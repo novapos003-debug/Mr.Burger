@@ -1,6 +1,5 @@
 {
   "hosting": {
-    "site": "mrburger-pos",
     "public": "frontend/dist",
     "ignore": [
       "firebase.json",
