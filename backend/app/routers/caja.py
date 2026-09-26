@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.deps import admin_required, cashier_required
 from app.database import get_db
-from app.models import Cierre, MovimientoCaja, Pago, Pedido, Usuario, Vale
+from app.models import Cierre, DetallePedido, MovimientoCaja, Pago, Pedido, Usuario, Vale
 from app.schemas import (
     CierreCerrarIn,
     CierreOut,
@@ -34,7 +34,10 @@ router = APIRouter(prefix="/caja", tags=["caja"])
 def _get_pedido(db: Session, pedido_id: int) -> Pedido:
     pedido = (
         db.query(Pedido)
-        .options(joinedload(Pedido.mesa))
+        .options(
+            joinedload(Pedido.mesa),
+            joinedload(Pedido.detalles).joinedload(DetallePedido.producto),
+        )
         .filter(Pedido.id == pedido_id)
         .first()
     )

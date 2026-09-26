@@ -76,7 +76,8 @@ def cobrar_pedido(db: Session, pedido: Pedido, cobro: CobroIn, cajero) -> dict:
                 or detalle.variacion_snapshot.get("preparado_id")
             )
             if not es_prep:
-                ref = f"Cobro en Caja Pedido #{pedido.consecutivo} - {detalle.producto.nombre}"
+                nombre_prod = detalle.producto.nombre if detalle.producto else f"Item {detalle.producto_id}"
+                ref = f"Cobro en Caja Pedido #{pedido.consecutivo} - {nombre_prod}"
                 descontar_insumos_de_producto(
                     db=db,
                     producto_id=detalle.producto_id,
@@ -86,6 +87,13 @@ def cobrar_pedido(db: Session, pedido: Pedido, cobro: CobroIn, cajero) -> dict:
                     referencia_base=ref,
                 )
             detalle.preparado_en = func.now()
+            detalle.listo_en = detalle.listo_en or func.now()
+            detalle.entregado_en = detalle.entregado_en or func.now()
+            detalle.estado = "ENTREGADO"
+        elif detalle.estado in ("PREPARANDO", "LISTO"):
+            detalle.listo_en = detalle.listo_en or func.now()
+            detalle.entregado_en = detalle.entregado_en or func.now()
+            detalle.estado = "ENTREGADO"
 
     pedido.pagado_en = func.now()
     if pedido.estado in ("FINALIZADO", "ENTREGADO"):
@@ -93,6 +101,11 @@ def cobrar_pedido(db: Session, pedido: Pedido, cobro: CobroIn, cajero) -> dict:
         liberar_mesa(db, pedido)
     elif pedido.canal in ("MOSTRADOR", "DOMICILIO", "DIDI"):
         pedido.estado = "PAGADO"
+    elif pedido.canal == "MESA":
+        todos_cerrados = all(d.estado in ("ENTREGADO", "CANCELADO") for d in pedido.detalles)
+        if todos_cerrados:
+            pedido.estado = "PAGADO"
+            liberar_mesa(db, pedido)
 
     db.flush()
     registrar(
