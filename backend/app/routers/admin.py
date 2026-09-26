@@ -22,6 +22,7 @@ from app.services.admin import (
     registrar_compra,
     reporte_ventas,
 )
+from app.services.historial import registrar
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -139,4 +140,137 @@ def actualizar_configuracion(
     db.commit()
     db.refresh(cfg)
     return cfg
+
+
+# ============================================================
+# GESTIÓN DE USUARIOS Y ROLES (ADMINISTRACIÓN)
+# ============================================================
+from app.models import Rol
+from app.core.security import hash_password
+from app.schemas.admin import (
+    UsuarioAdminOut,
+    UsuarioCreateIn,
+    UsuarioPasswordUpdateIn,
+    UsuarioEstadoUpdateIn,
+)
+
+
+@router.get("/usuarios", response_model=list[UsuarioAdminOut])
+def listar_usuarios(
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(admin_required),
+):
+    """Lista todos los usuarios del sistema ordenados por id."""
+    usuarios = db.query(Usuario).order_by(Usuario.id.asc()).all()
+    # Filtrar usuarios dummy de auditoría interna
+    usuarios_reales = [u for u in usuarios if not u.nombre.startswith("Audit Inactivo")]
+    return [
+        UsuarioAdminOut(
+            id=u.id,
+            nombre=u.nombre,
+            usuario=u.usuario,
+            rol_id=u.rol_id,
+            rol=u.rol.nombre if u.rol else "sin_rol",
+            activo=u.activo,
+            creado_en=u.creado_en,
+        )
+        for u in usuarios_reales
+    ]
+
+
+@router.post("/usuarios", response_model=UsuarioAdminOut, status_code=status.HTTP_201_CREATED)
+def crear_usuario(
+    data: UsuarioCreateIn,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(admin_required),
+):
+    """Crea un nuevo usuario del sistema con su rol y contraseña inicial."""
+    clean_user = data.usuario.strip().lower()
+    usuario_existente = db.query(Usuario).filter(Usuario.usuario == clean_user).first()
+    if usuario_existente:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El nombre de usuario '{clean_user}' ya existe. Elige otro.",
+        )
+
+    rol = db.query(Rol).filter(Rol.nombre == data.rol.lower()).first()
+    if not rol:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Rol '{data.rol}' no existe.",
+        )
+
+    nuevo_u = Usuario(
+        nombre=data.nombre.strip(),
+        usuario=clean_user,
+        rol_id=rol.id,
+        password_hash=hash_password(data.password),
+        activo=True,
+    )
+    db.add(nuevo_u)
+    db.flush()
+
+    registrar(db, admin, "CREAR_USUARIO", "usuario", nuevo_u.id, f"usuario={nuevo_u.usuario} rol={rol.nombre}")
+    db.commit()
+    db.refresh(nuevo_u)
+
+    return UsuarioAdminOut(
+        id=nuevo_u.id,
+        nombre=nuevo_u.nombre,
+        usuario=nuevo_u.usuario,
+        rol_id=nuevo_u.rol_id,
+        rol=rol.nombre,
+        activo=nuevo_u.activo,
+        creado_en=nuevo_u.creado_en,
+    )
+
+
+@router.put("/usuarios/{usuario_id}/password")
+def cambiar_password_usuario(
+    usuario_id: int,
+    data: UsuarioPasswordUpdateIn,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(admin_required),
+):
+    """Permite al administrador restablecer o cambiar la contraseña de cualquier usuario."""
+    u = db.get(Usuario, usuario_id)
+    if not u:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+
+    u.password_hash = hash_password(data.nueva_password)
+    registrar(db, admin, "MODIFICAR_PASSWORD", "usuario", u.id, f"cambio clave para usuario={u.usuario}")
+    db.commit()
+    return {"status": "ok", "mensaje": f"Contraseña actualizada para {u.usuario}"}
+
+
+@router.put("/usuarios/{usuario_id}/estado", response_model=UsuarioAdminOut)
+def cambiar_estado_usuario(
+    usuario_id: int,
+    data: UsuarioEstadoUpdateIn,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(admin_required),
+):
+    """Activa o desactiva a un usuario. Impide desactivarse a sí mismo."""
+    if usuario_id == admin.id and not data.activo:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No puedes desactivar tu propia cuenta administradora")
+
+    u = db.get(Usuario, usuario_id)
+    if not u:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+
+    u.activo = data.activo
+    accion = "ACTIVAR_USUARIO" if data.activo else "DESACTIVAR_USUARIO"
+    registrar(db, admin, accion, "usuario", u.id, f"estado={data.activo}")
+    db.commit()
+    db.refresh(u)
+
+    return UsuarioAdminOut(
+        id=u.id,
+        nombre=u.nombre,
+        usuario=u.usuario,
+        rol_id=u.rol_id,
+        rol=u.rol.nombre if u.rol else "sin_rol",
+        activo=u.activo,
+        creado_en=u.creado_en,
+    )
 

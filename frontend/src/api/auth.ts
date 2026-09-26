@@ -32,3 +32,14 @@ export const checkHealthApi = async (): Promise<boolean> => {
     return false
   }
 }
+
+export const cambiarMiPasswordApi = async (
+  passwordActual: string,
+  nuevaPassword: string
+): Promise<{ status: string; mensaje: string }> => {
+  const response = await api.put('/auth/cambiar-password', {
+    password_actual: passwordActual,
+    nueva_password: nuevaPassword,
+  })
+  return response.data
+}

@@ -175,3 +175,20 @@ export interface DetalleRecetaInput {
   cantidad: number
   unidad: string
 }
+
+export interface UsuarioAdminItem {
+  id: number
+  nombre: string
+  usuario: string
+  rol_id: number
+  rol: 'admin' | 'cajero' | 'mesero' | 'cocina' | string
+  activo: boolean
+  creado_en: string
+}
+
+export interface UsuarioCreateInput {
+  nombre: string
+  usuario: string
+  password: string
+  rol: 'admin' | 'cajero' | 'mesero' | 'cocina'
+}

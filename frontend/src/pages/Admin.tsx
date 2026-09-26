@@ -25,6 +25,7 @@ import type {
 } from '../types/admin'
 import type { Producto, Categoria } from '../types/mesero'
 import { InventarioTab } from '../components/admin/InventarioTab'
+import { UsuariosTab } from '../components/admin/UsuariosTab'
 import {
   Shield,
   TrendingUp,
@@ -43,6 +44,7 @@ import {
   Layers,
   Receipt,
   User,
+  Users,
   UtensilsCrossed,
   Search,
   Save,
@@ -50,7 +52,7 @@ import {
   Boxes,
 } from 'lucide-react'
 
-type AdminTab = 'DASHBOARD' | 'PLANILLA' | 'INVENTARIO' | 'RECETAS' | 'COMPRAS' | 'PREPARADOS' | 'AUDITORIA'
+type AdminTab = 'DASHBOARD' | 'PLANILLA' | 'INVENTARIO' | 'RECETAS' | 'COMPRAS' | 'PREPARADOS' | 'USUARIOS' | 'AUDITORIA'
 
 export const Admin: React.FC = () => {
   const [tabActiva, setTabActiva] = useState<AdminTab>('DASHBOARD')
@@ -505,6 +507,18 @@ export const Admin: React.FC = () => {
           >
             <Package className="w-4 h-4" />
             <span>Bolsa de Preparados ({dashData?.preparados_disponibles_count || 0})</span>
+          </button>
+
+          <button
+            onClick={() => setTabActiva('USUARIOS')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+              tabActiva === 'USUARIOS'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-950/50'
+                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Equipo & Seguridad</span>
           </button>
 
           <button
@@ -1638,6 +1652,15 @@ export const Admin: React.FC = () => {
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* PESTAÑA: EQUIPO, USUARIOS Y SEGURIDAD */}
+        {/* ======================================================== */}
+        {tabActiva === 'USUARIOS' && (
+          <div className="animate-fade-in">
+            <UsuariosTab />
           </div>
         )}
 

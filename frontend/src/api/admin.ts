@@ -13,6 +13,8 @@ import type {
   PreparadoAdminItem,
   DetalleRecetaItem,
   DetalleRecetaInput,
+  UsuarioAdminItem,
+  UsuarioCreateInput,
 } from '../types/admin'
 
 export const getDashboardApi = async (fecha?: string): Promise<DashboardOut> => {
@@ -144,6 +146,34 @@ export const setConfiguracionApi = async (
   valor: string
 ): Promise<any> => {
   const res = await api.put(`/admin/configuracion/${clave}`, { valor })
+  return res.data
+}
+
+export const getUsuariosApi = async (): Promise<UsuarioAdminItem[]> => {
+  const res = await api.get<UsuarioAdminItem[]>('/admin/usuarios')
+  return res.data
+}
+
+export const crearUsuarioApi = async (data: UsuarioCreateInput): Promise<UsuarioAdminItem> => {
+  const res = await api.post<UsuarioAdminItem>('/admin/usuarios', data)
+  return res.data
+}
+
+export const resetPasswordUsuarioApi = async (
+  usuarioId: number,
+  nuevaPassword: string
+): Promise<{ status: string; mensaje: string }> => {
+  const res = await api.put(`/admin/usuarios/${usuarioId}/password`, {
+    nueva_password: nuevaPassword,
+  })
+  return res.data
+}
+
+export const cambiarEstadoUsuarioApi = async (
+  usuarioId: number,
+  activo: boolean
+): Promise<UsuarioAdminItem> => {
+  const res = await api.put<UsuarioAdminItem>(`/admin/usuarios/${usuarioId}/estado`, { activo })
   return res.data
 }
 

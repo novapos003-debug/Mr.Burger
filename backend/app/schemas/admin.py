@@ -112,3 +112,36 @@ class HistorialAccionOut(BaseModel):
     creado_en: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ---------- USUARIOS Y SEGURIDAD ----------
+class UsuarioAdminOut(BaseModel):
+    id: int
+    nombre: str
+    usuario: str
+    rol_id: int
+    rol: str
+    activo: bool
+    creado_en: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UsuarioCreateIn(BaseModel):
+    nombre: str = Field(min_length=2, max_length=100)
+    usuario: str = Field(min_length=3, max_length=50)
+    password: str = Field(min_length=4, max_length=100)
+    rol: str = Field(pattern="^(admin|cajero|mesero|cocina)$")
+
+
+class UsuarioPasswordUpdateIn(BaseModel):
+    nueva_password: str = Field(min_length=4, max_length=100)
+
+
+class CambiarMiPasswordIn(BaseModel):
+    password_actual: str = Field(min_length=1)
+    nueva_password: str = Field(min_length=4, max_length=100)
+
+
+class UsuarioEstadoUpdateIn(BaseModel):
+    activo: bool

@@ -53,3 +53,24 @@ def me(current_user: Usuario = Depends(get_current_user)):
         nombre=current_user.nombre,
         rol=current_user.rol.nombre,
     )
+
+
+from app.schemas.admin import CambiarMiPasswordIn
+from app.core.security import hash_password
+
+
+@router.put("/cambiar-password")
+def cambiar_mi_password(
+    data: CambiarMiPasswordIn,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Permite a cualquier usuario cambiar su propia contraseña verificando la clave actual."""
+    if not verify_password(data.password_actual, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña actual no es correcta",
+        )
+    current_user.password_hash = hash_password(data.nueva_password)
+    db.commit()
+    return {"status": "ok", "mensaje": "Contraseña cambiada exitosamente"}
