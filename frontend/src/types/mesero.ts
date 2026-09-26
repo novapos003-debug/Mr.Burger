@@ -43,6 +43,7 @@ export interface DetallePedido {
   producto_id: number
   producto_nombre: string
   cantidad: number
+  precio_unitario?: number | null
   variacion_snapshot?: Record<string, any> | null
   ronda: number
   estado: string

@@ -126,18 +126,31 @@ export const Caja: React.FC = () => {
     })
   }
 
+  const requerirTurno = (accion: () => void) => {
+    if (!turno) {
+      setIsAperturaOpen(true)
+      return
+    }
+    accion()
+  }
+
   const handleCobroExitoso = (resultado: CobroOut) => {
     // Generar recibo de venta si tenemos el pedido
     if (pedidoParaCobro) {
-      const subtotalCalc = Math.round(resultado.total / 1.19)
-      const ivaCalc = resultado.total - subtotalCalc
-      const items = (pedidoParaCobro.detalles || []).map((l: DetallePedido) => ({
-        cantidad: l.cantidad,
-        nombre: l.producto_nombre,
-        precio_unitario: Math.round(Number(resultado.total) / (l.cantidad || 1)),
-        total: Number(resultado.total),
-        variaciones: (l.variacion_snapshot?.modificaciones as string[]) || [],
-      }))
+      const subtotalCalc = Number(pedidoParaCobro.subtotal) || Math.round(resultado.total / 1.19)
+      const ivaCalc = Number(pedidoParaCobro.iva) || (resultado.total - subtotalCalc)
+      const items = (pedidoParaCobro.detalles || []).map((l: DetallePedido) => {
+        const cant = Number(l.cantidad) || 1
+        const precioUnit = Number(l.precio_unitario) || 0
+        const totalLinea = Math.round(cant * precioUnit)
+        return {
+          cantidad: cant,
+          nombre: l.producto_nombre,
+          precio_unitario: precioUnit,
+          total: totalLinea,
+          variaciones: (l.variacion_snapshot?.modificaciones as string[]) || [],
+        }
+      })
 
       setTirillaConfig({
         isOpen: true,
@@ -152,7 +165,7 @@ export const Caja: React.FC = () => {
           consecutivo: resultado.consecutivo,
           fecha: new Date().toLocaleString('es-CO'),
           canal: pedidoParaCobro.canal,
-          mesa_numero: pedidoParaCobro.mesa_id,
+          mesa_numero: pedidoParaCobro.mesa_numero ?? pedidoParaCobro.mesa_id,
           cliente: pedidoParaCobro.cliente,
           direccion_entrega: pedidoParaCobro.direccion,
           items,
@@ -179,7 +192,9 @@ export const Caja: React.FC = () => {
         // Encontrar pedido recién creado
         getPedidosActivos('activos').then((lista) => {
           const encontrado = lista.find((p) => p.id === pedidoId)
-          if (encontrado) setPedidoParaCobro(encontrado)
+          if (encontrado) {
+            requerirTurno(() => setPedidoParaCobro(encontrado))
+          }
         })
       }
     })
@@ -208,9 +223,9 @@ export const Caja: React.FC = () => {
         turno={turno}
         onAbrirTurnoClick={() => setIsAperturaOpen(true)}
         onCerrarTurnoClick={() => setIsArqueoOpen(true)}
-        onMovimientosClick={() => setIsMovimientosOpen(true)}
+        onMovimientosClick={() => requerirTurno(() => setIsMovimientosOpen(true))}
         onValesClick={() => setIsValesOpen(true)}
-        onNuevoPedidoClick={() => setIsNuevoPedidoOpen(true)}
+        onNuevoPedidoClick={() => requerirTurno(() => setIsNuevoPedidoOpen(true))}
         onRefresh={() => cargarDatos(true)}
         isRefreshing={isRefreshing}
         totalValesPendientes={valesPendientes}
@@ -296,7 +311,7 @@ export const Caja: React.FC = () => {
         </div>
 
         <button
-          onClick={() => setIsNuevoPedidoOpen(true)}
+          onClick={() => requerirTurno(() => setIsNuevoPedidoOpen(true))}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition cursor-pointer shrink-0"
         >
           <PlusCircle className="w-3.5 h-3.5" />
@@ -321,7 +336,7 @@ export const Caja: React.FC = () => {
               No hay órdenes activas en el filtro seleccionado. Puedes crear un nuevo pedido de mostrador o esperar a que los meseros envíen órdenes desde las mesas.
             </p>
             <button
-              onClick={() => setIsNuevoPedidoOpen(true)}
+              onClick={() => requerirTurno(() => setIsNuevoPedidoOpen(true))}
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md transition cursor-pointer"
             >
               <PlusCircle className="w-4 h-4" />
@@ -439,7 +454,7 @@ export const Caja: React.FC = () => {
 
                     {!yaPagado ? (
                       <button
-                        onClick={() => setPedidoParaCobro(pedido)}
+                        onClick={() => requerirTurno(() => setPedidoParaCobro(pedido))}
                         className="flex items-center gap-1.5 px-4 py-2 rounded-xl font-black text-xs bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white shadow-lg shadow-emerald-950/50 transition cursor-pointer"
                       >
                         <DollarSign className="w-4 h-4" />

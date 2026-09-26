@@ -55,6 +55,11 @@ async def cobrar(
 ):
     """Cobra un pedido (uno o varios métodos). Caja es el único rol que ve dinero."""
     pedido = _get_pedido(db, pedido_id)
+    if not turno_abierto(db):
+        raise HTTPException(
+            status_code=409,
+            detail="No hay un turno de caja abierto. Debe abrir turno con la base inicial antes de cobrar.",
+        )
     if pedido.estado == "CANCELADO":
         raise HTTPException(status_code=409, detail="El pedido está cancelado")
     if pedido.estado == "CERRADO":

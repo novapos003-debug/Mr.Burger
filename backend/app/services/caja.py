@@ -45,6 +45,7 @@ def liberar_mesa(db: Session, pedido: Pedido) -> None:
 
 def cobrar_pedido(db: Session, pedido: Pedido, cobro: CobroIn, cajero) -> dict:
     """Registra los pagos de un pedido. Reglas del dueño:
+    - Debe existir un turno de caja abierto con la base de efectivo inicial.
     - La suma de pagos debe cuadrar EXACTAMENTE con el total (`subtotal + iva`).
     - EFECTIVO guarda `recibido` y calcula `cambio`.
     - VALE crea un pagaré PENDIENTE con los datos del cliente.
@@ -52,6 +53,9 @@ def cobrar_pedido(db: Session, pedido: Pedido, cobro: CobroIn, cajero) -> dict:
     - Cobro adelantado (mostrador): si la cocina no terminó, el pedido NO se
       saca de la cola; se marca `pagado_en` y pasará a PAGADO al finalizar.
     """
+    if turno_abierto(db) is None:
+        raise ValueError("No hay un turno de caja abierto. Debe abrir turno con la base de efectivo inicial antes de cobrar.")
+
     ref = f"pedido {pedido.consecutivo}"
     suma = sum((_monto(p.monto) for p in cobro.pagos), Decimal("0"))
     if suma != _monto(pedido.total):
