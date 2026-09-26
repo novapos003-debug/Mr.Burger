@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+ENV/
+
+# Variables de entorno secretas (NUNCA subir a git)
+.env
+.env.local
+.env.cloud
+
+# Node y Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+.firebase/
+
+# Bases de datos y respaldos
+*.sqlite3
+*.db
+backups/
+pgdata/
+media_data/
+
+# Herramientas de desarrollo
+.vscode/
+.idea/
+.DS_Store
+*.log

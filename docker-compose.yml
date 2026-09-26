@@ -1,0 +1,58 @@
+# ============================================================
+# CEREBRO DEL SISTEMA - docker-compose
+# Se usa igual en:
+#   1) El servidor local del restaurante (red interna, IP fija)
+#   2) El servidor en la nube (espejo para el admin)
+# ============================================================
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: restaurante_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-restaurante}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-restaurante_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-restaurante}
+      TZ: ${TZ:-America/Bogota}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # El schema definitivo (MER v4) se ejecuta solo la primera vez
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-restaurante} -d ${POSTGRES_DB:-restaurante}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: restaurante_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-restaurante}:${POSTGRES_PASSWORD:-restaurante_dev}@db:5432/${POSTGRES_DB:-restaurante}
+      SECRET_KEY: ${SECRET_KEY:-dev_secret_cambiar_en_produccion}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-720}
+      TZ: ${TZ:-America/Bogota}
+      ZONA_HORARIA: ${ZONA_HORARIA:-America/Bogota}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - media_data:/app/media             # fotos de productos (persistentes)
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  pgdata:
+  media_data:
