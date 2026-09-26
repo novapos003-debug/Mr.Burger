@@ -40,6 +40,10 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-720}
       TZ: ${TZ:-America/Bogota}
       ZONA_HORARIA: ${ZONA_HORARIA:-America/Bogota}
+      CLOUD_SYNC_ENABLED: ${CLOUD_SYNC_ENABLED:-true}
+      CLOUD_SYNC_URL: ${CLOUD_SYNC_URL:-https://mrburger-api.onrender.com}
+      CLOUD_SYNC_TOKEN: ${CLOUD_SYNC_TOKEN:-mrburger_sync_secret_token_2026}
+      SYNC_INTERVAL_SECONDS: ${SYNC_INTERVAL_SECONDS:-10}
     ports:
       - "8000:8000"
     volumes:

@@ -22,7 +22,33 @@ export const getApiBaseUrl = (): string => {
     const hostWithPort = customIp.includes(':') ? customIp : `${customIp}:8000`
     return `http://${hostWithPort}/api`
   }
+  // Si estamos en la nube (Firebase Hosting), apuntar por defecto a Render
+  if (
+    typeof window !== 'undefined' &&
+    (window.location.hostname.includes('web.app') || window.location.hostname.includes('firebaseapp.com'))
+  ) {
+    return 'https://mrburger-api.onrender.com/api'
+  }
   return import.meta.env.VITE_API_URL || '/api'
+}
+
+export const getWsBaseUrl = (): string => {
+  const customIp = getServerIp()
+  if (customIp) {
+    const clean = customIp.replace(/^https?:\/\//, '').replace(/\/api$/, '').replace(/\/$/, '')
+    const isHttps = customIp.startsWith('https://')
+    const protocol = isHttps ? 'wss:' : 'ws:'
+    const hostWithPort = clean.includes(':') ? clean : `${clean}:8000`
+    return `${protocol}//${hostWithPort}/ws/pedidos`
+  }
+  if (
+    typeof window !== 'undefined' &&
+    (window.location.hostname.includes('web.app') || window.location.hostname.includes('firebaseapp.com'))
+  ) {
+    return 'wss://mrburger-api.onrender.com/ws/pedidos'
+  }
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${protocol}//${window.location.host}/ws/pedidos`
 }
 
 export const api = axios.create({

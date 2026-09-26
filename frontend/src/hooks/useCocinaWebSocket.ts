@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { WebSocketStatus, WebSocketEvent } from '../types/cocina'
+import { getWsBaseUrl } from '../api/client'
 
 interface UseCocinaWebSocketOptions {
   onNewOrder?: (event: WebSocketEvent) => void
@@ -40,8 +41,9 @@ export function useCocinaWebSocket({ onNewOrder, onOrderUpdate }: UseCocinaWebSo
     }
 
     setStatus('reconectando')
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/ws/pedidos?token=${encodeURIComponent(token)}`
+    const baseWs = getWsBaseUrl()
+    const separator = baseWs.includes('?') ? '&' : '?'
+    const wsUrl = `${baseWs}${separator}token=${encodeURIComponent(token)}`
 
     try {
       const ws = new WebSocket(wsUrl)

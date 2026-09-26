@@ -70,7 +70,7 @@ async def ejecutar_ciclo_sync() -> dict[str, Any]:
     # 2. Verificar conectividad con la nube
     cloud_url = settings.CLOUD_SYNC_URL.rstrip("/")
     try:
-        async with httpx.AsyncClient(timeout=2.5) as client:
+        async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{cloud_url}/sync/health")
             if resp.status_code == 200:
                 _worker_status["online"] = True
