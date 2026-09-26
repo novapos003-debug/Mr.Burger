@@ -33,12 +33,18 @@ async def ejecutar_ciclo_sync() -> dict[str, Any]:
     """Ejecuta un ciclo de sondeo y sincronización con el servidor espejo en la nube.
     
     Flujo:
-    1. Consulta cuántos registros PENDIENTES existen en la BD local.
-    2. Si no hay CLOUD_SYNC_URL configurada, asume funcionamiento local normal.
-    3. Si hay CLOUD_SYNC_URL, hace ping ligero (timeout 2s) al endpoint /sync/health.
-    4. Si hay internet y registros pendientes, envía lotes de hasta 50 operaciones con UUID idempotente.
-    5. Actualiza atómicamente el estado local a APLICADO y sincronizado_en = now().
+    1. Si estamos en modo NUBE, el servidor es receptor; no envía push hacia afuera.
+    2. Consulta cuántos registros PENDIENTES existen en la BD local.
+    3. Si no hay CLOUD_SYNC_URL configurada, asume funcionamiento local normal.
+    4. Si hay CLOUD_SYNC_URL, hace ping ligero al endpoint /sync/health.
+    5. Si hay internet y registros pendientes, envía lotes de hasta 50 operaciones con UUID idempotente.
+    6. Actualiza atómicamente el estado local a APLICADO y sincronizado_en = now().
     """
+    # Si estamos en modo NUBE o la sincronización está deshabilitada, el worker no debe hacer nada
+    if settings.MODO_CEREBRO == "NUBE" or not settings.CLOUD_SYNC_ENABLED:
+        _worker_status["online"] = True
+        return dict(_worker_status)
+
     _worker_status["ultimo_chequeo"] = datetime.now(timezone.utc).isoformat()
 
     # 1. Contar pendientes locales
@@ -55,11 +61,6 @@ async def ejecutar_ciclo_sync() -> dict[str, Any]:
         logger.warning(f"Error al contar registros pendientes: {e}")
     finally:
         db.close()
-
-    # Si estamos en modo NUBE o la sincronización está deshabilitada, no enviamos push
-    if settings.MODO_CEREBRO == "NUBE" or not settings.CLOUD_SYNC_ENABLED:
-        _worker_status["online"] = True
-        return dict(_worker_status)
 
     # Si no hay URL de nube configurada (modo local puro de desarrollo o caja única sin nube)
     if not settings.CLOUD_SYNC_URL:
@@ -159,6 +160,10 @@ async def ejecutar_ciclo_sync() -> dict[str, Any]:
 
 async def sync_background_loop():
     """Bucle infinito en segundo plano que corre durante el ciclo de vida del servidor."""
+    if settings.MODO_CEREBRO == "NUBE" or not settings.CLOUD_SYNC_ENABLED:
+        logger.info("Modo CEREBRO NUBE: Daemon saliente inactivo (servidor opera como receptor).")
+        return
+
     # Espera 3 segundos iniciales para permitir que la BD y FastAPI terminen de iniciar
     await asyncio.sleep(3)
     while True:

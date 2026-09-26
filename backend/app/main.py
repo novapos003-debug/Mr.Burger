@@ -6,8 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.core.security import decode_access_token
-from app.database import SessionLocal
-from app.models import Usuario
+from app.database import Base, engine, SessionLocal
+import app.models  # registra todos los modelos SQLAlchemy
 from app.routers import (
     admin,
     auth,
@@ -26,15 +26,22 @@ from app.services.websocket import ws_manager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Inicia el daemon de sincronización automática en segundo plano
-    worker_task = asyncio.create_task(sync_background_loop())
-    yield
-    # Cancela ordenadamente el daemon al apagar el servidor
-    worker_task.cancel()
+    # Asegura que todas las tablas de los modelos existan en la BD (incluyendo la nube)
     try:
-        await worker_task
-    except asyncio.CancelledError:
+        Base.metadata.create_all(bind=engine)
+    except Exception:
         pass
+
+    worker_task = None
+    if settings.MODO_CEREBRO != "NUBE":
+        worker_task = asyncio.create_task(sync_background_loop())
+    yield
+    if worker_task:
+        worker_task.cancel()
+        try:
+            await worker_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(
