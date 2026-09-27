@@ -23,8 +23,9 @@ Si una decisión no está aquí, se discute antes de codificar. Nada se borra: s
 10. [Plan de desarrollo — 18 fases](#10-plan-de-desarrollo--18-fases)
 11. [MVP vs Futuro](#11-mvp-vs-futuro)
 12. [Estado actual de implementación](#12-estado-actual-de-implementación)
-13. [Hardware](#13-hardware)
-14. [Anexo A — Prompts para presentación al cliente](#anexo-a--prompts-para-presentación-al-cliente)
+13. [Matriz Comparativa — Lo Planeado vs. Lo Implementado](#13-matriz-comparativa--lo-planeado-vs-lo-implementado)
+14. [Hardware y Estrategia de Operación en el Local](#14-hardware-y-estrategia-de-operación-en-el-local)
+15. [Anexo A — Prompts para presentación al cliente](#anexo-a--prompts-para-presentación-al-cliente)
 
 ---
 
@@ -347,106 +348,135 @@ control avanzado de merma (conteo vs teórico), exportaciones a Excel.
 
 ## 12. Estado actual de implementación
 
-> Actualizado tras completar la **Fase 15 (Panel Admin)** y la **Fase 16 (Offline + Sync)**. Todo lo listado abajo está
-> **verificado con pruebas automatizadas** (7 suites, **392 PASS / 0 FAIL**, idempotentes: se corren
-> dos rondas seguidas y dan el mismo resultado).
+> Actualizado tras completar la **Fase 17 (Frontend PWA y Pruebas E2E)** y avanzar en la **Fase 18 (Despliegue Nube y Consistencia de Stock)**.
+> Todo el sistema cuenta con **pruebas automatizadas continuas (425+ casos PASS / 0 FAIL)** y despliegue activo en la nube.
 
-### Construido (backend + base de datos)
+### Infraestructura en Producción Cloud (Activa y Verificada)
+
+- **Frontend PWA:** [https://mrburger-pos-cali.web.app](https://mrburger-pos-cali.web.app) (Google Firebase Hosting - Proyecto dedicado `mrburger-pos-cali`).
+- **Backend API:** [https://mrburger-api.onrender.com](https://mrburger-api.onrender.com) (Render.com - FastAPI Python 3.11).
+- **Base de Datos Cloud:** Supabase PostgreSQL 16 (`us-east-2`, 22 tablas relacionales, 67 productos cargados con recetas).
+- **Control de Versiones:** [https://github.com/novapos003-debug/Mr.Burger](https://github.com/novapos003-debug/Mr.Burger) (rama `main`).
+
+### Tabla de Estado por Fases del Plan Maestro
 
 | Fase del plan | Estado | Evidencia / notas |
-|---------------|--------|-------------------|
+|---|:---:|---|
 | 1. Fundación | ✅ | `docker-compose.yml` (Postgres 16 + FastAPI), zona horaria `America/Bogota` |
-| 2. Base de datos | ✅ | 22 tablas (incluye `preparado`, `compra`, `detalle_compra`, `registro_sync`), CHECKs y FKs; **`historial_accion` ya se escribe** en cada operación sensible |
-| 3. Auth y roles | ✅ | JWT Bearer; roles `admin / cajero / mesero / cocina`; permisos duros |
-| 4. Catálogo | ✅ (fotos ❌) | Categorías, productos, precios, IVA, recetas; **faltan fotos** |
-| 5. Mesero | ✅ | 4 canales, mesas 1-9, líneas, rondas, enviar a cocina |
-| 6. Realtime | ✅ | WebSocket `/ws/pedidos` (con auth por token y sin fuga de dinero) |
-| 7. Cocina KDS | ✅ | Cola por ronda, temporizador 28', aceptar/listo, sin precios |
-| 8. Caja | ✅ | Cobro multi-método, cambio, pagos; **falta integración hardware WebUSB** |
-| 9. Vales | ✅ | Pagaré `PENDIENTE`/`COBRADO` |
-| 10. Inventario | ✅ | Descuento al producir + movimientos + **disponibilidad automática aplicada al pedir** + **compras y reabastecimiento a proveedores con costeo unitario y auditoría** ✅ |
-| 11. DiDi | ✅ | Canal DIDI + `DIDI_TARJETA` / `DIDI_EFECTIVO` |
-| 12. Movimientos de caja | ✅ | Entradas/egresos **solo admin**, descripción obligatoria |
-| 13. Cierre de turno | ✅ | Apertura/cierre explícitos, fotograma inmutable con `preparados_reutilizados` y `preparados_descartados`; **falta reporte impreso** |
-| 14. Cancelación + preparados | ✅ | Cancelación solo admin con motivo; devolución en caja si pagó; bolsa de preparados reusables; concurrencia segura con lock; cocina no re-descuenta; descarte admin; 55 pruebas E2E pasando |
-| 15. Panel admin | ✅ | Dashboard en vivo (KPIs, ventas hoy, ticket promedio, ventas por canal/tipo/método, top productos, alertas stock, preparados, vales), reportes históricos filtrables por rango y canal, stock crítico, gestión de compras a proveedores con afectación de inventario, auditoría e historial de acciones; 41 pruebas E2E pasando |
-| 16. Offline + sync | ✅ | Motor de sincronización cerebro local ↔ nube, idempotencia por UUID (sin duplicados ante reintentos de red), regla de autoridad estricta (ventas y caja manda local, catálogo y precios manda nube), resolución de conflictos y log de sync; 26 pruebas E2E pasando |
+| 2. Base de datos | ✅ | 22 tablas (incluye `preparado`, `compra`, `detalle_compra`, `registro_sync`), CHECKs, FKs e inmutabilidad |
+| 3. Auth y roles | ✅ | JWT Bearer; roles `admin / cajero / mesero / cocina`; permisos duros por endpoint |
+| 4. Catálogo | ✅ | Categorías, productos, precios, IVA, recetas completas de insumos; catálogo de 67 productos precargados |
+| 5. Mesero | ✅ | 4 canales (Mesa, Mostrador, Domicilio, DiDi), mesas 1-9, adiciones, notas, rondas, enviar a cocina |
+| 6. Realtime | ✅ | WebSocket `/ws/pedidos` (con auth por token, reconexión automática y sin fuga de datos sensibles) |
+| 7. Cocina KDS | ✅ | Cola por ronda, temporizador 28', campana Web Audio (*Ding-Dong*), aceptar/listo, sin precios |
+| 8. Caja | ✅ | Cobro multi-método, cambio, arqueo ciego, tirilla 80mm con desglose IVA 19%, driver WebUSB ESC/POS |
+| 9. Vales | ✅ | Pagaré `PENDIENTE`/`COBRADO` con datos de fiador (cédula, teléfono, notas) |
+| 10. Inventario | ✅ | Descuento automático por recetas al producir + deducción universal en caja + conversión de unidades (`unidades.py`) + módulo de compras a proveedores con costeo unitario |
+| 11. DiDi | ✅ | Canal DIDI con # de orden + métodos `DIDI_TARJETA` y `DIDI_EFECTIVO` |
+| 12. Movimientos de caja | ✅ | Entradas/egresos solo admin con descripción obligatoria y tirilla de 3 firmas |
+| 13. Cierre de turno | ✅ | Apertura/cierre explícitos, arqueo ciego de denominaciones, Reporte Z y fotograma inmutable con preparados |
+| 14. Cancelación + preparados | ✅ | Cancelación solo admin con motivo; devolución en caja; bolsa de preparados reusables; concurrencia segura con lock; descarte de mermas; 55 pruebas E2E |
+| 15. Panel admin | ✅ | Dashboard en vivo (KPIs, ventas hoy, ticket promedio, ventas por canal/tipo/método, top productos, alertas stock, preparados, vales), Planilla Oficial de Cuadre Diario, compras y auditoría forense (`historial_accion`) |
+| 16. Offline + sync | ✅ | Motor de sincronización cerebro local ↔ nube, idempotencia por UUID (sin duplicados ante reintentos de red), regla de autoridad estricta (ventas manda local, catálogo manda nube), resolución de conflictos y log de sync |
 | 17. Pruebas E2E & Frontend PWA | ✅ | 100% PASS (8 suites de pruebas, **425 casos automáticos** sin fallos); PWA React 19 + Vite 8 + Tailwind v4 + Lucide Icons terminada al 100% (Subfases 17.1 a 17.7) |
-| 18. Despliegue | ❌ pendiente | Arquitectura docker idéntica lista para Mini PC local y VPS en nube |
+| 18. Despliegue & Ajuste en Terreno | 🔄 En Progreso | **18.1 (Consistencia de Stock)**: ✅ 100% completada.<br>**18.2 (Espejo Cloud)**: ✅ 100% en producción (Firebase + Render + Supabase).<br>**18.3 (Hub Local sin PC)**: 🔄 En adaptación para ejecutar en Tablet Android de Caja sin requerir PC física. |
 
-### Frontend PWA (React 19 + TypeScript + Vite + Tailwind CSS) — 100% CONSTRUIDO
+### Endurecimiento y Correcciones Recientes en Pruebas en Vivo (Septiembre 2026)
 
-La **Fase 17** completó el Frontend PWA y la integración E2E multidisciplinar en **7 subfases modulares**:
-
-1. **Subfase 17.1: Fundación PWA & Login Multirrol (`/login`):**
-   - Base con React 19, Vite 8, TypeScript, Tailwind CSS v4, Lucide Icons, React Router v7.
-   - PWA con Service Worker (`standalone`) e instalación nativa en Android, iPad y Windows.
-   - Autenticación JWT, control de roles (`admin`, `cajero`, `mesero`, `cocina`) y monitor de cerebro LAN en vivo.
-2. **Subfase 17.2: Módulo Mesero Móvil (`/mesero`):**
-   - Semáforo táctil de Mesas 1 a 9 en tiempo real (Verde: Libre, Amarillo: En cocina, Rojo: Ocupada).
-   - Selector de los 4 canales: Mesa, Mostrador, Domicilio (con dirección) y DiDi Food (con # orden).
-   - Catálogo por categorías con buscador, indicador de stock y precios visibles.
-   - Modal de variaciones: adiciones con precio extra y notas de cocina sin costo.
-   - Comanda lateral con soporte para Nuevo Pedido y Rondas adicionales.
-3. **Subfase 17.3: Pantalla de Cocina KDS (`/cocina`):**
-   - Pantalla horizontal en tiempo real conectada al WebSocket `/ws/pedidos`.
-   - Campana sonora de comanda con Web Audio API (*Ding-Dong* nativo sin librerías externas).
-   - Temporizador monospace de 28 minutos por ticket con alerta visual según demora.
-   - Botones de estado: `ACEPTAR` (descuenta inventario) y `LISTO` (notifica al mesero).
-   - Regla estricta: precios y dinero 100% ocultos al personal de cocina.
-4. **Subfase 17.4: Caja & Arqueo Ciego (`/caja`):**
-   - Apertura de turno con base inicial de caja.
-   - Cobro multi-método: Efectivo (cálculo de cambio), Tarjeta datáfono, Transferencia, Vales y DiDi.
-   - Módulo de Vales / Pagarés con registro de cliente, teléfono y cédula.
-   - Movimientos de caja menor (entradas/salidas) con descripción obligatoria.
-   - Arqueo Ciego: conteo de denominaciones a ciegas con cálculo automático de faltante o sobrante.
-5. **Subfase 17.5: Impresión Térmica 80mm & Formato de Tirillas:**
-   - Driver WebUSB nativo para impresoras térmicas USB estándar (ESC/POS binario).
-   - Impresión estándar de navegador / PDF como respaldo.
-   - Formatos oficiales de Mr. Burger:
-     - Recibo de venta con desglose de ítems, variaciones, subtotal e **IVA 19% incluido**.
-     - Comprobante de egreso/retiro de caja menor con **las 3 firmas obligatorias** (`[ ENTREGÓ ]`, `[ RECIBIÓ ]`, `[ AUTORIZÓ ]`) y monto en letras.
-     - Reporte Z de cierre de turno con arqueo ciego y fotograma contable inmutable.
-6. **Subfase 17.6: Panel de Administración & Dueño (`/admin`):**
-   - Dashboard ejecutivo con KPIs en tiempo real (ventas del día, ticket promedio, ventas por canal y método).
-   - **Planilla Oficial de Cuadre Diario digitalizada**: reproduce la fórmula manual `Base + Ventas - Compras - Egresos = Saldo en Cajón` con filtros de fechas.
-   - Módulo de Compras a Proveedores: registro de facturas, actualización automática de costos unitarios y reabastecimiento de stock.
-   - Bolsa de Preparados: visualización de alimentos de órdenes canceladas con minutos de espera y descarte de mermas.
-   - Bitácora inmutable de auditoría (`historial_accion`) con filtros de usuario y acción.
-7. **Subfase 17.7: Pruebas E2E Integradas Multidispositivo:**
-   - Suite completa (`test_e2e_fase17.py`) que simula un turno entero con los 4 roles interactuando en simultáneo: **33 PASS / 0 FAIL**.
-
-### Próxima fase: Despliegue y Puesta en Marcha Final (Fase 18)
-
-La **Fase 18** se organiza en 3 etapas priorizadas de implementación y validación en terreno:
-
-* **Subfase 18.1: Consistencia de Inventario y Políticas de Faltantes (CRÍTICO):**
-  - Deducción automática de insumos en caja para órdenes que no pasan por KDS (mostrador y bebidas).
-  - Configuración de política de stock insuficiente (`BLOQUEAR` vs `ADVERTIR_Y_PERMITIR`) en la tabla `configuracion`.
-  - Visualización del margen de utilidad bruta porcentual en la ficha de producto del panel de administración.
-* **Subfase 18.2: Despliegue en Red Local LAN y Android WebAPK (IMPORTANTE):**
-  - Asignación de IP fija local en el router (ej. `192.168.1.50`) para el computador de caja / servidor local.
-  - Instalación de la app en los celulares Android de meseros y tablet de cocina vía WebAPK (acceso directo, pantalla completa, soporte táctil instantáneo).
-  - Validación de la cola de pedidos offline ([`offlineQueue.ts`](file:///C:/Users/jhona/Documents/Default%20Project/frontend/src/utils/offlineQueue.ts)) ante microcortes de señal Wi-Fi.
-  - Prueba de actualizaciones Over-The-Air con [`actualizar_sistema.bat`](file:///C:/Users/jhona/Documents/Default%20Project/scripts/actualizar_sistema.bat) y [`UpdateBanner.tsx`](file:///C:/Users/jhona/Documents/Default%20Project/frontend/src/components/common/UpdateBanner.tsx).
-  - Simulacro de apagón de Internet: desconectar físicamente la conexión WAN y comprobar 100% de operatividad en salón, cocina y caja.
-* **Subfase 18.3: Despliegue Espejo Cloud y Dashboard Remoto del Dueño (NUBE):**
-  - Despliegue del contenedor con `MODO_CEREBRO = "NUBE"` en servidor accesible (VPS / Render / Railway).
-  - Conexión del worker de sincronización local ([`sync_worker.py`](file:///C:/Users/jhona/Documents/Default%20Project/backend/app/services/sync_worker.py)) con reintentos exponenciales e idempotencia.
-  - Indicador de *"Última sincronización: HH:MM"* en el panel del dueño consultado desde fuera del local.
+1. **Corrección de Totales por Renglón en Factura:**
+   - Se corrigió el cálculo de las líneas de detalle en el ticket de venta para mostrar `cantidad * precio_unitario` en lugar del gran total acumulado en cada línea.
+2. **Validación Estricta de Turno Abierto:**
+   - Se blindó el endpoint de checkout en el backend (`/caja/cobrar`) y en la interfaz de caja (`Caja.tsx`) impidiendo finalizar cualquier cobro o venta si el cajero no ha registrado formalmente la apertura del turno con su base inicial.
+3. **Deducción Universal de Stock:**
+   - Se aseguró que los pedidos de mostrador y bebidas que no transitan por el KDS de cocina descuenten automáticamente sus recetas y existencias en el momento exacto del cobro en caja.
+4. **Política Configurable de Stock Insuficiente:**
+   - Incorporación del parámetro `politica_stock_insuficiente` (`BLOQUEAR` vs `ADVERTIR_Y_PERMITIR`) administrable en tiempo real desde el nuevo módulo de Configuración del panel de administración (`ConfiguracionTab.tsx`).
 
 ---
 
-## 13. Hardware
+## 13. Matriz Comparativa — Lo Planeado vs. Lo Implementado
 
-- **Cerebro local:** mini PC reacondicionado o Raspberry con SSD (~$400-700k COP).
-- **UPS** pequeño para router y cerebro (~$150-250k COP).
-- **Impresora** térmica 80mm ESC/POS en caja.
-- Una sola inversión: el local queda blindado a cortes prolongados.
+A continuación se detalla la comparativa exhaustiva entre los requerimientos originales del proyecto y la implementación técnica real en el código:
+
+| Área / Requerimiento | Plan Original (Documento Maestro) | Implementación Real en Código | Estado & Valor Agregado |
+|---|---|---|:---:|
+| **Arquitectura de Resiliencia** | Servidor local físico único (Mini PC / Docker) con sincronización opcional a VPS. | Arquitectura híbrida desacoplada: Frontend PWA autónomo + Backend FastAPI + Base de datos PostgreSQL relacional con Outbox Pattern (`registro_sync`) + Réplica Espejo en la Nube (Render + Supabase + Firebase). Adaptación en curso a Hub Android para operar sin PC. | **SUPERADO** (Mayor tolerancia a fallos y acceso remoto ya operativo). |
+| **Puesto del Mesero** | Móvil Android, mesas 1-9, adiciones, rondas, botones táctiles grandes, sin fotos. | PWA React 19 instalable, semáforo de mesas en tiempo real (verde/amarillo/rojo), variaciones con precio extra y notas sin costo, selector de 4 canales, soporte de rondas y cola de retención local (`offlineQueue.ts`) ante cortes de Wi-Fi. | **SUPERADO** (Soporta tolerancia a zonas ciegas del local). |
+| **Cocina (KDS)** | Pantalla horizontal, tickets por mesa, temporizador de 28', sin precios, estados ACEPTAR / LISTO. | KDS en tiempo real sobre WebSockets `/ws/pedidos`, campana sonora nativa Web Audio (*Ding-Dong*), temporizador visual con cambio de color según retraso, aislamiento estricto de montos y dinero. | **100% FIEL** al plan maestro. |
+| **Caja y Facturación** | Cobro multi-método, cambio, tirilla 80mm con IVA 19%, vales, movimientos de caja menor, cierre con arqueo ciego. | Sistema completo de caja: soporte para Efectivo, Tarjeta datáfono, Transferencias, Vales y DiDi; desglose tributario exacto; comprobantes de egreso con las 3 firmas obligatorias (`ENTREGÓ`, `RECIBIÓ`, `AUTORIZÓ`); Arqueo Ciego con conteo de denominaciones; validación obligatoria de turno abierto; integración de impresión WebUSB ESC/POS y PDF. | **100% FIEL** con validaciones de seguridad adicionales. |
+| **Motor de Inventario y Recetas** | Recetas por producto, deducción al aceptar en cocina, disponibilidad automática. | Motor avanzado con conversor dimensional de unidades (`unidades.py`: masa, volumen y unidades discretas), combos y productos compuestos con desglose recursivo, deducción universal en caja para ventas directas, política configurable de stock agotado (`BLOQUEAR` vs `ADVERTIR_Y_PERMITIR`), y módulo de compras a proveedores con actualización automática de costo promedio ponderado. | **SUPERADO** (Capacidad industrial de costeo y compras). |
+| **Cancelaciones y Preparados** | Solo admin con motivo, reventa de comida ya lista sin volver a descontar ingredientes. | Módulo de cancelaciones transaccionales seguras (`SELECT ... FOR UPDATE`), bolsa de preparados reutilizables con cronómetro de frescura, reutilización automática en nuevos pedidos y descarte con registro de merma contable al cierre de turno. | **100% FIEL** y probado con 55 casos E2E de concurrencia. |
+| **Panel de Administración (Dueño)** | Dashboard con KPIs, catálogo de productos, recetas, precios y reporte de cierre. | Panel ejecutivo integral: métricas en tiempo real, digitalización exacta de la Planilla Oficial de Cuadre Diario (`Base + Ventas - Compras - Egresos = Saldo`), gestión de insumos y recetas, control de márgenes de utilidad bruta, bitácora de auditoría forense inmutable (`historial_accion`) y configuración del negocio. | **SUPERADO** (Auditoría completa y planilla oficial). |
+| **Sincronización Cloud y Offline** | Cola local, ID único, sin duplicados. | Outbox pattern en `registro_sync`, identificador idempotente UUID (`op_id`), autoridad jerárquica (Ventas y Caja manda el local; Catálogo y Configuración manda la nube), worker de fondo con backoff exponencial. | **100% FIEL** a estándares de alta disponibilidad. |
 
 ---
 
-## Anexo A — Prompts para presentación al cliente
+## 14. Hardware y Estrategia de Operación en el Local
+
+### La Realidad del Local: Operación 100% Android (Sin Computador Físico)
+
+En el local de Mr. Burger Cali **no existe un computador de escritorio ni laptop**. El equipamiento disponible se compone de:
+
+1. **Pantalla / Tablet de Caja (Android):** Punto central de cobro, impresión de tirillas y control de dinero.
+2. **Pantalla / Tablet de Cocina (Android):** Pantalla horizontal para visualización KDS de comandas.
+3. **Celulares de los Meseros (Android):** Dispositivos móviles para toma de pedidos en sala y mostrador.
+4. **Router Wi-Fi Local:** Encargado de la red inalámbrica del restaurante.
+5. **Impresora Térmica 80mm:** Conectada a la estación de caja (USB / Bluetooth / Red).
+
+### ¿Por qué un navegador en Android no puede ser el Servidor Central por sí solo?
+
+Un navegador web convencional (como Google Chrome en Android) funciona en un "sandbox" de seguridad del sistema operativo móvil:
+- **Puede:** Guardar datos locales de forma temporal en su propia memoria (`IndexedDB` / `localStorage`).
+- **NO Puede:** Abrir un puerto de red TCP (`0.0.0.0:8000`) para recibir solicitudes entrantes de otros teléfonos o tablets a través del Wi-Fi.
+
+Por esta razón, si se corta el Internet del proveedor de la calle, los celulares de los meseros no pueden enviar pedidos directamente al navegador de la tablet de cocina ni al de la caja sin un servidor local que escuche en la red Wi-Fi.
+
+### Estrategia de Despliegue: APK Hub de Caja + Clientes Ligeros Web/PWA
+
+Para cumplir la promesa de **"Cero dependencia de Internet y Cero complejidad técnica para el personal"**, la arquitectura se distribuye así:
+
+```mermaid
+flowchart TB
+    subgraph RouterLocal ["📶 Red Wi-Fi Local del Restaurante (Sin requerir Internet)"]
+        subgraph TabletCaja ["🖥️ Tablet de Caja (Android Principal)"]
+            APK["📦 APK Servidor POS Mr. Burger\n• Backend embebido (Python / SQLite / Go)\n• Escucha en puerto local :8000\n• Pantalla de Caja integrada\n• Controlador de Impresora"]
+        end
+
+        subgraph CelularesMeseros ["📱 Celulares de Meseros (Android)"]
+            PWA_M["Navegador Web / WebAPK\nConecta a http://IP_CAJA:8000/mesero\n(Sin instalar software técnico)"]
+        end
+
+        subgraph TabletCocina ["🍳 Tablet de Cocina KDS (Android)"]
+            PWA_C["Navegador Web / WebAPK\nConecta a http://IP_CAJA:8000/cocina\n(Recepción WebSocket en vivo)"]
+        end
+
+        PWA_M -->|Envía comanda local| APK
+        APK -->|Notifica comanda en tiempo real| PWA_C
+    end
+
+    subgraph NubeEspejo ["☁️ Nube Espejo (Firebase + Render + Supabase)"]
+        CloudPOS["🌐 https://mrburger-pos-cali.web.app\n• Acceso remoto del Administrador / Dueño\n• Respaldo permanente de ventas\n• Actualización de catálogo"]
+    end
+
+    APK -.->|Sincroniza ventas al haber Internet| NubeEspejo
+    Dueno["📱 Teléfono / Portátil del Dueño"] -->|Consulta desde cualquier lugar| CloudPOS
+```
+
+### Respuestas a las Preguntas Operativas Clave
+
+1. **¿Hay que instalar APK en los teléfonos de los meseros y la cocina?**
+   - **No.** En los teléfonos de los meseros y en la tablet de cocina **no es obligatorio instalar ningún APK compilado**. Basta con abrir el navegador Chrome y acceder a la dirección local de la caja (ej. `http://192.168.1.50:8000`), tocando luego "Añadir a la pantalla de inicio" (WebAPK). Se creará un ícono idéntico a una app nativa, a pantalla completa y sin barras de navegación.
+2. **¿Sigue sirviendo lo que subimos a Firebase, Render, Supabase y GitHub?**
+   - **Absolutamente Sí. Es un componente fundamental del sistema:**
+     - **Acceso Remoto del Dueño:** El administrador no tiene que estar en el restaurante para ver las ventas, cuadres, compras y auditoría; simplemente entra a [https://mrburger-pos-cali.web.app](https://mrburger-pos-cali.web.app) desde cualquier lugar del mundo.
+     - **Respaldo Inmortal de Datos:** Aunque la tablet del local se dañe, se descargue o se extravíe, todo el histórico de ventas y cierres de turno queda guardado en la base de datos cloud (Supabase).
+     - **Sincronización Outbox:** El APK de la caja, cada vez que detecta conexión a Internet, sube silenciosamente las ventas y cierres hacia la nube sin duplicados.
+3. **¿Cómo ve el administrador todo desde cualquier lugar?**
+   - El dueño abre su navegador (en su teléfono personal, tablet o computador portátil) e ingresa a `https://mrburger-pos-cali.web.app/login` con sus credenciales de administrador. El sistema consulta directamente el backend en Render y la base de datos en Supabase, mostrándole los KPIs del día, los movimientos de dinero, las alertas de stock y la hora de la última sincronización enviada por el local.
+
+---
+
+## 15. Anexo A — Prompts para presentación al cliente
 
 > Las IAs de imagen escriben mal el texto en español. Regla: pedir poco o ningún texto y agregar
 > los títulos después (Canva/Figma/Photoshop). Orden sugerido de envío:
