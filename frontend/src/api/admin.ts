@@ -1,4 +1,5 @@
 import api from './client'
+import type { Producto } from '../types/mesero'
 import type {
   DashboardOut,
   ReporteVentasOut,
@@ -175,5 +176,35 @@ export const cambiarEstadoUsuarioApi = async (
 ): Promise<UsuarioAdminItem> => {
   const res = await api.put<UsuarioAdminItem>(`/admin/usuarios/${usuarioId}/estado`, { activo })
   return res.data
+}
+
+export const crearProductoApi = async (data: {
+  categoria_id: number
+  nombre: string
+  descripcion?: string
+  precio: number
+  iva_incluido?: boolean
+}): Promise<Producto> => {
+  const res = await api.post<Producto>('/productos', data)
+  return res.data
+}
+
+export const actualizarProductoApi = async (
+  id: number,
+  data: Partial<{
+    categoria_id: number
+    nombre: string
+    descripcion: string
+    precio: number
+    iva_incluido: boolean
+    manual_disponible: boolean | null
+  }>
+): Promise<Producto> => {
+  const res = await api.put<Producto>(`/productos/${id}`, data)
+  return res.data
+}
+
+export const eliminarProductoApi = async (id: number): Promise<void> => {
+  await api.delete(`/productos/${id}`)
 }
 

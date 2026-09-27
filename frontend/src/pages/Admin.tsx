@@ -12,6 +12,9 @@ import {
   getRecetaProductoApi,
   guardarRecetaProductoApi,
   crearIngredienteApi,
+  crearProductoApi,
+  actualizarProductoApi,
+  eliminarProductoApi,
 } from '../api/admin'
 import { getProductosApi, getCategoriasApi } from '../api/mesero'
 import type {
@@ -52,6 +55,7 @@ import {
   X,
   Boxes,
   Settings,
+  Pencil,
 } from 'lucide-react'
 
 type AdminTab = 'DASHBOARD' | 'PLANILLA' | 'INVENTARIO' | 'RECETAS' | 'COMPRAS' | 'PREPARADOS' | 'USUARIOS' | 'CONFIGURACION' | 'AUDITORIA'
@@ -118,6 +122,23 @@ export const Admin: React.FC = () => {
   const [nuevoIngCosto, setNuevoIngCosto] = useState(1000)
   const [nuevoIngStock, setNuevoIngStock] = useState(50)
   const [creandoIngrediente, setCreandoIngrediente] = useState(false)
+
+  // Modal nuevo producto
+  const [nuevoProdModalOpen, setNuevoProdModalOpen] = useState(false)
+  const [nuevoProdNombre, setNuevoProdNombre] = useState('')
+  const [nuevoProdCategoriaId, setNuevoProdCategoriaId] = useState<number | ''>('')
+  const [nuevoProdPrecio, setNuevoProdPrecio] = useState<number>(22000)
+  const [nuevoProdDescripcion, setNuevoProdDescripcion] = useState('')
+  const [creandoProducto, setCreandoProducto] = useState(false)
+
+  // Modal editar producto (precio / nombre / descripcion)
+  const [editarProdModalOpen, setEditarProdModalOpen] = useState(false)
+  const [editarProdNombre, setEditarProdNombre] = useState('')
+  const [editarProdPrecio, setEditarProdPrecio] = useState<number>(0)
+  const [editarProdDescripcion, setEditarProdDescripcion] = useState('')
+  const [editarProdCategoriaId, setEditarProdCategoriaId] = useState<number | ''>('')
+  const [guardandoEdicionProd, setGuardandoEdicionProd] = useState(false)
+  const [eliminandoProducto, setEliminandoProducto] = useState(false)
 
   // Feedback general
   const [bannerSuccess, setBannerSuccess] = useState<string | null>(null)
@@ -332,6 +353,107 @@ export const Admin: React.FC = () => {
       alert(err.response?.data?.detail || 'Error al crear ingrediente')
     } finally {
       setCreandoIngrediente(false)
+    }
+  }
+
+  const handleAbrirEditarProducto = (prod: Producto) => {
+    setEditarProdNombre(prod.nombre)
+    setEditarProdPrecio(Number(prod.precio || 0))
+    setEditarProdDescripcion(prod.descripcion || '')
+    setEditarProdCategoriaId(prod.categoria_id)
+    setEditarProdModalOpen(true)
+  }
+
+  const handleGuardarEditarProducto = async () => {
+    if (!productoSeleccionado) return
+    if (!editarProdNombre.trim()) {
+      alert('El nombre del producto no puede estar vacío')
+      return
+    }
+    if (editarProdPrecio < 0) {
+      alert('El precio no puede ser negativo')
+      return
+    }
+    setGuardandoEdicionProd(true)
+    try {
+      const prodActualizado = await actualizarProductoApi(productoSeleccionado.id, {
+        nombre: editarProdNombre.trim(),
+        precio: Number(editarProdPrecio),
+        descripcion: editarProdDescripcion.trim(),
+        categoria_id: editarProdCategoriaId ? Number(editarProdCategoriaId) : undefined,
+      })
+      setProductoSeleccionado(prodActualizado)
+      setBannerSuccess(
+        `✓ ¡Producto "${prodActualizado.nombre}" actualizado con éxito! Nuevo precio: $${Number(
+          prodActualizado.precio || 0
+        ).toLocaleString('es-CO')}`
+      )
+      setTimeout(() => setBannerSuccess(null), 5000)
+      setEditarProdModalOpen(false)
+      await cargarProductosYRecetas()
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error al actualizar el producto')
+    } finally {
+      setGuardandoEdicionProd(false)
+    }
+  }
+
+  const handleCrearNuevoProducto = async () => {
+    if (!nuevoProdNombre.trim()) {
+      alert('Por favor escribe el nombre del plato / hamburguesa')
+      return
+    }
+    if (!nuevoProdCategoriaId) {
+      alert('Por favor selecciona una categoría')
+      return
+    }
+    if (nuevoProdPrecio < 0) {
+      alert('El precio no puede ser negativo')
+      return
+    }
+    setCreandoProducto(true)
+    try {
+      const nuevo = await crearProductoApi({
+        nombre: nuevoProdNombre.trim(),
+        categoria_id: Number(nuevoProdCategoriaId),
+        precio: Number(nuevoProdPrecio),
+        descripcion: nuevoProdDescripcion.trim() || undefined,
+        iva_incluido: true,
+      })
+      setBannerSuccess(`✓ ¡Plato "${nuevo.nombre}" creado exitosamente! Ahora puedes definir sus ingredientes y receta.`)
+      setTimeout(() => setBannerSuccess(null), 6000)
+      setNuevoProdModalOpen(false)
+      setNuevoProdNombre('')
+      setNuevoProdDescripcion('')
+      setNuevoProdPrecio(22000)
+      await cargarProductosYRecetas()
+      setProductoSeleccionado(nuevo)
+      handleSeleccionarProducto(nuevo)
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error al crear el producto')
+    } finally {
+      setCreandoProducto(false)
+    }
+  }
+
+  const handleDesactivarProducto = async () => {
+    if (!productoSeleccionado) return
+    const confirma = window.confirm(
+      `¿Estás seguro de que deseas desactivar "${productoSeleccionado.nombre}" del menú?\n\nEl producto dejará de aparecer para los meseros inmediatamente, pero se conservará su historial para reportes de ventas.`
+    )
+    if (!confirma) return
+    setEliminandoProducto(true)
+    try {
+      await eliminarProductoApi(productoSeleccionado.id)
+      setBannerSuccess(`✓ "${productoSeleccionado.nombre}" ha sido desactivado del menú.`)
+      setTimeout(() => setBannerSuccess(null), 5000)
+      setProductoSeleccionado(null)
+      setRecetaLineas([])
+      await cargarProductosYRecetas()
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error al desactivar el producto')
+    } finally {
+      setEliminandoProducto(false)
     }
   }
 
@@ -1277,14 +1399,28 @@ export const Admin: React.FC = () => {
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setNuevoIngModalOpen(true)}
-                className="py-2 px-3.5 bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-purple-950/40 flex items-center gap-1.5 transition cursor-pointer shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Crear Insumo / Ingrediente</span>
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNuevoProdCategoriaId(categorias[0]?.id || '')
+                    setNuevoProdModalOpen(true)
+                  }}
+                  className="py-2 px-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-950/40 flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Nuevo Plato / Hamburguesa</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNuevoIngModalOpen(true)}
+                  className="py-2 px-3.5 bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-purple-950/40 flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Crear Insumo / Ingrediente</span>
+                </button>
+              </div>
             </div>
 
             {/* Layout Dividido: Catálogo a la izquierda, Editor a la derecha */}
@@ -1424,11 +1560,33 @@ export const Admin: React.FC = () => {
                         </p>
                       </div>
 
-                      <div className="text-right shrink-0">
-                        <span className="text-xs text-slate-500 block">Precio al Cliente</span>
-                        <span className="text-base font-black text-emerald-400 font-mono">
-                          ${Number(productoSeleccionado.precio || 0).toLocaleString('es-CO')}
-                        </span>
+                      <div className="flex flex-col sm:items-end gap-1.5 shrink-0">
+                        <div className="text-right">
+                          <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">Precio al Cliente</span>
+                          <span className="text-base font-black text-emerald-400 font-mono">
+                            ${Number(productoSeleccionado.precio || 0).toLocaleString('es-CO')}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleAbrirEditarProducto(productoSeleccionado)}
+                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border border-slate-700"
+                            title="Modificar precio, nombre o categoría"
+                          >
+                            <Pencil className="w-3 h-3 text-amber-400" />
+                            <span>Editar Precio / Datos</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleDesactivarProducto}
+                            disabled={eliminandoProducto}
+                            className="p-1.5 bg-rose-950/60 hover:bg-rose-900 border border-rose-800/80 text-rose-300 hover:text-rose-100 rounded-lg text-xs font-bold transition cursor-pointer"
+                            title="Desactivar este plato del menú"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -1779,6 +1937,202 @@ export const Admin: React.FC = () => {
                   className="px-4 py-2 bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-bold rounded-xl text-xs shadow-lg shadow-purple-950/50 cursor-pointer disabled:opacity-50"
                 >
                   {creandoIngrediente ? 'Creando...' : 'Crear Insumo'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Crear Nuevo Producto / Hamburguesa */}
+        {nuevoProdModalOpen && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 animate-fade-in">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <Plus className="w-4 h-4 text-emerald-400" />
+                  <span>Crear Nuevo Plato / Producto</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setNuevoProdModalOpen(false)}
+                  className="text-slate-400 hover:text-white p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Nombre del Plato / Hamburguesa *
+                  </label>
+                  <input
+                    type="text"
+                    value={nuevoProdNombre}
+                    onChange={(e) => setNuevoProdNombre(e.target.value)}
+                    placeholder="ej. Hamburguesa Doble Queso Tocino"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                      Categoría *
+                    </label>
+                    <select
+                      value={nuevoProdCategoriaId}
+                      onChange={(e) => setNuevoProdCategoriaId(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-semibold"
+                    >
+                      {categorias.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                      Precio de Venta ($ COP) *
+                    </label>
+                    <input
+                      type="number"
+                      step="500"
+                      value={nuevoProdPrecio}
+                      onChange={(e) => setNuevoProdPrecio(parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-emerald-400 focus:outline-none focus:border-emerald-500 font-mono font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Descripción (opcional)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={nuevoProdDescripcion}
+                    onChange={(e) => setNuevoProdDescripcion(e.target.value)}
+                    placeholder="ej. Pan brioche, 150g carne angus, queso cheddar y tocineta crocante..."
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-800 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setNuevoProdModalOpen(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={creandoProducto || !nuevoProdNombre.trim() || !nuevoProdCategoriaId}
+                  onClick={handleCrearNuevoProducto}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold rounded-xl text-xs shadow-lg shadow-emerald-950/50 cursor-pointer disabled:opacity-50"
+                >
+                  {creandoProducto ? 'Creando...' : 'Crear Plato'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Editar Plato / Precio / Datos */}
+        {editarProdModalOpen && productoSeleccionado && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 animate-fade-in">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <Pencil className="w-4 h-4 text-amber-400" />
+                  <span>Modificar Precio y Datos del Plato</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setEditarProdModalOpen(false)}
+                  className="text-slate-400 hover:text-white p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Nombre del Plato *
+                  </label>
+                  <input
+                    type="text"
+                    value={editarProdNombre}
+                    onChange={(e) => setEditarProdNombre(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500 font-bold"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                      Precio Carta ($ COP) *
+                    </label>
+                    <input
+                      type="number"
+                      step="500"
+                      value={editarProdPrecio}
+                      onChange={(e) => setEditarProdPrecio(parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-emerald-400 focus:outline-none focus:border-amber-500 font-mono font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                      Categoría
+                    </label>
+                    <select
+                      value={editarProdCategoriaId}
+                      onChange={(e) => setEditarProdCategoriaId(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500 font-semibold"
+                    >
+                      {categorias.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Descripción
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={editarProdDescripcion}
+                    onChange={(e) => setEditarProdDescripcion(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500 resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-800 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setEditarProdModalOpen(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={guardandoEdicionProd || !editarProdNombre.trim()}
+                  onClick={handleGuardarEditarProducto}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-bold rounded-xl text-xs shadow-lg shadow-amber-950/50 cursor-pointer disabled:opacity-50"
+                >
+                  {guardandoEdicionProd ? 'Guardando...' : 'Guardar Cambios'}
                 </button>
               </div>
             </div>
