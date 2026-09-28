@@ -403,6 +403,9 @@ control avanzado de merma (conteo vs teórico), exportaciones a Excel.
 7. **Motor Histórico y Consulta de Reportes Sin Límite Temporal:**
    - Conservación inmutable permanente en PostgreSQL: **"Nada se borra: se registra"**.
    - Filtros de fecha (`Desde` / `Hasta`) y canal en la **Planilla Oficial de Cuadre Diario** con desglose por día (subtotal, IVA 19%, total facturado, comanda diaria) y botón de impresión en papel físico o exportación PDF sin caducidad de datos (consultas disponibles desde el Día 1 del restaurante).
+8. **Protocolo de Recuperación de Credenciales Olvidadas:**
+   - **Para el Personal Operativo (Mesero, Cocina, Caja):** El Administrador gestiona sus accesos en tiempo real desde la pestaña `USUARIOS` (`UsuariosTab.tsx` / `PUT /admin/usuarios/{id}/password`). Permite visualizar los nombres de usuario exactos y asignar nuevas contraseñas temporales en un clic.
+   - **Para el Administrador:** Criptográficamente blindado con `bcrypt` (las contraseñas no se almacenan en texto plano). En caso de olvido del usuario o clave maestra, la cuenta se restablece de inmediato mediante la consola en la nube (Supabase SQL Editor) o comando de rescate sin afectar ventas, recetas ni saldos contables.
 
 ---
 
