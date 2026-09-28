@@ -31,6 +31,32 @@ import {
   PlusCircle,
 } from 'lucide-react'
 
+interface DetalleVistaAgrupado {
+  id: number
+  cantidad: number
+  producto_nombre: string
+  estado: string
+}
+
+function agruparDetallesParaVista(detalles: DetallePedido[]): DetalleVistaAgrupado[] {
+  const map = new Map<string, DetalleVistaAgrupado>()
+  for (const d of detalles) {
+    const key = `${d.producto_nombre}__${d.estado}`
+    const existing = map.get(key)
+    if (existing) {
+      existing.cantidad += Number(d.cantidad) || 1
+    } else {
+      map.set(key, {
+        id: d.id,
+        cantidad: Number(d.cantidad) || 1,
+        producto_nombre: d.producto_nombre,
+        estado: d.estado,
+      })
+    }
+  }
+  return Array.from(map.values())
+}
+
 export const Caja: React.FC = () => {
   const [turno, setTurno] = useState<CierreOut | null>(null)
   const [pedidos, setPedidos] = useState<Pedido[]>([])
@@ -139,18 +165,28 @@ export const Caja: React.FC = () => {
     if (pedidoParaCobro) {
       const subtotalCalc = Number(pedidoParaCobro.subtotal) || Math.round(resultado.total / 1.19)
       const ivaCalc = Number(pedidoParaCobro.iva) || (resultado.total - subtotalCalc)
-      const items = (pedidoParaCobro.detalles || []).map((l: DetallePedido) => {
+      const itemsMap = new Map<string, { cantidad: number; nombre: string; precio_unitario: number; total: number; variaciones?: string[] }>()
+      for (const l of (pedidoParaCobro.detalles || [])) {
         const cant = Number(l.cantidad) || 1
         const precioUnit = Number(l.precio_unitario) || 0
-        const totalLinea = Math.round(cant * precioUnit)
-        return {
-          cantidad: cant,
-          nombre: l.producto_nombre,
-          precio_unitario: precioUnit,
-          total: totalLinea,
-          variaciones: (l.variacion_snapshot?.modificaciones as string[]) || [],
+        const variaciones = (l.variacion_snapshot?.modificaciones as string[]) || []
+        const varKey = variaciones.slice().sort().join('|')
+        const key = `${l.producto_nombre}__${precioUnit}__${varKey}`
+        const existing = itemsMap.get(key)
+        if (existing) {
+          existing.cantidad += cant
+          existing.total += Math.round(cant * precioUnit)
+        } else {
+          itemsMap.set(key, {
+            cantidad: cant,
+            nombre: l.producto_nombre,
+            precio_unitario: precioUnit,
+            total: Math.round(cant * precioUnit),
+            variaciones: variaciones.length > 0 ? variaciones : undefined,
+          })
         }
-      })
+      }
+      const items = Array.from(itemsMap.values())
 
       setTirillaConfig({
         isOpen: true,
@@ -430,7 +466,7 @@ export const Caja: React.FC = () => {
 
                   {/* Lista de Ítems */}
                   <div className="p-3.5 space-y-1.5 flex-1 max-h-[180px] overflow-y-auto">
-                    {pedido.detalles?.map((d) => (
+                    {agruparDetallesParaVista(pedido.detalles || []).map((d) => (
                       <div key={d.id} className="flex items-center justify-between text-xs">
                         <span className="text-slate-200">
                           <strong className="text-amber-400 mr-1">{Number(d.cantidad)}x</strong>

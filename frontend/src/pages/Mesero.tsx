@@ -130,14 +130,34 @@ export const Mesero: React.FC = () => {
 
   // Agregar producto rápido desde el catálogo (+1)
   const handleQuickAdd = (producto: Producto) => {
-    const newItem: CartItem = {
-      uid: `${producto.id}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      producto,
-      cantidad: 1,
-      precio_unitario: Number(producto.precio || 0),
-      variacion: {},
-    }
-    setCartItems((prev) => [...prev, newItem])
+    setCartItems((prev) => {
+      // Si el producto ya existe en el carrito sin personalizaciones, incrementar cantidad
+      const existingIndex = prev.findIndex(
+        (item) =>
+          item.producto.id === producto.id &&
+          (!item.variacion || (
+            !item.variacion.notas &&
+            (!item.variacion.modificaciones || item.variacion.modificaciones.length === 0) &&
+            (!item.variacion.adiciones || item.variacion.adiciones.length === 0) &&
+            !item.variacion.preparado_id
+          ))
+      )
+      if (existingIndex >= 0) {
+        return prev.map((item, idx) =>
+          idx === existingIndex
+            ? { ...item, cantidad: item.cantidad + 1 }
+            : item
+        )
+      }
+      const newItem: CartItem = {
+        uid: `${producto.id}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        producto,
+        cantidad: 1,
+        precio_unitario: Number(producto.precio || 0),
+        variacion: {},
+      }
+      return [...prev, newItem]
+    })
   }
 
   // Agregar producto desde modal con personalización y adiciones
@@ -203,18 +223,33 @@ export const Mesero: React.FC = () => {
     setSubmitting(true)
     const idempotencyKey = `ord-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
 
+    // Consolidar ítems idénticos para que no se dupliquen las líneas en cocina ni caja
+    const lineasConsolidadas = (() => {
+      const map = new Map<string, { producto_id: number; cantidad: number; variacion_snapshot?: any; preparado_id?: number }>()
+      for (const item of cartItems) {
+        const key = `${item.producto.id}__${JSON.stringify(item.variacion || {})}__${item.variacion?.preparado_id || ''}`
+        const existing = map.get(key)
+        if (existing) {
+          existing.cantidad += item.cantidad
+        } else {
+          map.set(key, {
+            producto_id: item.producto.id,
+            cantidad: item.cantidad,
+            variacion_snapshot: item.variacion,
+            preparado_id: item.variacion?.preparado_id,
+          })
+        }
+      }
+      return Array.from(map.values())
+    })()
+
     try {
       if (pedidoActivo) {
         // AGREGAR NUEVA RONDA A LA MESA
         const nextRonda = Math.max(...pedidoActivo.detalles.map((d) => d.ronda), 1) + 1
         await agregarRondaApi(pedidoActivo.id, {
           ronda: nextRonda,
-          lineas: cartItems.map((item) => ({
-            producto_id: item.producto.id,
-            cantidad: item.cantidad,
-            variacion_snapshot: item.variacion,
-            preparado_id: item.variacion.preparado_id,
-          })),
+          lineas: lineasConsolidadas,
         })
 
         setSuccessBanner(
@@ -226,12 +261,7 @@ export const Mesero: React.FC = () => {
           canal: 'MESA',
           mesa_id: mesaSeleccionada.id,
           idempotency_key: idempotencyKey,
-          lineas: cartItems.map((item) => ({
-            producto_id: item.producto.id,
-            cantidad: item.cantidad,
-            variacion_snapshot: item.variacion,
-            preparado_id: item.variacion.preparado_id,
-          })),
+          lineas: lineasConsolidadas,
         }
         const nuevo = await crearPedidoApi(payloadNuevo)
 
