@@ -415,9 +415,17 @@ control avanzado de merma (conteo vs teórico), exportaciones a Excel.
 11. **Indexación Masiva B-Tree en PostgreSQL (Escalabilidad Empresarial):**
     - Inyección de índices (`index=True`) en todas las columnas de filtrado crítico: `fecha_dia`, `estado`, `mesa_id`, `usuario_id`, `pedido_id`, `producto_id`, `cierre_id` y `accion`.
     - Eliminación de escaneos secuenciales (*Sequential Scans*), garantizando tiempos de respuesta de milisegundos en el KDS de cocina y en los reportes del dashboard, incluso con cientos de miles de pedidos históricos acumulados.
-12. **Blindaje de Seguridad en Autenticación y WebSockets:**
-    - **Protección Anti-Fuerza Bruta en Caja:** Implementación de limitador de tasa (*Rate Limiting*) en memoria en `/auth/login`. Tras 5 intentos fallidos consecutivos por IP, el sistema bloquea solicitudes por 5 minutos arrojando `HTTP 429 Too Many Requests`.
-    - **Lista Negra y Desconexión Inmediata en KDS:** Validación en vivo de `user.activo` en el canal WebSocket `/ws/pedidos`; cualquier usuario revocado o desactivado por el Administrador es desconectado y expulsado de forma instantánea de la red.
+13. **Consolidación Visual de Adiciones y Personalizaciones en Comanda y Tirilla:**
+    - Agrupación inteligente de líneas repetidas en Mesero y Caja sin ocultar personalizaciones: si dos platos son idénticos se muestran consolidados como `2x`, pero si uno tiene adición (`+ Huevo Frito`, `+ Tocineta`, etc.) o modificación (`Sin cebolla`), se desglosan en líneas independientes con distintivos visuales coloridos.
+    - Impresión de adiciones con su costo extra en la tirilla física ESC/POS de 80mm y en el historial de pedidos activos en la comanda del mesero.
+14. **Auditoría Exhaustiva de Todo el Sistema y Blindaje de Producción (Septiembre 2026):**
+    - **Idempotencia Real Persistida:** Inyección y almacenamiento obligatorio de `idempotency_key` en PostgreSQL. Los reintentos por cortes de Wi-Fi retornan la orden existente sin duplicar pedidos ni mandar doble ticket a cocina.
+    - **Concurrencia en Cobros y Mesas:** Bloqueo pesimista `with_for_update()` en mesa al crear pedido y en comanda al cobrar. Se elimina el riesgo de doble cobro simultáneo o colisión de dos meseros abriendo la misma mesa.
+    - **Blindaje del Arqueo Físico en Devoluciones:** Las devoluciones de pagos con Tarjeta o Vales ya no deducen dinero en efectivo del cajón en el Reporte Z. Anular un pedido con Vale cancela automáticamente el pagaré en la base de datos.
+    - **Protección contra Stock Negativo y Deadlocks:** En `descontar_insumos_de_producto`, los ingredientes se bloquean en orden alfabético determinista (`sorted(insumos.keys())`) para evitar interbloqueos de BD, y la transacción se aborta limpiamente si el stock cae a negativo bajo la política `BLOQUEAR`.
+    - **Resiliencia PWA Offline:** `AuthContext` no expulsa al mesero por fallas de conexión (solo ante 401 explícito). La cola offline retiene comandas ante caídas temporales del servidor (errores 5xx).
+    - **Rate Limiting Seguro tras Proxy Cloud:** Detección de IP real con `X-Forwarded-For` y control individual por `(usuario, ip)` para prevenir auto-DoS en Render/Cloudflare.
+    - **Infraestructura y Seguridad:** CORS restringido a Firebase Hosting y LAN local; contenedor Docker con usuario sin privilegios `appuser` y Python 3.11; índices de alto rendimiento para kardex, pagos y vales en `01_schema.sql`.
 
 ---
 
@@ -536,3 +544,28 @@ flowchart TB
 > imagen es mi favorita: aunque el internet se caiga, adentro del local todo sigue funcionando
 > normal — los pedidos, la cocina y la caja. Usted solo necesita internet para ver los números desde
 > afuera. ¿Le parecen bien estas pantallas o quiere ajustar algo antes de que empecemos?"
+
+---
+
+## 16. Lista de Pendientes para Lanzamiento y Entrega al Cliente
+
+A continuación se resumen los puntos que quedan pendientes antes y durante el día de apertura en el local:
+
+### 1. Acuerdo Legal y Contrato de Software ⚖️
+- **Estado:** Pendiente de formalización cuando el usuario lo determine (*"aun no gracias"* en la sesión anterior).
+- **Alcance recomendado:** Delimitar alcance del MVP, cronograma de entrega, cláusula de garantía de corrección de bugs, exclusión de responsabilidad por daños de hardware/cortes de luz externos, y términos de soporte mensual.
+
+### 2. Puesta a Punto del Hardware en el Restaurante (Fase 18.3) 🔌
+- **Fijación de IP Local del Servidor:** Configurar IP fija en el router Wi-Fi para el "Cerebro Local" (ejemplo `192.168.1.50` reservada por MAC en el router del restaurante) para que los meseros no pierdan la ruta si el router se reinicia.
+- **Prueba Física de Impresión Térmica:** Conectar la impresora física de 80mm en caja mediante WebUSB / Red ESC/POS y calibrar el corte de papel automático, nitidez y márgenes reales del recibo.
+- **Inspección de Cobertura Wi-Fi:** Medir que la señal del router llegue sin zonas muertas a todas las mesas (1 a 9) y a la pared de cocina.
+
+### 3. Carga de Carta y Precios Oficiales de Cali 🍔
+- **Catálogo Definitivo:** Reemplazar los 67 productos e insumos base por la carta real del cliente, sus fotos reales y sus recetas exactas desde el panel de administración (`Admin.tsx` > `+ Nuevo Plato` / `✏️ Editar Precio`).
+
+### 4. Capacitación Operativa en Vivo (Simulacro de 20 min) 🧑‍🍳
+- Realizar un simulacro de servicio previo a la apertura con el personal real:
+  1. Dos meseros tomando órdenes y agregando rondas desde sus celulares.
+  2. Cocinero recibiendo los tickets con el timbre sonoro, cambiando estados y midiendo tiempos.
+  3. Cajera abriendo turno con base, cobrando en efectivo (verificando cambio) y tarjeta.
+  4. Ejecución del Arqueo Ciego y emisión del Reporte Z de cierre.
