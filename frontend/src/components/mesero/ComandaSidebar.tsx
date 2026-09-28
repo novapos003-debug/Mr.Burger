@@ -90,12 +90,21 @@ export const ComandaSidebar: React.FC<Props> = ({
                 <div className="truncate flex-1">
                   <span className="font-bold text-amber-200">{det.cantidad}×</span>{' '}
                   <span>{det.producto_nombre}</span>
-                  {Array.isArray(det.variacion_snapshot?.modificaciones) &&
-                    det.variacion_snapshot.modificaciones.length > 0 && (
-                      <span className="text-[10px] text-slate-400 ml-1">
-                        ({det.variacion_snapshot.modificaciones.join(', ')})
+                  {(() => {
+                    const snap = det.variacion_snapshot
+                    if (!snap) return null
+                    const mods = Array.isArray(snap.modificaciones) ? snap.modificaciones : []
+                    const adics = Array.isArray(snap.adiciones)
+                      ? snap.adiciones.map((a: any) => (typeof a === 'string' ? `+${a}` : `+${a.nombre}`))
+                      : []
+                    const notas = typeof snap.notas === 'string' && snap.notas.trim() ? [`"${snap.notas.trim()}"`] : []
+                    const all = [...mods, ...adics, ...notas]
+                    return all.length > 0 ? (
+                      <span className="text-[10px] text-amber-300/90 ml-1">
+                        ({all.join(', ')})
                       </span>
-                    )}
+                    ) : null
+                  })()}
                 </div>
                 <span className="text-[9px] font-mono text-slate-400 px-1 rounded bg-slate-900 border border-slate-800 ml-1 shrink-0">
                   R{det.ronda}

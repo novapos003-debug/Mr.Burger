@@ -31,17 +31,57 @@ import {
   PlusCircle,
 } from 'lucide-react'
 
+function extraerVariacionesTexto(variacion?: Record<string, any> | null): string[] {
+  if (!variacion) return []
+  const res: string[] = []
+
+  // 1. Modificaciones (ej: "Sin cebolla")
+  if (Array.isArray(variacion.modificaciones)) {
+    for (const m of variacion.modificaciones) {
+      if (typeof m === 'string' && m.trim()) {
+        res.push(m.trim())
+      }
+    }
+  }
+
+  // 2. Adiciones extras con nombre (ej: "+ Huevo Frito")
+  if (Array.isArray(variacion.adiciones)) {
+    for (const a of variacion.adiciones) {
+      if (typeof a === 'string' && a.trim()) {
+        res.push(`+ ${a.trim()}`)
+      } else if (a && typeof a === 'object' && a.nombre) {
+        res.push(`+ ${a.nombre}`)
+      }
+    }
+  }
+
+  // 3. Notas especiales
+  if (typeof variacion.notas === 'string' && variacion.notas.trim()) {
+    res.push(`"${variacion.notas.trim()}"`)
+  }
+
+  // 4. Preparado reutilizado
+  if (variacion.es_preparado || variacion.preparado_id) {
+    res.push('Preparado reusado')
+  }
+
+  return res
+}
+
 interface DetalleVistaAgrupado {
   id: number
   cantidad: number
   producto_nombre: string
   estado: string
+  variaciones: string[]
 }
 
 function agruparDetallesParaVista(detalles: DetallePedido[]): DetalleVistaAgrupado[] {
   const map = new Map<string, DetalleVistaAgrupado>()
   for (const d of detalles) {
-    const key = `${d.producto_nombre}__${d.estado}`
+    const vars = extraerVariacionesTexto(d.variacion_snapshot)
+    const varKey = vars.slice().sort().join('|')
+    const key = `${d.producto_nombre}__${d.estado}__${varKey}`
     const existing = map.get(key)
     if (existing) {
       existing.cantidad += Number(d.cantidad) || 1
@@ -51,6 +91,7 @@ function agruparDetallesParaVista(detalles: DetallePedido[]): DetalleVistaAgrupa
         cantidad: Number(d.cantidad) || 1,
         producto_nombre: d.producto_nombre,
         estado: d.estado,
+        variaciones: vars,
       })
     }
   }
@@ -169,7 +210,7 @@ export const Caja: React.FC = () => {
       for (const l of (pedidoParaCobro.detalles || [])) {
         const cant = Number(l.cantidad) || 1
         const precioUnit = Number(l.precio_unitario) || 0
-        const variaciones = (l.variacion_snapshot?.modificaciones as string[]) || []
+        const variaciones = extraerVariacionesTexto(l.variacion_snapshot)
         const varKey = variaciones.slice().sort().join('|')
         const key = `${l.producto_nombre}__${precioUnit}__${varKey}`
         const existing = itemsMap.get(key)
@@ -465,16 +506,36 @@ export const Caja: React.FC = () => {
                   )}
 
                   {/* Lista de Ítems */}
-                  <div className="p-3.5 space-y-1.5 flex-1 max-h-[180px] overflow-y-auto">
+                  <div className="p-3.5 space-y-2 flex-1 max-h-[190px] overflow-y-auto">
                     {agruparDetallesParaVista(pedido.detalles || []).map((d) => (
-                      <div key={d.id} className="flex items-center justify-between text-xs">
-                        <span className="text-slate-200">
-                          <strong className="text-amber-400 mr-1">{Number(d.cantidad)}x</strong>
-                          {d.producto_nombre}
-                        </span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
-                          {d.estado}
-                        </span>
+                      <div key={d.id} className="text-xs border-b border-slate-800/50 pb-1.5 last:border-b-0 last:pb-0">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-200">
+                            <strong className="text-amber-400 mr-1">{Number(d.cantidad)}x</strong>
+                            {d.producto_nombre}
+                          </span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 shrink-0 ml-1">
+                            {d.estado}
+                          </span>
+                        </div>
+                        {d.variaciones && d.variaciones.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1 pl-3.5">
+                            {d.variaciones.map((v, idx) => (
+                              <span
+                                key={idx}
+                                className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
+                                  v.startsWith('+')
+                                    ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/80'
+                                    : v.startsWith('Sin')
+                                    ? 'bg-rose-950/80 text-rose-300 border border-rose-800/80'
+                                    : 'bg-slate-800 text-slate-300 border border-slate-700'
+                                }`}
+                              >
+                                {v}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
