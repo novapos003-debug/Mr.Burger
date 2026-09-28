@@ -11,6 +11,7 @@ export function useCocinaWebSocket({ onNewOrder, onOrderUpdate }: UseCocinaWebSo
   const [status, setStatus] = useState<WebSocketStatus>('desconectado')
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<number | null>(null)
+  const pingIntervalRef = useRef<number | null>(null)
   const unmountedRef = useRef(false)
 
   // Callbacks refs to avoid stale closures in event listeners
@@ -40,6 +41,11 @@ export function useCocinaWebSocket({ onNewOrder, onOrderUpdate }: UseCocinaWebSo
       }
     }
 
+    if (pingIntervalRef.current) {
+      window.clearInterval(pingIntervalRef.current)
+      pingIntervalRef.current = null
+    }
+
     setStatus('reconectando')
     const baseWs = getWsBaseUrl()
     const separator = baseWs.includes('?') ? '&' : '?'
@@ -52,10 +58,23 @@ export function useCocinaWebSocket({ onNewOrder, onOrderUpdate }: UseCocinaWebSo
       ws.onopen = () => {
         if (unmountedRef.current) return
         setStatus('conectado')
+
+        // Heartbeat cada 15 segundos para mantener viva la conexión
+        if (pingIntervalRef.current) window.clearInterval(pingIntervalRef.current)
+        pingIntervalRef.current = window.setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            try {
+              ws.send('ping')
+            } catch {
+              // ignore
+            }
+          }
+        }, 15000)
       }
 
       ws.onmessage = (event) => {
         if (unmountedRef.current) return
+        if (event.data === 'pong') return
         try {
           const payload: WebSocketEvent = JSON.parse(event.data)
 
@@ -72,6 +91,10 @@ export function useCocinaWebSocket({ onNewOrder, onOrderUpdate }: UseCocinaWebSo
       }
 
       ws.onclose = (e) => {
+        if (pingIntervalRef.current) {
+          window.clearInterval(pingIntervalRef.current)
+          pingIntervalRef.current = null
+        }
         if (unmountedRef.current) return
         // Si el código es 1008 (autenticación fallida), no reintentar en bucle rápido
         if (e.code === 1008) {
@@ -111,6 +134,10 @@ export function useCocinaWebSocket({ onNewOrder, onOrderUpdate }: UseCocinaWebSo
 
     return () => {
       unmountedRef.current = true
+      if (pingIntervalRef.current) {
+        window.clearInterval(pingIntervalRef.current)
+        pingIntervalRef.current = null
+      }
       if (reconnectTimeoutRef.current) {
         window.clearTimeout(reconnectTimeoutRef.current)
       }

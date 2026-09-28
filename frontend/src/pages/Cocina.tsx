@@ -34,7 +34,13 @@ export const Cocina: React.FC = () => {
       setError(null)
     } catch (err: any) {
       console.error('Error cargando cola de cocina:', err)
-      setError('No se pudo conectar con el servidor de cocina')
+      if (err.response?.status === 403) {
+        setError('Tu usuario actual no tiene permiso de Cocina. Cierra sesión e ingresa con el usuario "cocina".')
+      } else if (err.code === 'ERR_NETWORK' || !err.response) {
+        setError('Error de conexión con el servidor local. Abre http://localhost:5173 en tu PC o verifica la IP.')
+      } else {
+        setError(err.response?.data?.detail || 'No se pudo conectar con el servidor de cocina')
+      }
     } finally {
       setLoading(false)
       setIsRefreshing(false)

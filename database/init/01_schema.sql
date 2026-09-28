@@ -180,6 +180,7 @@ CREATE TABLE pedido (
     iva           NUMERIC(12,2) NOT NULL DEFAULT 0,
     total         NUMERIC(12,2) NOT NULL DEFAULT 0,
     motivo_cancelacion TEXT,                      -- obligatorio si estado = CANCELADO
+    idempotency_key VARCHAR(100) UNIQUE,          -- clave de idempotencia para evitar duplicados offline
     creado_en       TIMESTAMPTZ NOT NULL DEFAULT now(),
     enviado_en       TIMESTAMPTZ,
     finalizado_en    TIMESTAMPTZ,
@@ -190,6 +191,8 @@ CREATE TABLE pedido (
     -- una línea cuenta como "producida" si su copia_detalle pasó a PREPARANDO/LISTO/ENTREGADO
     UNIQUE (fecha_dia, consecutivo)
 );
+
+CREATE INDEX IF NOT EXISTS ix_pedido_idempotency_key ON pedido(idempotency_key);
 
 CREATE INDEX idx_pedido_mesa  ON pedido (mesa_id) WHERE canal = 'MESA';
 CREATE INDEX idx_pedido_estado ON pedido (estado);

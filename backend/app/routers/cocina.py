@@ -3,7 +3,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.deps import kitchen_required
-from app.database import get_db
+from app.database import get_db, safe_commit
 from app.models import DetallePedido, Pedido, Usuario
 from app.schemas import TicketOut
 from app.services.cocina import cola_cocina, descontar_inventario, minutos_cocina

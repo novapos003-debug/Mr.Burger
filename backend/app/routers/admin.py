@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import admin_required
-from app.database import get_db
+from app.database import get_db, safe_commit
 from app.models import Usuario
 from app.schemas.admin import (
     AlertaStockItem,

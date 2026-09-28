@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import admin_required, staff_required
-from app.database import get_db
+from app.database import get_db, safe_commit
 from app.models import Categoria, TipoCategoria, Usuario
 from app.schemas import CategoriaIn, CategoriaOut, CategoriaUpdate, TipoCategoriaOut
 from app.services.historial import registrar

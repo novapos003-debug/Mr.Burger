@@ -59,16 +59,30 @@ export const Mesero: React.FC = () => {
   // Cargar datos
   const cargarDatos = useCallback(async () => {
     try {
-      const [m, c, p, act] = await Promise.all([
+      const [mRes, cRes, pRes, actRes] = await Promise.allSettled([
         getMesasApi(),
         getCategoriasApi(),
         getProductosApi(),
         getPedidosActivosApi(),
       ])
-      setMesas(m)
-      setCategorias(c)
-      setProductos(p)
-      setPedidosActivos(act)
+
+      let menuOk = true
+      if (mRes.status === 'fulfilled') setMesas(mRes.value)
+      else menuOk = false
+
+      if (cRes.status === 'fulfilled') setCategorias(cRes.value)
+      else menuOk = false
+
+      if (pRes.status === 'fulfilled') setProductos(pRes.value)
+      else menuOk = false
+
+      if (actRes.status === 'fulfilled') setPedidosActivos(actRes.value)
+
+      if (!menuOk) {
+        setErrorBanner('Error al sincronizar mesas y menú con el servidor local')
+      } else {
+        setErrorBanner(null)
+      }
     } catch {
       setErrorBanner('Error al sincronizar mesas y menú con el servidor local')
     }
@@ -279,8 +293,6 @@ export const Mesero: React.FC = () => {
                 localStorage.setItem('pos_mesero_offline_queue', JSON.stringify(queue))
              }
           }
-        }
-          })
         }
 
         setOfflineCount(getPendingOrders().length)

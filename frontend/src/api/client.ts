@@ -14,12 +14,17 @@ export const setServerIp = (ip: string): void => {
 }
 
 export const getApiBaseUrl = (): string => {
+  // En localhost o 127.0.0.1 (el computador servidor local), usar siempre el proxy local de Vite
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return '/api'
+  }
   const customIp = getServerIp()
   if (customIp) {
-    if (customIp.startsWith('http://') || customIp.startsWith('https://')) {
-      return `${customIp}/api`
+    const clean = customIp.trim().replace(/\/api$/, '').replace(/\/$/, '')
+    if (clean.startsWith('http://') || clean.startsWith('https://')) {
+      return `${clean}/api`
     }
-    const hostWithPort = customIp.includes(':') ? customIp : `${customIp}:8000`
+    const hostWithPort = clean.includes(':') ? clean : `${clean}:8000`
     return `http://${hostWithPort}/api`
   }
   // Si estamos en la nube (Firebase Hosting), apuntar por defecto a Render
@@ -33,6 +38,10 @@ export const getApiBaseUrl = (): string => {
 }
 
 export const getWsBaseUrl = (): string => {
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${protocol}//${window.location.host}/ws/pedidos`
+  }
   const customIp = getServerIp()
   if (customIp) {
     const clean = customIp.replace(/^https?:\/\//, '').replace(/\/api$/, '').replace(/\/$/, '')

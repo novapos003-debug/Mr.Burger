@@ -4,10 +4,13 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
+from sqlalchemy import text
+
 from app.config import settings
 from app.core.security import decode_access_token
 from app.database import Base, engine, SessionLocal
 import app.models  # registra todos los modelos SQLAlchemy
+from app.models import Usuario
 from app.routers import (
     admin,
     auth,
@@ -29,6 +32,10 @@ async def lifespan(app: FastAPI):
     # Asegura que todas las tablas de los modelos existan en la BD (incluyendo la nube)
     try:
         Base.metadata.create_all(bind=engine)
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE pedido ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(100) UNIQUE;"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_pedido_idempotency_key ON pedido(idempotency_key);"))
+            conn.commit()
     except Exception:
         pass
 
@@ -104,7 +111,9 @@ async def websocket_pedidos(websocket: WebSocket, token: str | None = None):
     await ws_manager.connect(websocket)
     try:
         while True:
-            await websocket.receive_text()  # mantiene la conexión abierta
+            data = await websocket.receive_text()  # mantiene la conexión abierta
+            if data == "ping":
+                await websocket.send_text("pong")
     except Exception:
         ws_manager.disconnect(websocket)
 

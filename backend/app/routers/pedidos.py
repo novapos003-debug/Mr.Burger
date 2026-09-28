@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.deps import admin_required, cashier_required, staff_required
 from app.core.tiempo import fecha_local
-from app.database import get_db
+from app.database import get_db, safe_commit
 from app.models import DetallePedido, Mesa, Pedido, Preparado, Producto, Usuario
 from app.schemas import (
     DetallePedidoIn,

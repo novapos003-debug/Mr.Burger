@@ -7,7 +7,7 @@ import httpx
 from sqlalchemy import func
 
 from app.config import settings
-from app.database import SessionLocal
+from app.database import SessionLocal, safe_commit
 from app.models.sync import RegistroSync
 
 logger = logging.getLogger("sync_worker")

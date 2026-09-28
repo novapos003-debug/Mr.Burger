@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.deps import admin_required, staff_required
-from app.database import get_db
+from app.database import get_db, safe_commit
 from app.models import Categoria, ComponenteCombo, DetalleReceta, Producto, Usuario
 from app.schemas import (
     ComponenteComboOut,
