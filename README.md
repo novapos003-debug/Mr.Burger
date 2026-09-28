@@ -391,6 +391,18 @@ control avanzado de merma (conteo vs teórico), exportaciones a Excel.
    - Se aseguró que los pedidos de mostrador y bebidas que no transitan por el KDS de cocina descuenten automáticamente sus recetas y existencias en el momento exacto del cobro en caja.
 4. **Política Configurable de Stock Insuficiente:**
    - Incorporación del parámetro `politica_stock_insuficiente` (`BLOQUEAR` vs `ADVERTIR_Y_PERMITIR`) administrable en tiempo real desde el nuevo módulo de Configuración del panel de administración (`ConfiguracionTab.tsx`).
+5. **Gestión Dinámica de Catálogo y Precios en la Interfaz de Admin:**
+   - Integración de modales interactivos en `Admin.tsx` y API de catálogo (`admin.ts`):
+     - `+ Nuevo Plato / Hamburguesa`: creación visual de nuevos platos con asignación directa de categoría, precio en COP y descripción.
+     - `✏️ Editar Precio / Datos`: ajuste inmediato del precio de carta con recálculo automático de costos/márgenes y auditoría inmutable (`MODIFICAR_PRECIO`).
+     - `🗑️ Desactivar Plato`: borrado lógico seguro (*soft-delete*) que remueve el plato del catálogo del mesero sin afectar estadísticas ni historiales contables.
+6. **Auditoría Exhaustiva en Vivo Multi-Rol (100% PASS):**
+   - Ejecución de suite automatizada contra el backend en producción (`https://mrburger-api.onrender.com` + Supabase PostgreSQL) con **23 casos ejecutados y 23 aprobados (23 PASS / 0 FAIL)**:
+     - Verificación de los 4 roles (`admin`, `mesero`, `cocina`, `caja`) con tokens JWT independientes y aislamiento estricto de seguridad (códigos 403 ante accesos indebidos).
+     - Validación del flujo operativo completo: Selección de mesa/mostrador → comanda a cocina → campana KDS y aceptación con descuento de stock → pase a listo → cobro en caja con validación de turno y cambio exacto → visualización de KPIs en dashboard y auditoría.
+7. **Motor Histórico y Consulta de Reportes Sin Límite Temporal:**
+   - Conservación inmutable permanente en PostgreSQL: **"Nada se borra: se registra"**.
+   - Filtros de fecha (`Desde` / `Hasta`) y canal en la **Planilla Oficial de Cuadre Diario** con desglose por día (subtotal, IVA 19%, total facturado, comanda diaria) y botón de impresión en papel físico o exportación PDF sin caducidad de datos (consultas disponibles desde el Día 1 del restaurante).
 
 ---
 
