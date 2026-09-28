@@ -406,6 +406,18 @@ control avanzado de merma (conteo vs teórico), exportaciones a Excel.
 8. **Protocolo de Recuperación de Credenciales Olvidadas:**
    - **Para el Personal Operativo (Mesero, Cocina, Caja):** El Administrador gestiona sus accesos en tiempo real desde la pestaña `USUARIOS` (`UsuariosTab.tsx` / `PUT /admin/usuarios/{id}/password`). Permite visualizar los nombres de usuario exactos y asignar nuevas contraseñas temporales en un clic.
    - **Para el Administrador:** Criptográficamente blindado con `bcrypt` (las contraseñas no se almacenan en texto plano). En caso de olvido del usuario o clave maestra, la cuenta se restablece de inmediato mediante la consola en la nube (Supabase SQL Editor) o comando de rescate sin afectar ventas, recetas ni saldos contables.
+9. **Idempotencia Offline contra Pedidos Duplicados:**
+   - Generación de llave de idempotencia única (`idempotency_key` con prefijo UUID) en el cliente (`Mesero.tsx` y `offlineQueue.ts`) antes del despacho de la orden.
+   - Columna única e indexada `idempotency_key` en el modelo `Pedido` y esquema `PedidoCreate`. Si un microcorte de red interrumpe la respuesta del servidor y la cola de reintentos offline reenvía la orden, el backend detecta la llave duplicada y retorna la comanda existente sin duplicar productos, comandas en cocina ni cobros a la mesa.
+10. **Transacciones Seguras con Rollback Automático (`safe_commit`):**
+    - Implementación de la función centralizada `safe_commit(db)` en [`database.py`](file:///C:/Users/jhona/Documents/Default%20Project/backend/app/database.py) y refactorización total de routers y servicios.
+    - Captura atómica de `SQLAlchemyError` con ejecución forzada de `db.rollback()` y emisión de código estructurado `HTTP 409 Conflict`, erradicando fallos 500 no controlados y asegurando la integridad del pool de conexiones.
+11. **Indexación Masiva B-Tree en PostgreSQL (Escalabilidad Empresarial):**
+    - Inyección de índices (`index=True`) en todas las columnas de filtrado crítico: `fecha_dia`, `estado`, `mesa_id`, `usuario_id`, `pedido_id`, `producto_id`, `cierre_id` y `accion`.
+    - Eliminación de escaneos secuenciales (*Sequential Scans*), garantizando tiempos de respuesta de milisegundos en el KDS de cocina y en los reportes del dashboard, incluso con cientos de miles de pedidos históricos acumulados.
+12. **Blindaje de Seguridad en Autenticación y WebSockets:**
+    - **Protección Anti-Fuerza Bruta en Caja:** Implementación de limitador de tasa (*Rate Limiting*) en memoria en `/auth/login`. Tras 5 intentos fallidos consecutivos por IP, el sistema bloquea solicitudes por 5 minutos arrojando `HTTP 429 Too Many Requests`.
+    - **Lista Negra y Desconexión Inmediata en KDS:** Validación en vivo de `user.activo` en el canal WebSocket `/ws/pedidos`; cualquier usuario revocado o desactivado por el Administrador es desconectado y expulsado de forma instantánea de la red.
 
 ---
 
@@ -428,53 +440,59 @@ A continuación se detalla la comparativa exhaustiva entre los requerimientos or
 
 ## 14. Hardware y Estrategia de Operación en el Local
 
-### La Realidad del Local: Operación 100% Android (Sin Computador Físico)
+### Clarificación Técnica Operativa: Internet vs. Wi-Fi Local (LAN)
 
-En el local de Mr. Burger Cali **no existe un computador de escritorio ni laptop**. El equipamiento disponible se compone de:
+Para garantizar la autonomía del restaurante sin confusiones operativas:
+* **INTERNET (Conexión Exterior):** Es el servicio del proveedor (Claro, Tigo, Movistar). **El sistema NO requiere internet para operar el restaurante.** Si cortan el cable de la calle, se pueden tomar pedidos, despachar comandas en cocina y facturar al 100%.
+* **WI-FI LOCAL (Ondas de Radio Internas):** Es el medio inalámbrico invisible que interconecta los celulares de los meseros y la tablet de cocina con el servidor local sin cables físicos. Un router estándar cubre 50-80 metros a la redonda, garantizando cobertura total en todas las mesas (1 a 9). Si un mesero ingresa a un rincón ciego, la cola offline retiene la orden y la transmite automáticamente con su llave de idempotencia al recuperar señal.
 
-1. **Pantalla / Tablet de Caja (Android):** Punto central de cobro, impresión de tirillas y control de dinero.
-2. **Pantalla / Tablet de Cocina (Android):** Pantalla horizontal para visualización KDS de comandas.
-3. **Celulares de los Meseros (Android):** Dispositivos móviles para toma de pedidos en sala y mostrador.
-4. **Router Wi-Fi Local:** Encargado de la red inalámbrica del restaurante.
-5. **Impresora Térmica 80mm:** Conectada a la estación de caja (USB / Bluetooth / Red).
+---
 
-### ¿Por qué un navegador en Android no puede ser el Servidor Central por sí solo?
+### Dos Opciones de Arquitectura para el "Cerebro Local"
 
-Un navegador web convencional (como Google Chrome en Android) funciona en un "sandbox" de seguridad del sistema operativo móvil:
-- **Puede:** Guardar datos locales de forma temporal en su propia memoria (`IndexedDB` / `localStorage`).
-- **NO Puede:** Abrir un puerto de red TCP (`0.0.0.0:8000`) para recibir solicitudes entrantes de otros teléfonos o tablets a través del Wi-Fi.
+| Dimensión | Opción A: Mini PC Corporativo "Headless" *(Recomendada)* | Opción B: Hub Embebido en Pantalla/Tablet de Caja |
+|---|---|---|
+| **Hardware** | Mini PC ultra-compacto (Lenovo ThinkCentre Tiny / HP ProDesk Mini / Dell Micro). | Tablet o Pantalla táctil Android todo-en-uno en la estación de cobro. |
+| **Costo Aprox.** | $380.000 – $450.000 COP (reacondicionado corporativo) o $550.000 COP (nuevo N100). | $0 adicional (usa el hardware existente de caja). |
+| **Operación 24/7** | Diseñado para operar años continuos sin apagarse; sin baterías que se degraden o inflen. | Limitado a la vida útil de batería y gestión térmica del dispositivo Android. |
+| **Cortes de Luz** | **Auto Power-On:** Configurable en BIOS (*Restore on AC Power Loss*); al volver la luz enciende solo. | Requiere encendido manual y reapertura de la app por la cajera. |
+| **Aislamiento de Fallos** | **Total:** Si se riega una gaseosa en la pantalla de caja o se cae al suelo, el servidor sigue vivo. | **Riesgo:** Si la pantalla de caja se apaga, se detienen cocina y meseros. |
+| **Mantenimiento** | Cero cables visibles: va escondido junto al router Wi-Fi conectado por cable Ethernet. | La cajera interactúa directamente con el dispositivo que aloja la base de datos. |
 
-Por esta razón, si se corta el Internet del proveedor de la calle, los celulares de los meseros no pueden enviar pedidos directamente al navegador de la tablet de cocina ni al de la caja sin un servidor local que escuche en la red Wi-Fi.
+---
 
-### Estrategia de Despliegue: APK Hub de Caja + Clientes Ligeros Web/PWA
-
-Para cumplir la promesa de **"Cero dependencia de Internet y Cero complejidad técnica para el personal"**, la arquitectura se distribuye así:
+### Diagrama de Flujo Físico y Sincronización
 
 ```mermaid
 flowchart TB
     subgraph RouterLocal ["📶 Red Wi-Fi Local del Restaurante (Sin requerir Internet)"]
-        subgraph TabletCaja ["🖥️ Tablet de Caja (Android Principal)"]
-            APK["📦 APK Servidor POS Mr. Burger\n• Backend embebido (Python / SQLite / Go)\n• Escucha en puerto local :8000\n• Pantalla de Caja integrada\n• Controlador de Impresora"]
+        subgraph ServidorLocal ["🖥️ Cerebro Local (Mini PC o APK Hub)"]
+            SRV["⚙️ Servidor POS Mr. Burger\n• Backend FastAPI + PostgreSQL / SQLite\n• Escucha en red local :8000\n• Conexión WebSocket KDS\n• Worker de Sincronización Outbox"]
+        end
+
+        subgraph EstacionCaja ["💵 Pantalla de Caja (Cliente)"]
+            CAJA_UI["Pantalla Táctil / Tablet\n• Conecta a http://IP_LOCAL:8000/caja\n• Impresora Térmica 80mm ESC/POS\n• Cajón Monedero"]
         end
 
         subgraph CelularesMeseros ["📱 Celulares de Meseros (Android)"]
-            PWA_M["Navegador Web / WebAPK\nConecta a http://IP_CAJA:8000/mesero\n(Sin instalar software técnico)"]
+            PWA_M["Navegador Web / WebAPK\nConecta a http://IP_LOCAL:8000/mesero\n(Cola offline con Idempotencia)"]
         end
 
         subgraph TabletCocina ["🍳 Tablet de Cocina KDS (Android)"]
-            PWA_C["Navegador Web / WebAPK\nConecta a http://IP_CAJA:8000/cocina\n(Recepción WebSocket en vivo)"]
+            PWA_C["Navegador Web / WebAPK\nConecta a http://IP_LOCAL:8000/cocina\n(Recepción WebSocket Ding-Dong)"]
         end
 
-        PWA_M -->|Envía comanda local| APK
-        APK -->|Notifica comanda en tiempo real| PWA_C
+        PWA_M -->|Envía comanda local| SRV
+        SRV -->|Notifica comanda en tiempo real| PWA_C
+        SRV <-->|Facturación y arqueos| CAJA_UI
     end
 
     subgraph NubeEspejo ["☁️ Nube Espejo (Firebase + Render + Supabase)"]
-        CloudPOS["🌐 https://mrburger-pos-cali.web.app\n• Acceso remoto del Administrador / Dueño\n• Respaldo permanente de ventas\n• Actualización de catálogo"]
+        CloudPOS["🌐 https://mrburger-pos-cali.web.app\n• Acceso remoto del Administrador / Dueño\n• Respaldo permanente de ventas\n• Actualización de catálogo y recetas"]
     end
 
-    APK -.->|Sincroniza ventas al haber Internet| NubeEspejo
-    Dueno["📱 Teléfono / Portátil del Dueño"] -->|Consulta desde cualquier lugar| CloudPOS
+    SRV -.->|Sincronización automática al detectar Internet| NubeEspejo
+    Dueno["📱 Teléfono / Portátil del Dueño"] -->|Consulta ventas desde cualquier lugar| CloudPOS
 ```
 
 ### Respuestas a las Preguntas Operativas Clave
