@@ -1,3 +1,4 @@
+from app.database import safe_commit
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -174,7 +175,7 @@ def cancelar_pedido(
         f"consecutivo={pedido.consecutivo} motivo={motivo} preparados={len(preparados_creados)} devoluciones={pagos_devueltos}",
     )
 
-    db.commit()
+    safe_commit(db)
     db.refresh(pedido)
     for p in preparados_creados:
         db.refresh(p)
@@ -265,7 +266,7 @@ def asignar_preparado(
         f"pedido={pedido.consecutivo} producto={producto.nombre}",
     )
 
-    db.commit()
+    safe_commit(db)
     db.refresh(preparado)
     db.refresh(pedido)
     return preparado, pedido
@@ -303,7 +304,7 @@ def descartar_preparado(
         f"producto={preparado.producto.nombre if preparado.producto else preparado.producto_id} motivo={motivo}",
     )
 
-    db.commit()
+    safe_commit(db)
     db.refresh(preparado)
     return preparado
 

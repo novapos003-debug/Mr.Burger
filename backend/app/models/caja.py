@@ -32,7 +32,7 @@ class Cierre(Base):
 
     id = Column(Integer, primary_key=True)
     usuario_id = Column(Integer, ForeignKey("usuario.id"), nullable=False)
-    abierto_en = Column(DateTime(timezone=True), nullable=False)
+    abierto_en = Column(DateTime(timezone=True), nullable=False, index=True)
     cerrado_en = Column(DateTime(timezone=True))  # NULL mientras el turno está abierto
     total_pedidos = Column(Integer, nullable=False, default=0)
     total_venta_comida = Column(Numeric(12, 2), nullable=False, default=0)
@@ -64,7 +64,7 @@ class Pago(Base):
 
     id = Column(Integer, primary_key=True)
     pedido_id = Column(Integer, ForeignKey("pedido.id"), nullable=False)
-    cierre_id = Column(Integer, ForeignKey("cierre.id"))
+    cierre_id = Column(Integer, ForeignKey("cierre.id"), index=True)
     metodo = Column(String(20), nullable=False)
     monto = Column(Numeric(12, 2), nullable=False)
     recibido = Column(Numeric(12, 2))
@@ -128,7 +128,7 @@ class MovimientoCaja(Base):
     valor = Column(Numeric(12, 2), nullable=False)
     pedido_id = Column(Integer, ForeignKey("pedido.id"))
     vale_id = Column(Integer, ForeignKey("vale.id"))
-    cierre_id = Column(Integer, ForeignKey("cierre.id"))
+    cierre_id = Column(Integer, ForeignKey("cierre.id"), index=True)
     creado_en = Column(DateTime(timezone=True), server_default=func.now())
 
     usuario = relationship("Usuario")

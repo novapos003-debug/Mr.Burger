@@ -187,6 +187,8 @@ export const Mesero: React.FC = () => {
     if (cartItems.length === 0) return
 
     setSubmitting(true)
+    const idempotencyKey = `ord-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+
     try {
       if (pedidoActivo) {
         // AGREGAR NUEVA RONDA A LA MESA
@@ -206,16 +208,18 @@ export const Mesero: React.FC = () => {
         )
       } else {
         // CREAR NUEVO PEDIDO EN LA MESA Y ENVIAR A COCINA
-        const nuevo = await crearPedidoApi({
+        const payloadNuevo = {
           canal: 'MESA',
           mesa_id: mesaSeleccionada.id,
+          idempotency_key: idempotencyKey,
           lineas: cartItems.map((item) => ({
             producto_id: item.producto.id,
             cantidad: item.cantidad,
             variacion_snapshot: item.variacion,
             preparado_id: item.variacion.preparado_id,
           })),
-        })
+        }
+        const nuevo = await crearPedidoApi(payloadNuevo)
 
         // Enviar a cocina
         await enviarCocinaApi(nuevo.id)
@@ -250,12 +254,13 @@ export const Mesero: React.FC = () => {
             },
           })
         } else {
-          savePendingOrder({
+          const orderFallback = savePendingOrder({
             tipo: 'NUEVO_PEDIDO',
             mesaNumero: mesaSeleccionada.numero,
             payloadNuevo: {
               canal: 'MESA',
               mesa_id: mesaSeleccionada.id,
+              idempotency_key: idempotencyKey,
               lineas: cartItems.map((item) => ({
                 producto_id: item.producto.id,
                 cantidad: item.cantidad,
@@ -263,6 +268,18 @@ export const Mesero: React.FC = () => {
                 preparado_id: item.variacion.preparado_id,
               })),
             },
+          })
+          orderFallback.id = idempotencyKey
+          const queueRaw = localStorage.getItem('pos_mesero_offline_queue')
+          if (queueRaw) {
+             const queue = JSON.parse(queueRaw)
+             const last = queue[queue.length - 1]
+             if (last) {
+                last.id = idempotencyKey
+                localStorage.setItem('pos_mesero_offline_queue', JSON.stringify(queue))
+             }
+          }
+        }
           })
         }
 

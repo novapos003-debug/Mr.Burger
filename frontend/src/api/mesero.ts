@@ -40,6 +40,7 @@ export interface CrearPedidoPayload {
   telefono?: string | null
   direccion?: string | null
   didi_orden_id?: string | null
+  idempotency_key?: string
   lineas: {
     producto_id: number
     cantidad: number

@@ -65,7 +65,7 @@ def crear_categoria_insumo(
     db.add(cat)
     db.flush()
     registrar(db, usuario, "CREAR_CATEGORIA_INSUMO", "categoria_insumo", cat.id, cat.nombre)
-    db.commit()
+    safe_commit(db)
     db.refresh(cat)
     return cat
 
@@ -137,7 +137,7 @@ def crear_ingrediente(
             )
         )
     registrar(db, usuario, "CREAR_INGREDIENTE", "ingrediente", ing.id, ing.nombre)
-    db.commit()
+    safe_commit(db)
     db.refresh(ing)
     return to_ingrediente_out(ing)
 
@@ -189,7 +189,7 @@ def actualizar_ingrediente(
             db, usuario, "MODIFICAR_INGREDIENTE", "ingrediente", ing.id,
             ", ".join(sorted(cambios.keys())) or None,
         )
-    db.commit()
+    safe_commit(db)
     db.refresh(ing)
     return to_ingrediente_out(ing)
 
@@ -208,7 +208,7 @@ def desactivar_ingrediente(
         raise HTTPException(status_code=409, detail="Este ingrediente está en uso en recetas; no se puede inactivar")
     ing.activo = False
     registrar(db, usuario, "DESACTIVAR_INGREDIENTE", "ingrediente", ing.id, ing.nombre)
-    db.commit()
+    safe_commit(db)
 
 
 # ============================================================
@@ -338,7 +338,7 @@ def reemplazar_receta(
         db, usuario, "MODIFICAR_RECETA", "producto", producto_id,
         f"lineas={len(lineas)}",
     )
-    db.commit()
+    safe_commit(db)
     return ver_receta(producto_id, db=db, _=None)
 
 
@@ -411,5 +411,5 @@ def configurar_componentes_combo(
         db, usuario, "MODIFICAR_COMBO", "producto", producto_id,
         f"componentes={len(componentes)}",
     )
-    db.commit()
+    safe_commit(db)
     return ver_componentes_combo(producto_id, db=db, _=None)

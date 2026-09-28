@@ -55,6 +55,7 @@ class PedidoCreate(BaseModel):
     direccion: str | None = None
     nota_interna: str | None = None
     didi_orden_id: str | None = None
+    idempotency_key: str | None = None
     lineas: list[DetallePedidoIn] = Field(min_length=1)
 
     @field_validator("mesa_id")

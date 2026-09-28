@@ -61,6 +61,7 @@ export const syncPendingOrders = async (
   for (const order of queue) {
     try {
       if (order.tipo === 'NUEVO_PEDIDO' && order.payloadNuevo) {
+        order.payloadNuevo.idempotency_key = order.id
         const nuevo = await crearPedidoApi(order.payloadNuevo)
         await enviarCocinaApi(nuevo.id)
         exitosos++

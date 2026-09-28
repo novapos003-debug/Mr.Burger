@@ -166,7 +166,7 @@ def crear_producto(
     db.add(prod)
     db.flush()
     registrar(db, usuario, "CREAR_PRODUCTO", "producto", prod.id, f"{prod.nombre} precio={prod.precio}")
-    db.commit()
+    safe_commit(db)
     db.refresh(prod)
     disponible, _ = disponibilidad_producto(db, prod)
     return producto_out(prod, disponible)
@@ -192,7 +192,7 @@ def actualizar_producto(
         registrar(db, usuario, "MODIFICAR_PRECIO", "producto", prod.id, f"{prod.nombre}: {anterior} -> {prod.precio}")
     else:
         registrar(db, usuario, "MODIFICAR_PRODUCTO", "producto", prod.id, ", ".join(sorted(cambios.keys())) or None)
-    db.commit()
+    safe_commit(db)
     db.refresh(prod)
     disponible, _ = disponibilidad_producto(db, prod)
     return producto_out(prod, disponible)
@@ -214,7 +214,7 @@ def forzar_disponibilidad(
         db, usuario, "FORZAR_DISPONIBILIDAD", "producto", prod.id,
         f"{prod.nombre} -> {data.manual_disponible}",
     )
-    db.commit()
+    safe_commit(db)
     db.refresh(prod)
     disponible, _ = disponibilidad_producto(db, prod)
     return producto_out(prod, disponible)
@@ -232,4 +232,4 @@ def desactivar_producto(
         raise HTTPException(status_code=404, detail="Producto no encontrado")
     prod.activo = False
     registrar(db, usuario, "DESACTIVAR_PRODUCTO", "producto", prod.id, prod.nombre)
-    db.commit()
+    safe_commit(db)

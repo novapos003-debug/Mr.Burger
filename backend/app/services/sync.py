@@ -1,3 +1,4 @@
+from app.database import safe_commit
 from datetime import datetime, timezone
 
 from sqlalchemy import func
@@ -75,7 +76,7 @@ def procesar_push(db: Session, data: SyncPushIn, usuario: Usuario) -> SyncPushOu
             f"op_id={op.op_id} tipo={op.tipo} estado={estado} disp={op.dispositivo_id}",
         )
 
-    db.commit()
+    safe_commit(db)
     for r in resultado_ops:
         db.refresh(r)
 

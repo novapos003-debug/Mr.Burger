@@ -137,7 +137,7 @@ def actualizar_configuracion(
         cfg.valor = data.valor
     from app.services.historial import registrar
     registrar(db, usuario, "MODIFICAR_CONFIG", "configuracion", None, f"{clave}={data.valor}")
-    db.commit()
+    safe_commit(db)
     db.refresh(cfg)
     return cfg
 
@@ -211,7 +211,7 @@ def crear_usuario(
     db.flush()
 
     registrar(db, admin, "CREAR_USUARIO", "usuario", nuevo_u.id, f"usuario={nuevo_u.usuario} rol={rol.nombre}")
-    db.commit()
+    safe_commit(db)
     db.refresh(nuevo_u)
 
     return UsuarioAdminOut(
@@ -239,7 +239,7 @@ def cambiar_password_usuario(
 
     u.password_hash = hash_password(data.nueva_password)
     registrar(db, admin, "MODIFICAR_PASSWORD", "usuario", u.id, f"cambio clave para usuario={u.usuario}")
-    db.commit()
+    safe_commit(db)
     return {"status": "ok", "mensaje": f"Contraseña actualizada para {u.usuario}"}
 
 
@@ -261,7 +261,7 @@ def cambiar_estado_usuario(
     u.activo = data.activo
     accion = "ACTIVAR_USUARIO" if data.activo else "DESACTIVAR_USUARIO"
     registrar(db, admin, accion, "usuario", u.id, f"estado={data.activo}")
-    db.commit()
+    safe_commit(db)
     db.refresh(u)
 
     return UsuarioAdminOut(

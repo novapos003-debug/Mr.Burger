@@ -1,3 +1,4 @@
+from app.database import safe_commit
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
@@ -294,7 +295,7 @@ def registrar_compra(db: Session, data: CompraIn, admin: Usuario) -> Compra:
         f"proveedor_id={compra.proveedor_id} total={costo_total_compra}",
     )
 
-    db.commit()
+    safe_commit(db)
     db.refresh(compra)
     return compra
 

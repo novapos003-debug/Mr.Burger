@@ -132,7 +132,7 @@ async def ejecutar_ciclo_sync() -> dict[str, Any]:
                         r.estado = "APLICADO"
                         r.sincronizado_en = now_dt
                         r.ultimo_error = None
-                    db.commit()
+                    safe_commit(db)
                     _worker_status["ultima_sincronizacion"] = now_dt.isoformat()
                     # Recalcular pendientes
                     p_restantes = (
@@ -146,7 +146,7 @@ async def ejecutar_ciclo_sync() -> dict[str, Any]:
                     for r in pendientes:
                         r.reintentos += 1
                         r.ultimo_error = f"HTTP {push_resp.status_code}: {push_resp.text[:150]}"
-                    db.commit()
+                    safe_commit(db)
                     _worker_status["ultimo_error"] = f"Error al sincronizar lote: HTTP {push_resp.status_code}"
         except Exception as e:
             db.rollback()

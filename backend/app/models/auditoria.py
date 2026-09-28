@@ -14,8 +14,8 @@ class HistorialAccion(Base):
     __tablename__ = "historial_accion"
 
     id = Column(Integer, primary_key=True)
-    usuario_id = Column(Integer, ForeignKey("usuario.id"))
-    accion = Column(String(100), nullable=False)
+    usuario_id = Column(Integer, ForeignKey("usuario.id"), index=True)
+    accion = Column(String(100), nullable=False, index=True)
     entidad = Column(String(50))
     entidad_id = Column(Integer)
     detalle = Column(Text)

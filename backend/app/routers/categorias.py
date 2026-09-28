@@ -41,7 +41,7 @@ def crear_categoria(
     db.add(cat)
     db.flush()
     registrar(db, usuario, "CREAR_CATEGORIA", "categoria", cat.id, cat.nombre)
-    db.commit()
+    safe_commit(db)
     db.refresh(cat)
     return cat
 
@@ -62,7 +62,7 @@ def actualizar_categoria(
     for campo, valor in cambios.items():
         setattr(cat, campo, valor)
     registrar(db, usuario, "MODIFICAR_CATEGORIA", "categoria", cat.id, ", ".join(sorted(cambios.keys())) or None)
-    db.commit()
+    safe_commit(db)
     db.refresh(cat)
     return cat
 
@@ -79,4 +79,4 @@ def desactivar_categoria(
         raise HTTPException(status_code=404, detail="Categoría no encontrada")
     cat.activo = False
     registrar(db, usuario, "DESACTIVAR_CATEGORIA", "categoria", cat.id, cat.nombre)
-    db.commit()
+    safe_commit(db)

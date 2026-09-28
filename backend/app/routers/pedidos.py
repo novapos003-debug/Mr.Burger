@@ -53,7 +53,7 @@ async def cambiar_estado_mesa(
     if data.estado == "DISPONIBLE" and _mesa_con_pedido_abierto(db, mesa.id):
         raise HTTPException(status_code=409, detail=f"Mesa {mesa.numero} tiene un pedido abierto; ciérralo antes de liberarla")
     mesa.estado = data.estado
-    db.commit()
+    safe_commit(db)
     db.refresh(mesa)
     await await_broadcast("mesa_update", {"mesa_id": mesa.id, "numero": mesa.numero, "estado": mesa.estado})
     return mesa
@@ -216,6 +216,12 @@ async def crear_pedido(
     if usuario.rol.nombre not in CREAN_PEDIDO:
         raise HTTPException(status_code=403, detail="Solo mesero, caja o admin pueden crear pedidos")
 
+    if data.idempotency_key:
+        existente = db.query(Pedido).filter(Pedido.idempotency_key == data.idempotency_key).first()
+        if existente:
+            return existente
+
+
     if data.canal == "MESA":
         mesa = db.get(Mesa, data.mesa_id)
         if not mesa or not mesa.activo:
@@ -287,7 +293,7 @@ async def crear_pedido(
         entidad_id=pedido.id,
         dispositivo_id=f"USER_{usuario.id}",
     )
-    db.commit()
+    safe_commit(db)
     db.refresh(pedido)
 
     await await_broadcast("pedido_creado", {"pedido_id": pedido.id, "consecutivo": pedido.consecutivo, "canal": pedido.canal})
@@ -363,7 +369,7 @@ async def enviar_a_cocina(
     pedido.estado = "ENVIADO_A_COCINA"
     pedido.enviado_en = func.now()
     registrar(db, usuario, "ENVIAR_COCINA", "pedido", pedido.id, f"consecutivo={pedido.consecutivo}")
-    db.commit()
+    safe_commit(db)
     db.refresh(pedido)
 
     await await_broadcast(
@@ -445,7 +451,7 @@ async def agregar_ronda(
         entidad_id=pedido.id,
         dispositivo_id=f"USER_{usuario.id}",
     )
-    db.commit()
+    safe_commit(db)
     db.refresh(pedido)
 
     await await_broadcast(

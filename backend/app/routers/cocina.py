@@ -73,7 +73,7 @@ async def aceptar_detalle(
         db, cocinero, "ACEPTAR_PREPARACION", "detalle", detalle.id,
         f"pedido={pedido.consecutivo} producto={detalle.producto.nombre}",
     )
-    db.commit()
+    safe_commit(db)
     db.refresh(detalle)
 
     await ws_manager.broadcast(
@@ -113,7 +113,7 @@ async def marcar_listo(
         db, cocinero, "MARCAR_LISTO", "detalle", detalle.id,
         f"pedido={pedido.consecutivo} producto={detalle.producto.nombre}",
     )
-    db.commit()
+    safe_commit(db)
     db.refresh(detalle)
 
     restantes = (
@@ -133,7 +133,7 @@ async def marcar_listo(
                 pedido.mesa.estado = "DISPONIBLE"
         else:
             pedido.estado = "FINALIZADO"
-        db.commit()
+        safe_commit(db)
 
     await ws_manager.broadcast(
         {

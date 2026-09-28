@@ -28,3 +28,16 @@ def get_db():
         yield db
     finally:
         db.close()
+
+from fastapi import HTTPException, status
+from sqlalchemy.exc import SQLAlchemyError
+
+def safe_commit(db):
+    try:
+        db.commit()
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Conflicto de transaccion en base de datos: {str(e)}"
+        )

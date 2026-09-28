@@ -1,3 +1,4 @@
+from app.database import safe_commit
 from decimal import Decimal
 
 from sqlalchemy import func, or_
@@ -152,7 +153,7 @@ def cobrar_pedido(db: Session, pedido: Pedido, cobro: CobroIn, cajero) -> dict:
             dispositivo_id=f"CAJA_{cajero.id}",
         )
 
-    db.commit()
+    safe_commit(db)
     for pago in pagos:
         db.refresh(pago)
     for vale in vales:
@@ -246,7 +247,7 @@ def cobrar_vale(db: Session, vale: Vale, cajero, descripcion: str | None = None)
         entidad_id=vale.id,
         dispositivo_id=f"CAJA_{cajero.id}",
     )
-    db.commit()
+    safe_commit(db)
     db.refresh(vale)
 
 
@@ -294,7 +295,7 @@ def devolver_pago(db: Session, pago: Pago, motivo: str, usuario) -> Pago:
         entidad_id=pago.id,
         dispositivo_id=f"CAJA_{usuario.id}",
     )
-    db.commit()
+    safe_commit(db)
     db.refresh(pago)
     return pago
 
@@ -350,7 +351,7 @@ def abrir_turno(db: Session, usuario, monto_inicial: Decimal = Decimal("0")) -> 
             )
         )
 
-    db.commit()
+    safe_commit(db)
     db.refresh(cierre)
     return cierre
 
@@ -390,7 +391,7 @@ def registrar_movimiento(db: Session, usuario, data) -> MovimientoCaja:
         entidad_id=mov.id,
         dispositivo_id=f"CAJA_{usuario.id}",
     )
-    db.commit()
+    safe_commit(db)
     db.refresh(mov)
     return mov
 
@@ -548,6 +549,6 @@ def cerrar_turno(db: Session, cierre: Cierre, usuario, notas: str | None = None)
         entidad_id=cierre.id,
         dispositivo_id=f"CAJA_{usuario.id}",
     )
-    db.commit()
+    safe_commit(db)
     db.refresh(cierre)
     return cierre
