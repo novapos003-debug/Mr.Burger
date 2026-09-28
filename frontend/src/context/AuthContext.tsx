@@ -46,12 +46,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const me = await getMeApi()
           setUser(me)
           localStorage.setItem('pos_user', JSON.stringify(me))
-        } catch {
-          // Token expirado o inválido
-          localStorage.removeItem('pos_token')
-          localStorage.removeItem('pos_user')
-          setToken(null)
-          setUser(null)
+        } catch (err: any) {
+          // Si el servidor responde explícitamente 401, el token expiró o es inválido
+          if (err.response?.status === 401) {
+            localStorage.removeItem('pos_token')
+            localStorage.removeItem('pos_user')
+            setToken(null)
+            setUser(null)
+          } else {
+            // Si fue error de red/sin conexión, mantener el usuario guardado para operar offline
+            const savedUser = localStorage.getItem('pos_user')
+            if (savedUser) {
+              try {
+                setUser(JSON.parse(savedUser))
+              } catch {
+                // ignore
+              }
+            }
+          }
         }
       }
       setLoading(false)

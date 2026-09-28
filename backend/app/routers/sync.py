@@ -30,8 +30,8 @@ def sync_or_staff_required(
     db: Session = Depends(get_db),
     sync_token: str | None = Header(None, alias="X-Sync-Token"),
 ) -> Usuario:
-    """Permite autenticar con JWT Bearer de staff O con header X-Sync-Token de máquina a máquina."""
-    if sync_token and sync_token == settings.CLOUD_SYNC_TOKEN:
+    import secrets
+    if sync_token and settings.CLOUD_SYNC_TOKEN and secrets.compare_digest(sync_token, settings.CLOUD_SYNC_TOKEN):
         admin_u = db.query(Usuario).filter(Usuario.usuario == "admin").first()
         if admin_u:
             return admin_u

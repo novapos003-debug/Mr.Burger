@@ -9,8 +9,16 @@ from app.models import Configuracion, DetallePedido, Pedido, Producto
 
 
 def siguiente_consecutivo(db: Session, dia: date | None = None) -> int:
-    """Numeración de ticket por día (requisito del cliente): reinicia cada día."""
+    """Numeración de ticket por día (requisito del cliente): reinicia cada día.
+    Utiliza advisory lock a nivel de transacción para serializar concurrentes en PostgreSQL."""
     dia = dia or fecha_local()
+    try:
+        from sqlalchemy import text
+        lock_id = int(dia.strftime("%Y%m%d"))
+        db.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": lock_id})
+    except Exception:
+        pass
+
     maximo = (
         db.query(func.max(Pedido.consecutivo))
         .filter(Pedido.fecha_dia == dia)

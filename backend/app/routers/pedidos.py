@@ -135,6 +135,8 @@ def _validar_lineas(db: Session, lineas: list[DetallePedidoIn]) -> None:
         raise HTTPException(status_code=404, detail="Uno o más productos no existen o están inactivos")
 
     for l in lineas:
+        if l.cantidad <= Decimal("0"):
+            raise HTTPException(status_code=422, detail="La cantidad de cada producto debe ser mayor a cero")
         if l.preparado_id is not None:
             prep = db.get(Preparado, l.preparado_id)
             if not prep or prep.producto_id != l.producto_id:
@@ -217,13 +219,17 @@ async def crear_pedido(
         raise HTTPException(status_code=403, detail="Solo mesero, caja o admin pueden crear pedidos")
 
     if data.idempotency_key:
-        existente = db.query(Pedido).filter(Pedido.idempotency_key == data.idempotency_key).first()
+        existente = (
+            db.query(Pedido)
+            .options(joinedload(Pedido.detalles).joinedload(DetallePedido.producto), joinedload(Pedido.mesa))
+            .filter(Pedido.idempotency_key == data.idempotency_key)
+            .first()
+        )
         if existente:
-            return existente
-
+            return pedido_out(db, existente, usuario)
 
     if data.canal == "MESA":
-        mesa = db.get(Mesa, data.mesa_id)
+        mesa = db.query(Mesa).with_for_update().filter(Mesa.id == data.mesa_id).first()
         if not mesa or not mesa.activo:
             raise HTTPException(status_code=404, detail="Mesa no encontrada")
         if mesa.estado != "DISPONIBLE" or _mesa_con_pedido_abierto(db, mesa.id):
@@ -236,6 +242,7 @@ async def crear_pedido(
     dia = fecha_local()
     consecutivo = siguiente_consecutivo(db, dia)
     pedido = Pedido(
+        idempotency_key=data.idempotency_key,
         consecutivo=consecutivo,
         fecha_dia=dia,
         canal=data.canal,
@@ -363,8 +370,11 @@ async def enviar_a_cocina(
     )
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
-    if pedido.estado not in ("NUEVO", "ENVIADO_A_COCINA"):
-        raise HTTPException(status_code=409, detail=f"No se puede enviar un pedido en estado {pedido.estado}")
+    if pedido.estado != "NUEVO":
+        raise HTTPException(
+            status_code=409,
+            detail=f"No se puede enviar un pedido en estado {pedido.estado}. Ya fue enviado a cocina."
+        )
 
     pedido.estado = "ENVIADO_A_COCINA"
     pedido.enviado_en = func.now()
@@ -403,10 +413,8 @@ async def agregar_ronda(
     )
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
-    if pedido.estado in ("CERRADO", "CANCELADO"):
-        raise HTTPException(status_code=409, detail="Pedido cerrado o cancelado; no admite más rondas")
-    if pedido.pagado_en is not None:
-        raise HTTPException(status_code=409, detail="El pedido ya fue cobrado; no admite más rondas")
+    if pedido.estado in ("CERRADO", "CANCELADO", "PAGADO") or pedido.pagado_en is not None:
+        raise HTTPException(status_code=409, detail="El pedido ya fue cobrado, cerrado o cancelado; no admite más rondas")
 
     _validar_lineas(db, data.lineas)
     detalles = _crear_detalles(db, pedido, data.lineas, ronda=data.ronda, usuario=usuario)

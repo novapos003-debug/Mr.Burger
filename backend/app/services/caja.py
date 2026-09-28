@@ -164,6 +164,8 @@ def cobrar_pedido(db: Session, pedido: Pedido, cobro: CobroIn, cajero) -> dict:
 
 def _crear_pago(db: Session, pedido: Pedido, item: PagoIn, cajero) -> Pago:
     monto = _monto(item.monto)
+    if monto <= Decimal("0"):
+        raise ValueError("El monto de cada pago debe ser estrictamente mayor a cero")
     recibido = cambio = None
     didi_orden = item.didi_orden_id
 
@@ -209,8 +211,10 @@ def _crear_vale(db: Session, pedido: Pedido, item: PagoIn, cajero) -> Vale:
 
 def cobrar_vale(db: Session, vale: Vale, cajero, descripcion: str | None = None) -> None:
     """El cliente paga su pagaré: queda COBRADO y entra el dinero a caja."""
+    if turno_abierto(db) is None:
+        raise ValueError("No hay un turno de caja abierto. Debe abrir turno con la base antes de cobrar vales.")
     if vale.estado != "PENDIENTE":
-        raise ValueError("El vale ya fue cobrado")
+        raise ValueError("El vale ya fue cobrado o cancelado")
     vale.estado = "COBRADO"
     vale.cobrado_por = cajero.id
     vale.cobrado_en = func.now()
@@ -256,22 +260,33 @@ def devolver_pago(db: Session, pago: Pago, motivo: str, usuario) -> Pago:
     pedido sigue cubierto; si no, vuelve a quedar por pagar."""
     if pago.estado != "VALIDO":
         raise ValueError("El pago ya fue devuelto")
+    if turno_abierto(db) is None:
+        raise ValueError("No hay un turno de caja abierto para registrar la devolución")
     pedido = pago.pedido
     pago.estado = "DEVUELTO"
     pago.devuelto_por = usuario.id
     pago.devuelto_en = func.now()
     pago.motivo_devolucion = motivo
-    db.add(
-        MovimientoCaja(
-            usuario_id=usuario.id,
-            tipo="SALIDA",
-            categoria="DEVOLUCION",
-            concepto=f"Devolución pago #{pago.id} - pedido {pedido.consecutivo}",
-            descripcion=motivo,
-            valor=_monto(pago.monto),
-            pedido_id=pedido.id,
+
+    # Solo generar salida física de dinero del cajón si el cliente pagó en efectivo
+    if pago.metodo in ("EFECTIVO", "DIDI_EFECTIVO"):
+        db.add(
+            MovimientoCaja(
+                usuario_id=usuario.id,
+                tipo="SALIDA",
+                categoria="DEVOLUCION",
+                concepto=f"Devolución pago #{pago.id} ({pago.metodo}) - pedido {pedido.consecutivo}",
+                descripcion=motivo,
+                valor=_monto(pago.monto),
+                pedido_id=pedido.id,
+            )
         )
-    )
+    elif pago.metodo == "VALE":
+        # Cancelar el pagaré para que no quede deuda pendiente activa
+        vales = db.query(Vale).filter(Vale.pedido_id == pedido.id, Vale.estado == "PENDIENTE").all()
+        for v in vales:
+            v.estado = "CANCELADO"
+            v.notas = f"Cancelado por devolución: {motivo}"
     db.flush()
     if total_cobrado(db, pedido) < _monto(pedido.total):
         pedido.pagado_en = None
@@ -359,6 +374,10 @@ def abrir_turno(db: Session, usuario, monto_inicial: Decimal = Decimal("0")) -> 
 def registrar_movimiento(db: Session, usuario, data) -> MovimientoCaja:
     """Entrada/egreso manual de caja (solo admin). La descripción es obligatoria."""
     abierto = turno_abierto(db)
+    if not abierto:
+        raise ValueError("No hay un turno de caja abierto. Debe abrir turno con la base antes de registrar movimientos.")
+    if _monto(data.valor) <= Decimal("0"):
+        raise ValueError("El valor del movimiento debe ser mayor a cero")
     mov = MovimientoCaja(
         usuario_id=usuario.id,
         tipo=data.tipo,
@@ -366,7 +385,7 @@ def registrar_movimiento(db: Session, usuario, data) -> MovimientoCaja:
         concepto=data.concepto or f"{data.tipo} de caja",
         descripcion=data.descripcion,
         valor=_monto(data.valor),
-        cierre_id=abierto.id if abierto else None,
+        cierre_id=abierto.id,
     )
     db.add(mov)
     db.flush()
@@ -430,12 +449,18 @@ def cerrar_turno(db: Session, cierre: Cierre, usuario, notas: str | None = None)
 
     pagos = (
         db.query(Pago)
-        .filter(or_(Pago.cierre_id.is_(None), Pago.cierre_id == cierre.id))
+        .filter(
+            or_(Pago.cierre_id == cierre.id, Pago.cierre_id.is_(None)),
+            Pago.creado_en >= cierre.abierto_en,
+        )
         .all()
     )
     movimientos = (
         db.query(MovimientoCaja)
-        .filter(or_(MovimientoCaja.cierre_id.is_(None), MovimientoCaja.cierre_id == cierre.id))
+        .filter(
+            or_(MovimientoCaja.cierre_id == cierre.id, MovimientoCaja.cierre_id.is_(None)),
+            MovimientoCaja.creado_en >= cierre.abierto_en,
+        )
         .all()
     )
 

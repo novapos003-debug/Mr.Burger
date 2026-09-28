@@ -36,31 +36,45 @@ def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
-    ip = request.client.host if request.client else "unknown"
+    # Extraer IP real detrás de reverse proxies (Render / Cloudflare / Nginx)
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        ip = forwarded.split(",")[0].strip()
+    else:
+        ip = request.client.host if request.client else "unknown"
+
+    key = f"{form_data.username.strip().lower()}_{ip}"
     now = time.time()
-    
+
+    # Purgar periódicamente si el diccionario crece demasiado
+    if len(FAILED_LOGINS) > 2000:
+        keys_to_del = [k for k, timestamps in FAILED_LOGINS.items() if not timestamps or now - timestamps[-1] > LOCKOUT_SECONDS]
+        for k in keys_to_del:
+            del FAILED_LOGINS[k]
+
     # Limpiar intentos viejos
-    FAILED_LOGINS[ip] = [t for t in FAILED_LOGINS[ip] if now - t < LOCKOUT_SECONDS]
-    if len(FAILED_LOGINS[ip]) >= MAX_ATTEMPTS:
+    FAILED_LOGINS[key] = [t for t in FAILED_LOGINS[key] if now - t < LOCKOUT_SECONDS]
+    if len(FAILED_LOGINS[key]) >= MAX_ATTEMPTS:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Demasiados intentos fallidos. Intente nuevamente en 5 minutos."
+            detail="Demasiados intentos fallidos para este usuario. Intente nuevamente en 5 minutos."
         )
 
     user = db.query(Usuario).filter(Usuario.usuario == form_data.username).first()
     if not user or not verify_password(form_data.password, user.password_hash):
-        FAILED_LOGINS[ip].append(now)
+        FAILED_LOGINS[key].append(now)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario o contraseña incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
-        
+
     if not user.activo:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario inactivo")
 
-    # Reset en exito
-    FAILED_LOGINS[ip] = []
+    # Reset en exito para liberar memoria
+    if key in FAILED_LOGINS:
+        del FAILED_LOGINS[key]
     
     token = create_access_token(subject=str(user.id))
     return TokenResponse(access_token=token)

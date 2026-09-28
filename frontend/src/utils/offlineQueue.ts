@@ -72,8 +72,8 @@ export const syncPendingOrders = async (
         onSuccessOrder?.(order, `Ronda #${order.payloadRonda.ronda} de Mesa #${order.mesaNumero || ''} enviada a cocina`)
       }
     } catch (err: any) {
-      // Si fue error de conexión, se mantiene en la cola para el próximo ciclo
-      if (!err.response || err.code === 'ERR_NETWORK') {
+      // Si fue error de conexión o caída temporal del servidor (5xx), se mantiene en la cola para el próximo ciclo
+      if (!err.response || err.code === 'ERR_NETWORK' || (err.response.status >= 500 && err.response.status <= 599)) {
         remaining.push({ ...order, reintentos: order.reintentos + 1 })
       } else {
         // Si fue error 4xx de validación, registrarlo y descartar para no bloquear la cola

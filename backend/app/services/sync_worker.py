@@ -88,6 +88,8 @@ async def ejecutar_ciclo_sync() -> dict[str, Any]:
     # 3. Si hay internet y hay pendientes, procesar lote
     if _worker_status["pendientes"] > 0:
         db = SessionLocal()
+        pendientes_data = []
+        pendientes_ids = []
         try:
             pendientes = (
                 db.query(RegistroSync)
@@ -97,25 +99,34 @@ async def ejecutar_ciclo_sync() -> dict[str, Any]:
                 .all()
             )
             if pendientes:
-                _worker_status["sincronizando"] = True
-                lote = {
-                    "dispositivo_id": settings.SUCURSAL_ID,
-                    "operaciones": [
-                        {
-                            "op_id": r.op_id,
-                            "sucursal_id": r.sucursal_id,
-                            "dispositivo_id": r.dispositivo_id,
-                            "tipo": r.tipo,
-                            "entidad": r.entidad,
-                            "entidad_id": r.entidad_id,
-                            "entidad_uuid": r.entidad_uuid,
-                            "payload": r.payload,
-                            "origen": "LOCAL",
-                        }
-                        for r in pendientes
-                    ],
-                }
+                pendientes_ids = [r.id for r in pendientes]
+                pendientes_data = [
+                    {
+                        "op_id": r.op_id,
+                        "sucursal_id": r.sucursal_id,
+                        "dispositivo_id": r.dispositivo_id,
+                        "tipo": r.tipo,
+                        "entidad": r.entidad,
+                        "entidad_id": r.entidad_id,
+                        "entidad_uuid": r.entidad_uuid,
+                        "payload": r.payload,
+                        "origen": "LOCAL",
+                    }
+                    for r in pendientes
+                ]
+        finally:
+            db.close()
 
+        if pendientes_data:
+            _worker_status["sincronizando"] = True
+            lote = {
+                "dispositivo_id": settings.SUCURSAL_ID,
+                "operaciones": pendientes_data,
+            }
+
+            push_resp = None
+            error_http = None
+            try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     push_resp = await client.post(
                         f"{cloud_url}/sync/push",
@@ -125,16 +136,21 @@ async def ejecutar_ciclo_sync() -> dict[str, Any]:
                         },
                         json=lote,
                     )
+            except Exception as e:
+                error_http = str(e)
 
-                if push_resp.status_code == 200:
+            # Abrir nueva sesión para asentar resultado
+            db = SessionLocal()
+            try:
+                records = db.query(RegistroSync).filter(RegistroSync.id.in_(pendientes_ids)).all()
+                if push_resp and push_resp.status_code == 200:
                     now_dt = datetime.now(timezone.utc)
-                    for r in pendientes:
+                    for r in records:
                         r.estado = "APLICADO"
                         r.sincronizado_en = now_dt
                         r.ultimo_error = None
                     safe_commit(db)
                     _worker_status["ultima_sincronizacion"] = now_dt.isoformat()
-                    # Recalcular pendientes
                     p_restantes = (
                         db.query(func.count(RegistroSync.id))
                         .filter(RegistroSync.estado == "PENDIENTE")
@@ -142,18 +158,24 @@ async def ejecutar_ciclo_sync() -> dict[str, Any]:
                         or 0
                     )
                     _worker_status["pendientes"] = int(p_restantes)
-                else:
-                    for r in pendientes:
+                elif push_resp:
+                    for r in records:
                         r.reintentos += 1
                         r.ultimo_error = f"HTTP {push_resp.status_code}: {push_resp.text[:150]}"
                     safe_commit(db)
                     _worker_status["ultimo_error"] = f"Error al sincronizar lote: HTTP {push_resp.status_code}"
-        except Exception as e:
-            db.rollback()
-            _worker_status["ultimo_error"] = f"Fallo al enviar lote: {str(e)}"
-        finally:
-            _worker_status["sincronizando"] = False
-            db.close()
+                else:
+                    for r in records:
+                        r.reintentos += 1
+                        r.ultimo_error = f"Fallo de red al enviar lote: {error_http}"
+                    safe_commit(db)
+                    _worker_status["ultimo_error"] = f"Fallo al enviar lote: {error_http}"
+            except Exception as e:
+                db.rollback()
+                _worker_status["ultimo_error"] = f"Fallo al asentar lote: {str(e)}"
+            finally:
+                _worker_status["sincronizando"] = False
+                db.close()
 
     return dict(_worker_status)
 

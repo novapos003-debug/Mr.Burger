@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.unidades import convertir_unidad, normalizar_clave
 from app.models import (
     ComponenteCombo,
+    Configuracion,
     DetallePedido,
     DetalleReceta,
     Ingrediente,
@@ -161,8 +162,8 @@ def descontar_insumos_de_producto(
 
     movimientos: list[MovimientoInventario] = []
 
-    # Bloquear con FOR UPDATE para concurrencia segura
-    ing_ids = list(insumos.keys())
+    # Bloquear con FOR UPDATE en orden determinista para concurrencia segura y evitar deadlocks
+    ing_ids = sorted(insumos.keys())
     ings_db = (
         db.query(Ingrediente)
         .with_for_update()
@@ -171,7 +172,11 @@ def descontar_insumos_de_producto(
     )
     mapa_ings = {i.id: i for i in ings_db}
 
-    for ing_id, info in insumos.items():
+    cfg = db.get(Configuracion, "politica_stock_insuficiente")
+    politica = cfg.valor.strip().upper() if cfg and cfg.valor else "BLOQUEAR"
+
+    for ing_id in ing_ids:
+        info = insumos[ing_id]
         ing = mapa_ings.get(ing_id)
         if not ing:
             continue
@@ -182,6 +187,12 @@ def descontar_insumos_de_producto(
 
         saldo_ant = ing.stock_actual or Decimal("0")
         saldo_nuevo = saldo_ant - cant_consumo
+
+        if politica == "BLOQUEAR" and saldo_nuevo < Decimal("0"):
+            raise ValueError(
+                f"Stock insuficiente para {ing.nombre}: disponible {saldo_ant} {ing.unidad_base}, requerido {cant_consumo} {ing.unidad_base}"
+            )
+
         ing.stock_actual = saldo_nuevo
 
         costo_unit = ing.costo_unitario or Decimal("0")

@@ -475,3 +475,34 @@ INSERT INTO usuario (rol_id, nombre, usuario, password_hash) VALUES
 ((SELECT id FROM rol WHERE nombre='cajero'), 'Cajero Demo',    'caja',   '$2b$12$UR9zR9cwj5ffRV9B9oJdteyUkDG5MKTTuANe8aYzqZ1hv0VO70cc.'),
 ((SELECT id FROM rol WHERE nombre='mesero'), 'Mesero Demo',    'mesero', '$2b$12$ns9jFXxoo26ThkiIjdd7y.C/0POZqvxPRMKW5spYxCB3aIQ3JP5r6'),
 ((SELECT id FROM rol WHERE nombre='cocina'), 'Cocina Demo',    'cocina', '$2b$12$vMsDVdpD.xW494pwpmb2k.gyxGbDLOvKdRRo2KLUDOErIjy75yiwa');
+
+-- ============================================================
+-- TABLA DE SINCRONIZACIÓN OFFLINE / NUBE (PATRÓN OUTBOX)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS registro_sync (
+    id              SERIAL PRIMARY KEY,
+    op_id           VARCHAR(64) NOT NULL UNIQUE,
+    sucursal_id     VARCHAR(32) NOT NULL,
+    dispositivo_id  VARCHAR(64),
+    tipo            VARCHAR(50) NOT NULL,
+    entidad         VARCHAR(50) NOT NULL,
+    entidad_id      INT,
+    entidad_uuid    VARCHAR(64),
+    payload         JSONB NOT NULL,
+    estado          VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
+    reintentos      INT NOT NULL DEFAULT 0,
+    ultimo_error    TEXT,
+    creado_en       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    sincronizado_en TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_registro_sync_estado ON registro_sync (estado, creado_en);
+CREATE INDEX IF NOT EXISTS idx_registro_sync_op_id ON registro_sync (op_id);
+
+-- Índices de alto rendimiento para kardex, pagos y vales
+CREATE INDEX IF NOT EXISTS idx_movinv_ingrediente ON movimiento_inventario (ingrediente_id);
+CREATE INDEX IF NOT EXISTS idx_movinv_pedido ON movimiento_inventario (pedido_id);
+CREATE INDEX IF NOT EXISTS idx_movinv_creado_en ON movimiento_inventario (creado_en);
+CREATE INDEX IF NOT EXISTS idx_pago_pedido_id ON pago (pedido_id);
+CREATE INDEX IF NOT EXISTS idx_vale_pedido ON vale (pedido_id);
+CREATE INDEX IF NOT EXISTS idx_vale_estado ON vale (estado);

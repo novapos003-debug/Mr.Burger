@@ -31,16 +31,18 @@ from app.services.websocket import ws_manager
 router = APIRouter(prefix="/caja", tags=["caja"])
 
 
-def _get_pedido(db: Session, pedido_id: int) -> Pedido:
-    pedido = (
+def _get_pedido(db: Session, pedido_id: int, lock: bool = False) -> Pedido:
+    q = (
         db.query(Pedido)
         .options(
             joinedload(Pedido.mesa),
             joinedload(Pedido.detalles).joinedload(DetallePedido.producto),
         )
         .filter(Pedido.id == pedido_id)
-        .first()
     )
+    if lock:
+        q = q.with_for_update()
+    pedido = q.first()
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
     return pedido
@@ -54,7 +56,7 @@ async def cobrar(
     cajero: Usuario = Depends(cashier_required),
 ):
     """Cobra un pedido (uno o varios métodos). Caja es el único rol que ve dinero."""
-    pedido = _get_pedido(db, pedido_id)
+    pedido = _get_pedido(db, pedido_id, lock=True)
     if not turno_abierto(db):
         raise HTTPException(
             status_code=409,
@@ -62,10 +64,8 @@ async def cobrar(
         )
     if pedido.estado == "CANCELADO":
         raise HTTPException(status_code=409, detail="El pedido está cancelado")
-    if pedido.estado == "CERRADO":
-        raise HTTPException(status_code=409, detail="El pedido ya está cerrado")
-    if pedido.pagado_en is not None:
-        raise HTTPException(status_code=409, detail="El pedido ya fue cobrado")
+    if pedido.estado in ("CERRADO", "PAGADO") or pedido.pagado_en is not None:
+        raise HTTPException(status_code=409, detail="El pedido ya fue cobrado o cerrado")
 
     try:
         resultado = cobrar_pedido(db, pedido, data, cajero)

@@ -36,8 +36,9 @@ async def lifespan(app: FastAPI):
             conn.execute(text("ALTER TABLE pedido ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(100) UNIQUE;"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_pedido_idempotency_key ON pedido(idempotency_key);"))
             conn.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.error("Aviso al verificar esquema inicial en lifespan: %s", e)
 
     worker_task = None
     if settings.MODO_CEREBRO != "NUBE":
@@ -60,8 +61,14 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # en producción restringir al dominio
-    allow_origin_regex=".*",  # dev: tablets del local conectan desde cualquier IP LAN
+    allow_origins=[
+        "https://mrburger-pos-cali.web.app",
+        "https://mrburger-pos-cali.firebaseapp.com",
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+    ],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|172\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

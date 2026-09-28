@@ -14,7 +14,23 @@ connect_args = {}
 if any(cloud_host in DATABASE_URL for cloud_host in ("supabase", "neon", "render", "aws")):
     connect_args["sslmode"] = "require"
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args=connect_args)
+import logging
+
+logger = logging.getLogger(__name__)
+
+is_sqlite = DATABASE_URL.startswith("sqlite")
+engine_kwargs = {
+    "pool_pre_ping": True,
+}
+if not is_sqlite:
+    engine_kwargs.update({
+        "pool_size": 15,
+        "max_overflow": 10,
+        "pool_timeout": 30,
+        "pool_recycle": 1800,
+    })
+
+engine = create_engine(DATABASE_URL, connect_args=connect_args, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -37,7 +53,8 @@ def safe_commit(db):
         db.commit()
     except SQLAlchemyError as e:
         db.rollback()
+        logger.error("Error en safe_commit DB: %s", str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Conflicto de transaccion en base de datos: {str(e)}"
+            detail="Conflicto de integridad o concurrencia en base de datos. Verifique los datos o reintente."
         )
