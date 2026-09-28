@@ -274,3 +274,84 @@ def cambiar_estado_usuario(
         creado_en=u.creado_en,
     )
 
+
+from decimal import Decimal
+from app.models import (
+    Cierre,
+    DetallePedido,
+    HistorialAccion,
+    Ingrediente,
+    Mesa,
+    MovimientoCaja,
+    MovimientoInventario,
+    Pago,
+    Pedido,
+    Preparado,
+    RegistroSync,
+    Vale,
+)
+
+
+@router.post("/sistema/limpiar-pruebas")
+def limpiar_datos_prueba(
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(admin_required),
+):
+    """Pone el sistema completamente en blanco para iniciar producción:
+    - Elimina todos los pedidos, detalles y rondas de prueba.
+    - Elimina pagos, vales y movimientos de caja.
+    - Elimina cierres de turno previos.
+    - Elimina preparados.
+    - Elimina movimientos de inventario de prueba.
+    - Elimina registros de la cola de sincronización.
+    - Libera todas las mesas a 'DISPONIBLE'.
+    - Restablece el stock de insumos a un nivel operativo seguro.
+    - MANTIENE intactos: usuarios, catálogo, productos, categorías y recetas."""
+    try:
+        # 1. Eliminar preparados
+        db.query(Preparado).delete(synchronize_session=False)
+
+        # 2. Eliminar detalles de pedidos y pedidos
+        db.query(DetallePedido).delete(synchronize_session=False)
+        db.query(Pago).delete(synchronize_session=False)
+        db.query(Vale).delete(synchronize_session=False)
+        db.query(Pedido).delete(synchronize_session=False)
+
+        # 3. Eliminar movimientos de caja y cierres de turno
+        db.query(MovimientoCaja).delete(synchronize_session=False)
+        db.query(Cierre).delete(synchronize_session=False)
+
+        # 4. Eliminar movimientos de inventario de ventas
+        db.query(MovimientoInventario).delete(synchronize_session=False)
+
+        # 5. Limpiar cola outbox de sincronización
+        try:
+            db.query(RegistroSync).delete(synchronize_session=False)
+        except Exception:
+            pass
+
+        # 6. Liberar todas las mesas a DISPONIBLE
+        db.query(Mesa).update({"estado": "DISPONIBLE"}, synchronize_session=False)
+
+        # 7. Restablecer stock base para insumos
+        ings = db.query(Ingrediente).all()
+        for ing in ings:
+            minimo = ing.stock_minimo or Decimal("10")
+            ing.stock_actual = max(minimo * Decimal("4"), Decimal("50"))
+
+        registrar(
+            db, admin, "LIMPIAR_DATOS_PRUEBA", "sistema", None,
+            "El administrador restableció todas las transacciones de prueba a Cero para producción."
+        )
+        safe_commit(db)
+        return {
+            "status": "ok",
+            "mensaje": "Sistema restablecido exitosamente. Todas las mesas, pedidos y caja están limpios para empezar de cero."
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al limpiar datos: {str(e)}"
+        )
+

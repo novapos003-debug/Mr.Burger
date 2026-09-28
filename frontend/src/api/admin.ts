@@ -208,3 +208,8 @@ export const eliminarProductoApi = async (id: number): Promise<void> => {
   await api.delete(`/productos/${id}`)
 }
 
+export const limpiarDatosPruebaApi = async (): Promise<{ status: string; mensaje: string }> => {
+  const res = await api.post<{ status: string; mensaje: string }>('/admin/sistema/limpiar-pruebas')
+  return res.data
+}
+

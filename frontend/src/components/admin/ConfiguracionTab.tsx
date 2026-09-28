@@ -10,12 +10,15 @@ import {
   RefreshCw,
   Sliders,
   HelpCircle,
+  Trash2,
 } from 'lucide-react'
-import { getConfiguracionApi, setConfiguracionApi } from '../../api/admin'
+import { getConfiguracionApi, setConfiguracionApi, limpiarDatosPruebaApi } from '../../api/admin'
 
 export const ConfiguracionTab: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [guardando, setGuardando] = useState(false)
+  const [limpiando, setLimpiando] = useState(false)
+  const [confirmarLimpieza, setConfirmarLimpieza] = useState(false)
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
 
   // Config variables
@@ -79,6 +82,27 @@ export const ConfiguracionTab: React.FC = () => {
       })
     } finally {
       setGuardando(false)
+    }
+  }
+
+  const handleLimpiarPruebas = async () => {
+    try {
+      setLimpiando(true)
+      const res = await limpiarDatosPruebaApi()
+      try {
+        localStorage.removeItem('pos_mesero_offline_queue')
+      } catch {
+        // ignore
+      }
+      setMensaje({ tipo: 'ok', texto: `✓ ${res.mensaje}` })
+      setConfirmarLimpieza(false)
+    } catch (err: any) {
+      setMensaje({
+        tipo: 'error',
+        texto: err.response?.data?.detail || 'Error al restablecer datos de prueba',
+      })
+    } finally {
+      setLimpiando(false)
     }
   }
 
@@ -279,6 +303,51 @@ export const ConfiguracionTab: React.FC = () => {
                 <option value="MAS_IVA">MÁS IVA (Los impuestos se suman al subtotal en la factura)</option>
               </select>
             </div>
+          </div>
+        </div>
+
+        {/* ZONA DE MANTENIMIENTO: RESTABLECER A CERO PARA PRODUCCIÓN */}
+        <div className="bg-rose-950/20 border border-rose-800/40 rounded-2xl p-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Puesta en Blanco para Producción</h3>
+                <p className="text-xs text-rose-300/80">
+                  Borra todos los pedidos de prueba, turnos viejos de caja y tickets de cocina. Libera las mesas y restablece el stock. Conserva productos, recetas y usuarios.
+                </p>
+              </div>
+            </div>
+            {!confirmarLimpieza ? (
+              <button
+                type="button"
+                onClick={() => setConfirmarLimpieza(true)}
+                className="px-4 py-2 bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-bold transition cursor-pointer self-start md:self-auto shrink-0"
+              >
+                Restablecer a Cero
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setConfirmarLimpieza(false)}
+                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={limpiando}
+                  onClick={handleLimpiarPruebas}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-950/50 transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {limpiando ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  <span>Confirmar: Borrar Pruebas</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
