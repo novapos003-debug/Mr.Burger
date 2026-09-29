@@ -40,9 +40,9 @@ export const ComandaSidebar: React.FC<Props> = ({
     : 1
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-3.5 flex flex-col h-full shadow-2xl overflow-hidden">
+    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-3.5 flex flex-col h-full shadow-2xl overflow-hidden min-h-0">
       {/* Cabecera de la Mesa */}
-      <div className="pb-2.5 mb-2.5 border-b border-slate-800 flex items-center justify-between">
+      <div className="pb-2.5 mb-2.5 border-b border-slate-800 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl bg-orange-600/30 border border-orange-500/50 flex items-center justify-center text-orange-400">
             <Utensils className="w-4 h-4" />
@@ -71,7 +71,7 @@ export const ComandaSidebar: React.FC<Props> = ({
 
       {/* Si hay pedido activo en esta mesa, mostrar lo que ya se ordenó */}
       {isRonda && pedidoActivo && (
-        <div className="mb-2.5 p-2 rounded-2xl bg-amber-950/30 border border-amber-800/50 max-h-32 overflow-y-auto">
+        <div className="mb-2.5 p-2 rounded-2xl bg-amber-950/30 border border-amber-800/50 max-h-24 overflow-y-auto shrink-0">
           <div className="flex items-center justify-between text-[11px] font-bold text-amber-300 mb-1">
             <span className="flex items-center gap-1">
               <Layers className="w-3 h-3" /> En mesa (Orden #{pedidoActivo.consecutivo})
@@ -116,7 +116,7 @@ export const ComandaSidebar: React.FC<Props> = ({
       )}
 
       {/* Lista de nuevos ítems a enviar con precios */}
-      <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[120px]">
+      <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0">
         {items.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-4 text-slate-500">
             <Utensils className="w-7 h-7 stroke-1 text-slate-600 mb-1.5" />
@@ -227,7 +227,7 @@ export const ComandaSidebar: React.FC<Props> = ({
       </div>
 
       {/* Pie con TOTAL CALCULADO EN VIVO Y ENVÍO A COCINA */}
-      <div className="pt-2.5 mt-2 border-t border-slate-800 flex flex-col gap-2">
+      <div className="pt-2.5 mt-auto border-t border-slate-800 flex flex-col gap-2 shrink-0">
         <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block leading-none">

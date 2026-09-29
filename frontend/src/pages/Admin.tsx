@@ -513,22 +513,22 @@ export const Admin: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col">
+    <div className="min-h-screen bg-slate-950 flex flex-col selection:bg-purple-600 selection:text-white">
       <Navbar title="Centro de Mando • Administración & Dueño Mr. Burger" />
 
-      <main className="flex-1 p-4 max-w-6xl mx-auto w-full flex flex-col">
+      <main className="flex-1 p-2.5 sm:p-4 max-w-6xl mx-auto w-full min-w-0 flex flex-col overflow-x-hidden">
         {/* Cabecera del Panel */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-purple-950/70 via-slate-900 to-slate-900 border border-purple-800/40 rounded-2xl p-5 mb-5 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-purple-950/70 via-slate-900 to-slate-900 border border-purple-800/40 rounded-2xl p-4 sm:p-5 mb-5 shadow-xl">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-purple-600/30 border border-purple-500/50 flex items-center justify-center text-purple-400 shrink-0">
-              <Shield className="w-6 h-6" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-purple-600/30 border border-purple-500/50 flex items-center justify-center text-purple-400 shrink-0">
+              <Shield className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <h1 className="text-xl font-black text-white uppercase tracking-wide">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-black text-white uppercase tracking-wide truncate">
                 Panel Gerencial Ejecutivo
               </h1>
-              <p className="text-xs text-slate-400">
-                Gobernanza completa: Ventas en vivo, Cuadre diario, Reabastecimiento y Auditoría inmutable
+              <p className="text-[11px] sm:text-xs text-slate-400 truncate">
+                Gobernanza completa: Ventas en vivo, Cuadre diario, Reabastecimiento y Auditoría
               </p>
             </div>
           </div>
@@ -559,8 +559,8 @@ export const Admin: React.FC = () => {
           </div>
         )}
 
-        {/* Selector de Pestañas Principales */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-6 scrollbar-none">
+        {/* Selector de Pestañas Principales (Deslizable horizontalmente en móviles) */}
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-2.5 mb-5 max-w-full scrollbar-thin scrollbar-thumb-purple-900/40">
           <button
             onClick={() => setTabActiva('DASHBOARD')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
@@ -683,74 +683,74 @@ export const Admin: React.FC = () => {
             )}
 
             {/* Tarjetas de Métricas Principales (KPIs) */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-                <div className="flex items-center justify-between text-slate-400 mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider">Ventas Hoy</span>
-                  <div className="w-7 h-7 rounded-lg bg-emerald-600/20 text-emerald-400 flex items-center justify-center">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 sm:p-4 min-w-0 overflow-hidden flex flex-col justify-between">
+                <div className="flex items-center justify-between text-slate-400 mb-2 gap-1">
+                  <span className="text-xs font-bold uppercase tracking-wider truncate">Ventas Hoy</span>
+                  <div className="w-7 h-7 rounded-lg bg-emerald-600/20 text-emerald-400 flex items-center justify-center shrink-0">
                     <DollarSign className="w-4 h-4" />
                   </div>
                 </div>
-                <p className="text-2xl font-black text-emerald-400">
+                <p className="text-base sm:text-xl md:text-2xl font-black text-emerald-400 truncate" title={`$${dashData ? Number(dashData.total_ventas).toLocaleString('es-CO') : '0'}`}>
                   ${dashData ? Number(dashData.total_ventas).toLocaleString('es-CO') : '0'}
                 </p>
-                <p className="text-[11px] text-slate-500 mt-1">Cuentas cerradas y cobradas</p>
+                <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1 truncate">Cuentas cerradas</p>
               </div>
 
-              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-                <div className="flex items-center justify-between text-slate-400 mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider">Pedidos Hoy</span>
-                  <div className="w-7 h-7 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center">
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 sm:p-4 min-w-0 overflow-hidden flex flex-col justify-between">
+                <div className="flex items-center justify-between text-slate-400 mb-2 gap-1">
+                  <span className="text-xs font-bold uppercase tracking-wider truncate">Pedidos Hoy</span>
+                  <div className="w-7 h-7 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center shrink-0">
                     <ShoppingBag className="w-4 h-4" />
                   </div>
                 </div>
-                <p className="text-2xl font-black text-white">
+                <p className="text-base sm:text-xl md:text-2xl font-black text-white truncate">
                   {dashData ? dashData.total_pedidos : '0'}
                 </p>
-                <p className="text-[11px] text-slate-500 mt-1">Comandas procesadas</p>
+                <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1 truncate">Comandas procesadas</p>
               </div>
 
-              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-                <div className="flex items-center justify-between text-slate-400 mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider">Ticket Promedio</span>
-                  <div className="w-7 h-7 rounded-lg bg-purple-600/20 text-purple-400 flex items-center justify-center">
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 sm:p-4 min-w-0 overflow-hidden flex flex-col justify-between">
+                <div className="flex items-center justify-between text-slate-400 mb-2 gap-1">
+                  <span className="text-xs font-bold uppercase tracking-wider truncate">Ticket Promedio</span>
+                  <div className="w-7 h-7 rounded-lg bg-purple-600/20 text-purple-400 flex items-center justify-center shrink-0">
                     <TrendingUp className="w-4 h-4" />
                   </div>
                 </div>
-                <p className="text-2xl font-black text-purple-300">
+                <p className="text-base sm:text-xl md:text-2xl font-black text-purple-300 truncate" title={`$${dashData ? Number(dashData.ticket_promedio).toLocaleString('es-CO') : '0'}`}>
                   ${dashData ? Number(dashData.ticket_promedio).toLocaleString('es-CO') : '0'}
                 </p>
-                <p className="text-[11px] text-slate-500 mt-1">Gasto medio por orden</p>
+                <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1 truncate">Gasto medio por orden</p>
               </div>
 
-              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-                <div className="flex items-center justify-between text-slate-400 mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider">Bolsa Preparados</span>
-                  <div className="w-7 h-7 rounded-lg bg-amber-600/20 text-amber-400 flex items-center justify-center">
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 sm:p-4 min-w-0 overflow-hidden flex flex-col justify-between">
+                <div className="flex items-center justify-between text-slate-400 mb-2 gap-1">
+                  <span className="text-xs font-bold uppercase tracking-wider truncate">Bolsa Preparados</span>
+                  <div className="w-7 h-7 rounded-lg bg-amber-600/20 text-amber-400 flex items-center justify-center shrink-0">
                     <Package className="w-4 h-4" />
                   </div>
                 </div>
-                <p className="text-2xl font-black text-amber-400">
+                <p className="text-base sm:text-xl md:text-2xl font-black text-amber-400 truncate">
                   {dashData ? dashData.preparados_disponibles_count : '0'}
                 </p>
-                <p className="text-[11px] text-slate-500 mt-1">Listos para reventa rápida</p>
+                <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1 truncate">Listos para reventa</p>
               </div>
             </div>
 
             {/* Sección de Canales y Formas de Pago */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               {/* Ventas por Canal */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5">
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 sm:p-5 min-w-0 overflow-hidden">
                 <h3 className="text-sm font-bold text-slate-200 mb-4 flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-purple-400" />
-                  Ventas de Hoy por Canal
+                  <Layers className="w-4 h-4 text-purple-400 shrink-0" />
+                  <span className="truncate">Ventas de Hoy por Canal</span>
                 </h3>
                 <div className="space-y-3">
                   {dashData && dashData.ventas_por_canal ? (
                     Object.entries(dashData.ventas_por_canal).map(([canal, monto]) => (
-                      <div key={canal} className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs">
-                        <span className="font-bold text-slate-200 uppercase">{canal}</span>
-                        <span className="font-mono font-bold text-emerald-400">
+                      <div key={canal} className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs gap-2 min-w-0">
+                        <span className="font-bold text-slate-200 uppercase truncate">{canal}</span>
+                        <span className="font-mono font-bold text-emerald-400 shrink-0">
                           ${Number(monto).toLocaleString('es-CO')}
                         </span>
                       </div>
@@ -762,17 +762,17 @@ export const Admin: React.FC = () => {
               </div>
 
               {/* Formas de Pago */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5">
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 sm:p-5 min-w-0 overflow-hidden">
                 <h3 className="text-sm font-bold text-slate-200 mb-4 flex items-center gap-2">
-                  <Receipt className="w-4 h-4 text-emerald-400" />
-                  Recaudos de Hoy por Forma de Pago
+                  <Receipt className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="truncate">Recaudos de Hoy por Forma de Pago</span>
                 </h3>
                 <div className="space-y-3">
                   {dashData && dashData.pagos_por_metodo ? (
                     Object.entries(dashData.pagos_por_metodo).map(([metodo, monto]) => (
-                      <div key={metodo} className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs">
-                        <span className="font-semibold text-slate-300">{metodo}</span>
-                        <span className="font-mono font-bold text-slate-100">
+                      <div key={metodo} className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs gap-2 min-w-0">
+                        <span className="font-semibold text-slate-300 truncate">{metodo}</span>
+                        <span className="font-mono font-bold text-slate-100 shrink-0">
                           ${Number(monto).toLocaleString('es-CO')}
                         </span>
                       </div>
@@ -785,30 +785,30 @@ export const Admin: React.FC = () => {
             </div>
 
             {/* Top Productos y Stock Crítico */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               {/* Top Productos */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5">
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 sm:p-5 min-w-0 overflow-hidden">
                 <h3 className="text-sm font-bold text-slate-200 mb-4 flex items-center gap-2">
-                  <Award className="w-4 h-4 text-orange-400" />
-                  Top Productos Más Vendidos Hoy
+                  <Award className="w-4 h-4 text-orange-400 shrink-0" />
+                  <span className="truncate">Top Productos Más Vendidos Hoy</span>
                 </h3>
                 {dashData && dashData.top_productos.length > 0 ? (
                   <div className="space-y-3">
                     {dashData.top_productos.map((prod, idx) => (
                       <div
                         key={prod.producto_id}
-                        className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs"
+                        className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs gap-2 min-w-0"
                       >
-                        <div className="flex items-center gap-3">
-                          <span className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center font-bold text-slate-300">
+                        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                          <span className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center font-bold text-slate-300 shrink-0">
                             #{idx + 1}
                           </span>
-                          <div>
-                            <p className="font-bold text-slate-100">{prod.nombre}</p>
-                            <p className="text-slate-400">{prod.cantidad} unidades</p>
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-100 truncate">{prod.nombre}</p>
+                            <p className="text-slate-400 truncate">{prod.cantidad} unidades</p>
                           </div>
                         </div>
-                        <span className="font-mono font-bold text-emerald-400">
+                        <span className="font-mono font-bold text-emerald-400 shrink-0">
                           ${Number(prod.total).toLocaleString('es-CO')}
                         </span>
                       </div>
@@ -822,25 +822,25 @@ export const Admin: React.FC = () => {
               </div>
 
               {/* Alertas de Stock Crítico */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5">
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 sm:p-5 min-w-0 overflow-hidden">
                 <h3 className="text-sm font-bold text-slate-200 mb-4 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-400" />
-                  Alertas de Stock Crítico
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="truncate">Alertas de Stock Crítico</span>
                 </h3>
                 {dashData && dashData.alertas_stock.length > 0 ? (
                   <div className="space-y-3">
                     {dashData.alertas_stock.map((alerta) => (
                       <div
                         key={alerta.ingrediente_id}
-                        className="flex items-center justify-between p-3 rounded-xl bg-amber-950/20 border border-amber-800/40 text-xs"
+                        className="flex items-center justify-between p-3 rounded-xl bg-amber-950/20 border border-amber-800/40 text-xs gap-2 min-w-0"
                       >
-                        <div>
-                          <p className="font-bold text-amber-200">{alerta.nombre}</p>
-                          <p className="text-slate-400">
+                        <div className="min-w-0">
+                          <p className="font-bold text-amber-200 truncate">{alerta.nombre}</p>
+                          <p className="text-slate-400 truncate">
                             Mínimo: {alerta.stock_minimo} {alerta.unidad_base} • Déficit: {alerta.deficit}
                           </p>
                         </div>
-                        <span className="font-mono font-bold text-red-400 bg-red-950/60 px-2 py-1 rounded border border-red-800/60">
+                        <span className="font-mono font-bold text-red-400 bg-red-950/60 px-2 py-1 rounded border border-red-800/60 shrink-0">
                           Quedan: {alerta.stock_actual}
                         </span>
                       </div>
@@ -928,29 +928,29 @@ export const Admin: React.FC = () => {
               </div>
 
               {/* Resumen Financiero del Período */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                  <span className="text-xs text-slate-400 font-bold uppercase">Ventas Período</span>
-                  <p className="text-xl font-black text-emerald-400 mt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+                <div className="p-3 sm:p-4 rounded-xl bg-slate-950 border border-slate-800 min-w-0 overflow-hidden">
+                  <span className="text-xs text-slate-400 font-bold uppercase truncate block">Ventas Período</span>
+                  <p className="text-lg sm:text-xl font-black text-emerald-400 mt-1 truncate" title={`$${reporteData ? Number(reporteData.total_ventas).toLocaleString('es-CO') : '0'}`}>
                     ${reporteData ? Number(reporteData.total_ventas).toLocaleString('es-CO') : '0'}
                   </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">{reporteData?.total_pedidos || 0} pedidos atendidos</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5 truncate">{reporteData?.total_pedidos || 0} pedidos atendidos</p>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                  <span className="text-xs text-slate-400 font-bold uppercase">Ticket Promedio</span>
-                  <p className="text-xl font-black text-purple-300 mt-1">
+                <div className="p-3 sm:p-4 rounded-xl bg-slate-950 border border-slate-800 min-w-0 overflow-hidden">
+                  <span className="text-xs text-slate-400 font-bold uppercase truncate block">Ticket Promedio</span>
+                  <p className="text-lg sm:text-xl font-black text-purple-300 mt-1 truncate" title={`$${reporteData ? Number(reporteData.ticket_promedio).toLocaleString('es-CO') : '0'}`}>
                     ${reporteData ? Number(reporteData.ticket_promedio).toLocaleString('es-CO') : '0'}
                   </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Media de consumo por cliente</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5 truncate">Media de consumo por cliente</p>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                  <span className="text-xs text-slate-400 font-bold uppercase">IVA 19% Generado</span>
-                  <p className="text-xl font-black text-sky-400 mt-1">
+                <div className="p-3 sm:p-4 rounded-xl bg-slate-950 border border-slate-800 min-w-0 overflow-hidden">
+                  <span className="text-xs text-slate-400 font-bold uppercase truncate block">IVA 19% Generado</span>
+                  <p className="text-lg sm:text-xl font-black text-sky-400 mt-1 truncate" title={`$${reporteData ? Math.round(Number(reporteData.total_ventas) - Number(reporteData.total_ventas) / 1.19).toLocaleString('es-CO') : '0'}`}>
                     ${reporteData ? Math.round(Number(reporteData.total_ventas) - Number(reporteData.total_ventas) / 1.19).toLocaleString('es-CO') : '0'}
                   </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">IVA 19% incluido en precios</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5 truncate">IVA 19% incluido en precios</p>
                 </div>
               </div>
 

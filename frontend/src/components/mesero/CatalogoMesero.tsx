@@ -41,7 +41,7 @@ export const CatalogoMesero: React.FC<Props> = ({
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {/* Barra de Búsqueda y Categorías Rápidas */}
-      <div className="space-y-2 mb-3">
+      <div className="space-y-2 mb-3 shrink-0">
         {/* Buscador */}
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
@@ -101,7 +101,7 @@ export const CatalogoMesero: React.FC<Props> = ({
       </div>
 
       {/* Grid de Productos Táctil con PRECIOS VISIBLES */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 overflow-y-auto pr-1 flex-1">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 overflow-y-auto pr-1 flex-1 min-h-0 pb-12 lg:pb-2">
         {productosFiltrados.map((prod) => {
           const disponible = prod.disponible
           const precioNumerico = Number(prod.precio || 0)

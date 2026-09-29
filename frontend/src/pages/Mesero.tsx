@@ -399,12 +399,12 @@ export const Mesero: React.FC = () => {
         </div>
       )}
 
-      {/* Contenido Principal */}
-      <main className="flex-1 flex flex-col lg:flex-row p-2 sm:p-3 gap-2 sm:gap-3 max-w-[1600px] mx-auto w-full overflow-hidden pb-16 lg:pb-2">
+      {/* Contenido Principal: en PC ocupa el alto exacto con scroll interno por panel, en móvil hace scroll fluido */}
+      <main className="flex-1 flex flex-col lg:flex-row p-2 sm:p-3 gap-2 sm:gap-3 max-w-[1600px] mx-auto w-full min-h-0 lg:h-[calc(100dvh-58px)] overflow-y-auto lg:overflow-hidden pb-24 lg:pb-2">
         {/* Columna Izquierda: Mesas 1 a 9 + Catálogo */}
-        <div className="flex-1 flex flex-col min-h-0">
+        <div className="flex-1 flex flex-col min-h-0 lg:h-full overflow-hidden">
           {/* Selector Compacto de Mesas 1 a 9 (Ocupa mínimo espacio vertical) */}
-          <div className="mb-2 bg-slate-900/80 p-2 rounded-2xl border border-slate-800/80">
+          <div className="mb-2 bg-slate-900/80 p-2 rounded-2xl border border-slate-800/80 shrink-0">
             <MesaSelector
               mesas={mesas}
               pedidosActivos={pedidosActivos}
@@ -414,7 +414,7 @@ export const Mesero: React.FC = () => {
           </div>
 
           {/* Catálogo de Productos con Filtros Táctiles y Precios */}
-          <div className="flex-1 min-h-0 flex flex-col bg-slate-950/40 rounded-2xl">
+          <div className="flex-1 min-h-0 flex flex-col bg-slate-950/40 rounded-2xl overflow-hidden">
             <CatalogoMesero
               categorias={categorias}
               productos={productos}
@@ -425,7 +425,7 @@ export const Mesero: React.FC = () => {
         </div>
 
         {/* Columna Derecha en Pantallas Grandes (Tablet horizontal / Desktop) */}
-        <div className="hidden lg:flex w-84 xl:w-96 flex-col shrink-0">
+        <div className="hidden lg:flex w-84 xl:w-96 flex-col shrink-0 min-h-0 h-full">
           <ComandaSidebar
             items={cartItems}
             mesa={mesaSeleccionada}

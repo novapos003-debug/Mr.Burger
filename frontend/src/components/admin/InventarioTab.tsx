@@ -234,43 +234,47 @@ export const InventarioTab: React.FC = () => {
       )}
 
       {/* KPI Cards de Inventario */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg">
-          <span className="text-slate-400 text-xs font-semibold flex items-center gap-1.5 mb-1">
-            <Boxes className="w-3.5 h-3.5 text-purple-400" /> Total Insumos
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-lg min-w-0 overflow-hidden flex flex-col justify-between">
+          <span className="text-slate-400 text-xs font-semibold flex items-center gap-1.5 mb-1 truncate">
+            <Boxes className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+            <span className="truncate">Total Insumos</span>
           </span>
-          <p className="text-2xl font-black text-white">{stats.totalInsumos}</p>
-          <span className="text-[10px] text-slate-500">Materias primas registradas</span>
+          <p className="text-lg sm:text-2xl font-black text-white truncate">{stats.totalInsumos}</p>
+          <span className="text-[10px] text-slate-500 truncate">Materias primas</span>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg">
-          <span className="text-slate-400 text-xs font-semibold flex items-center gap-1.5 mb-1">
-            <TrendingDown className="w-3.5 h-3.5 text-amber-400" /> Stock Bajo
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-lg min-w-0 overflow-hidden flex flex-col justify-between">
+          <span className="text-slate-400 text-xs font-semibold flex items-center gap-1.5 mb-1 truncate">
+            <TrendingDown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="truncate">Stock Bajo</span>
           </span>
-          <p className={`text-2xl font-black ${stats.stockBajo > 0 ? 'text-amber-400' : 'text-slate-200'}`}>
+          <p className={`text-lg sm:text-2xl font-black truncate ${stats.stockBajo > 0 ? 'text-amber-400' : 'text-slate-200'}`}>
             {stats.stockBajo}
           </p>
-          <span className="text-[10px] text-slate-500">Por debajo del mínimo</span>
+          <span className="text-[10px] text-slate-500 truncate">Bajo el mínimo</span>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg">
-          <span className="text-slate-400 text-xs font-semibold flex items-center gap-1.5 mb-1">
-            <AlertTriangle className="w-3.5 h-3.5 text-red-400" /> Agotados (0)
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-lg min-w-0 overflow-hidden flex flex-col justify-between">
+          <span className="text-slate-400 text-xs font-semibold flex items-center gap-1.5 mb-1 truncate">
+            <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+            <span className="truncate">Agotados (0)</span>
           </span>
-          <p className={`text-2xl font-black ${stats.agotados > 0 ? 'text-red-400' : 'text-slate-200'}`}>
+          <p className={`text-lg sm:text-2xl font-black truncate ${stats.agotados > 0 ? 'text-red-400' : 'text-slate-200'}`}>
             {stats.agotados}
           </p>
-          <span className="text-[10px] text-slate-500">Impiden preparar pedidos</span>
+          <span className="text-[10px] text-slate-500 truncate">Impiden preparar</span>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg">
-          <span className="text-slate-400 text-xs font-semibold flex items-center gap-1.5 mb-1">
-            <DollarSign className="w-3.5 h-3.5 text-emerald-400" /> Valor Valorizado
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-lg min-w-0 overflow-hidden flex flex-col justify-between">
+          <span className="text-slate-400 text-xs font-semibold flex items-center gap-1.5 mb-1 truncate">
+            <DollarSign className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span className="truncate">Valor Valorizado</span>
           </span>
-          <p className="text-xl font-black text-emerald-400 font-mono">
+          <p className="text-sm sm:text-lg lg:text-xl font-black text-emerald-400 font-mono truncate" title={`$${stats.valorInventario.toLocaleString('es-CO')}`}>
             ${stats.valorInventario.toLocaleString('es-CO')}
           </p>
-          <span className="text-[10px] text-slate-500">Capital en existencias</span>
+          <span className="text-[10px] text-slate-500 truncate">Capital en stock</span>
         </div>
       </div>
 
