@@ -569,3 +569,8 @@ A continuación se resumen los puntos que quedan pendientes antes y durante el d
   2. Cocinero recibiendo los tickets con el timbre sonoro, cambiando estados y midiendo tiempos.
   3. Cajera abriendo turno con base, cobrando en efectivo (verificando cambio) y tarjeta.
   4. Ejecución del Arqueo Ciego y emisión del Reporte Z de cierre.
+
+### 5. Optimización Responsiva Multi-Dispositivo (PC / Móvil) ✅
+- **Mesero en PC (Desktop / Laptop):** Se ajustó el layout a altura fija calculada (`100dvh - 58px`) con scroll interno independiente para el catálogo y la comanda (`min-h-0`, `overflow-y-auto`). Esto garantiza que los botones inferiores de "Enviar a Cocina" y totales nunca queden tapados ni se corten abajo por la barra de tareas o la ventana.
+- **Admin & Inventario en Móviles (Android 360px - 412px):** Se incorporó tipografía responsiva adaptativa (`text-base sm:text-xl md:text-2xl`), contención horizontal con `min-w-0`, `overflow-hidden` y `truncate` con atributo `title` para que los números grandes (ej. cifras millonarias en COP) y tarjetas KPI no se coman caracteres ni desborden los bordes en pantallas compactas.
+
