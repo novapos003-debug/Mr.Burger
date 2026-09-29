@@ -25,7 +25,7 @@ export const ConfiguracionTab: React.FC = () => {
   const [politicaStock, setPoliticaStock] = useState<'BLOQUEAR' | 'ADVERTIR_Y_PERMITIR'>('BLOQUEAR')
   const [nombreLocal, setNombreLocal] = useState('Mr. Burger Cali')
   const [minutosCocina, setMinutosCocina] = useState('28')
-  const [ivaPorcentaje, setIvaPorcentaje] = useState('19')
+  const [ivaPorcentaje, setIvaPorcentaje] = useState('0')
   const [modoImpuestos, setModoImpuestos] = useState('INCLUIDO')
 
   const cargarConfiguracion = async () => {
@@ -45,7 +45,7 @@ export const ConfiguracionTab: React.FC = () => {
         setMinutosCocina(mapa.get('minutos_cocina') || '28')
       }
       if (mapa.has('iva_porcentaje')) {
-        setIvaPorcentaje(mapa.get('iva_porcentaje') || '19')
+        setIvaPorcentaje(mapa.get('iva_porcentaje') || '0')
       }
       if (mapa.has('modo_impuestos')) {
         setModoImpuestos(mapa.get('modo_impuestos') || 'INCLUIDO')
@@ -271,11 +271,11 @@ export const ConfiguracionTab: React.FC = () => {
               </p>
             </div>
 
-            {/* Porcentaje IVA */}
+            {/* Porcentaje IVA / Impuesto */}
             <div>
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                 <Percent className="w-3.5 h-3.5 text-blue-400" />
-                Porcentaje de Impuesto / IVA (%)
+                Tarifa de Impuesto / IVA (%)
               </label>
               <input
                 type="number"
@@ -286,6 +286,10 @@ export const ConfiguracionTab: React.FC = () => {
                 onChange={(e) => setIvaPorcentaje(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition"
               />
+              <p className="text-[11px] text-slate-500 mt-1">
+                <strong>0%:</strong> Régimen No Responsable (Art. 512-13 E.T. - Comida rápida local).<br />
+                <strong>8%:</strong> Impoconsumo (Régimen ordinario). <strong>19%:</strong> Franquicias.
+              </p>
             </div>
 
             {/* Modo Impuestos */}

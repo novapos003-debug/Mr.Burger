@@ -142,9 +142,7 @@ y temporizador (**28 min configurable**).
 | **Vale (pagaré)** | Nombre, cédula, teléfono, hora, qué comió, monto. Estado `PENDIENTE`/`COBRADO`. Admin y caja lo cobran |
 | **Egresos / entradas de dinero** | **Solo admin**, con **descripción obligatoria** (pago turno, préstamo, adelanto, cambio inicial…) |
 | **DiDi tarjeta** | En ventas queda "por cobrar de DiDi" (consignación) — **NO** es efectivo |
-| **DiDi efectivo** | El repartidor entrega la plata → **sí** es efectivo físico del turno |
-| **IVA** | 19% configurable, **incluido** en el precio; el recibo separa `subtotal / IVA / total` |
-| **Disponibilidad** | Automática: si algún insumo de la receta no alcanza → NO DISPONIBLE (o manual del admin) |
+| **Impuestos (E.T. Colombia)** | Configurable (0%, 8%, 19%). Por defecto **0% (Régimen No Responsable de IVA/Impoconsumo - Art. 512-13 E.T.)** con leyenda legal obligatoria en tirilla y sin recargos indebidos al comensal |
 | **Visibilidad de dinero** | Mesero y cocina **NO ven dinero**, ni márgenes/costos/inventario. Solo admin ve todo |
 
 ### 6.1 Regla final de cancelación (tabla definitiva)
@@ -426,6 +424,10 @@ control avanzado de merma (conteo vs teórico), exportaciones a Excel.
     - **Resiliencia PWA Offline:** `AuthContext` no expulsa al mesero por fallas de conexión (solo ante 401 explícito). La cola offline retiene comandas ante caídas temporales del servidor (errores 5xx).
     - **Rate Limiting Seguro tras Proxy Cloud:** Detección de IP real con `X-Forwarded-For` y control individual por `(usuario, ip)` para prevenir auto-DoS en Render/Cloudflare.
     - **Infraestructura y Seguridad:** CORS restringido a Firebase Hosting y LAN local; contenedor Docker con usuario sin privilegios `appuser` y Python 3.11; índices de alto rendimiento para kardex, pagos y vales en `01_schema.sql`.
+15. **Alineación Normativa Colombiana (Régimen No Responsable - Art. 512-13 E.T.):**
+    - **Tarifa Oficial 0%:** Se ajustó la configuración por defecto de impuestos a 0% para cumplir con la legislación colombiana aplicable a personas naturales del sector gastronómico con ingresos menores a 3.500 UVT.
+    - **Tirilla Legal Térmica 80mm:** Se suprimió la discriminación indebida de IVA en el tiquete y se incorporó la leyenda legal obligatoria: *"Régimen No Responsable de IVA (Art. 512-13 E.T.) - Documento de Control Interno"*.
+    - **Panel de Configuración Flexible:** En `ConfiguracionTab.tsx` se documentó la selección de tarifas (0% No Responsable, 8% Impoconsumo ordinario, 19% Franquicias) permitiendo evolucionar si el cliente cambia de régimen tributario.
 
 ---
 

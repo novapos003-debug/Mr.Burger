@@ -946,11 +946,11 @@ export const Admin: React.FC = () => {
                 </div>
 
                 <div className="p-3 sm:p-4 rounded-xl bg-slate-950 border border-slate-800 min-w-0 overflow-hidden">
-                  <span className="text-xs text-slate-400 font-bold uppercase truncate block">IVA 19% Generado</span>
-                  <p className="text-lg sm:text-xl font-black text-sky-400 mt-1 truncate" title={`$${reporteData ? Math.round(Number(reporteData.total_ventas) - Number(reporteData.total_ventas) / 1.19).toLocaleString('es-CO') : '0'}`}>
-                    ${reporteData ? Math.round(Number(reporteData.total_ventas) - Number(reporteData.total_ventas) / 1.19).toLocaleString('es-CO') : '0'}
+                  <span className="text-xs text-slate-400 font-bold uppercase truncate block">Régimen Tributario</span>
+                  <p className="text-base sm:text-lg font-black text-sky-400 mt-1 truncate" title="No Responsable de IVA (Art. 512-13 E.T.)">
+                    No Responsable
                   </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5 truncate">IVA 19% incluido en precios</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5 truncate">Art. 512-13 E.T. • Tarifa 0%</p>
                 </div>
               </div>
 
@@ -962,7 +962,7 @@ export const Admin: React.FC = () => {
                       <th className="p-3">Fecha</th>
                       <th className="p-3 text-center">Pedidos</th>
                       <th className="p-3 text-right">Subtotal</th>
-                      <th className="p-3 text-right">IVA (19%)</th>
+                      <th className="p-3 text-right">Impuesto (0%)</th>
                       <th className="p-3 text-right">Total Facturado</th>
                     </tr>
                   </thead>

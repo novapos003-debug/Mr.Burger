@@ -18,6 +18,7 @@ export interface DatosReciboVenta {
   ciudad: string
   telefono: string
   direccion: string
+  leyenda_tributaria?: string
   consecutivo: number
   fecha: string
   canal: string

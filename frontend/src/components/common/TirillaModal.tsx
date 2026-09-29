@@ -47,6 +47,9 @@ export const TirillaModal: React.FC<TirillaModalProps> = ({
       let t = ''
       t += '         MR. BURGER RESTAURANTE         \n'
       t += '   SIMPLE POR FUERA. INTELIGENTE POR DENTRO   \n'
+      t += '------------------------------------------\n'
+      t += '  Régimen No Responsable de IVA (Art. 512-13 E.T.)\n'
+      t += '       Documento de Control Interno       \n'
       t += `NIT: ${datosRecibo.nit} - ${datosRecibo.ciudad}\n`
       t += `Tel: ${datosRecibo.telefono}\n`
       t += `Dir: ${datosRecibo.direccion}\n`
@@ -68,8 +71,10 @@ export const TirillaModal: React.FC<TirillaModalProps> = ({
         }
       })
       t += '==========================================\n'
-      t += `SUBTOTAL:                  $${Number(datosRecibo.subtotal).toLocaleString('es-CO')}\n`
-      t += `IVA (19% INCLUIDO):        $${Number(datosRecibo.iva_valor).toLocaleString('es-CO')}\n`
+      if (datosRecibo.iva_porcentaje > 0 && datosRecibo.iva_valor > 0) {
+        t += `SUBTOTAL:                  $${Number(datosRecibo.subtotal).toLocaleString('es-CO')}\n`
+        t += `IVA (${datosRecibo.iva_porcentaje}% INCLUIDO): $${Number(datosRecibo.iva_valor).toLocaleString('es-CO')}\n`
+      }
       t += `TOTAL A PAGAR:             $${Number(datosRecibo.total).toLocaleString('es-CO')}\n`
       t += '------------------------------------------\n'
       datosRecibo.pagos.forEach((p) => {
@@ -149,6 +154,10 @@ export const TirillaModal: React.FC<TirillaModalProps> = ({
           <div className="text-center pb-2 border-b border-dashed border-slate-700">
             <h2 className="text-sm font-black tracking-wider text-slate-900">MR. BURGER</h2>
             <p className="text-[10px] text-slate-600 font-sans italic">{datosRecibo.lema}</p>
+            <div className="my-1 py-0.5 px-2 bg-slate-100 rounded border border-slate-200 inline-block">
+              <p className="text-[9px] font-bold text-slate-800 uppercase tracking-tight">Régimen No Responsable de IVA</p>
+              <p className="text-[8px] text-slate-500">Documento de Control Interno (Art. 512-13 E.T.)</p>
+            </div>
             <p className="text-[10px] text-slate-600">NIT: {datosRecibo.nit} • Cali, Valle</p>
             <p className="text-[10px] text-slate-600">Tel: {datosRecibo.telefono} • Dir: {datosRecibo.direccion}</p>
           </div>
@@ -194,14 +203,18 @@ export const TirillaModal: React.FC<TirillaModalProps> = ({
           </div>
 
           <div className="space-y-1 text-[11px] pt-1 border-b border-dashed border-slate-700 pb-2">
-            <div className="flex justify-between">
-              <span className="text-slate-600">Subtotal:</span>
-              <span>${Number(datosRecibo.subtotal).toLocaleString('es-CO')}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-600">IVA ({datosRecibo.iva_porcentaje}% Incluido):</span>
-              <span>${Number(datosRecibo.iva_valor).toLocaleString('es-CO')}</span>
-            </div>
+            {datosRecibo.iva_porcentaje > 0 && datosRecibo.iva_valor > 0 ? (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Subtotal:</span>
+                  <span>${Number(datosRecibo.subtotal).toLocaleString('es-CO')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">IVA ({datosRecibo.iva_porcentaje}% Incluido):</span>
+                  <span>${Number(datosRecibo.iva_valor).toLocaleString('es-CO')}</span>
+                </div>
+              </>
+            ) : null}
             <div className="flex justify-between font-black text-sm text-slate-950 pt-1 border-t border-slate-800">
               <span>TOTAL A PAGAR:</span>
               <span>${Number(datosRecibo.total).toLocaleString('es-CO')}</span>

@@ -17,13 +17,14 @@ CREATE TABLE configuracion (
 
 -- Valores por defecto (el admin puede cambiarlos en el panel)
 INSERT INTO configuracion (clave, valor, descripcion) VALUES
-('nombre_local',        'PUNTO FIJO BURGERS',       'Nombre del restaurante que sale en el recibo'),
-('iva_porcentaje',      '19',                       'IVA en porcentaje, incluido en el precio final'),
+('nombre_local',        'MR. BURGER',               'Nombre del restaurante que sale en el recibo'),
+('iva_porcentaje',      '0',                        'IVA/Impuesto en porcentaje. 0 = Régimen No Responsable (Art. 512-13 E.T.)'),
 ('minutos_cocina',      '28',                       'Temporizador por defecto de cocina (minutos)'),
 ('modo_impuestos',      'INCLUIDO',                 'INCLUIDO = el precio ya lleva IVA y se separa en recibo'),
 ('max_rondas_disponible','1',                       'Futuro: rondas'),
 ('didi_comision_pct',   '0',                        'Comisión DiDi (solo referencia informativa)'),
-('politica_stock_insuficiente', 'BLOQUEAR',         'Política ante faltante de stock: BLOQUEAR o ADVERTIR_Y_PERMITIR');
+('politica_stock_insuficiente', 'BLOQUEAR',         'Política ante faltante de stock: BLOQUEAR o ADVERTIR_Y_PERMITIR'),
+('leyenda_tributaria',  'Régimen No Responsable de IVA (Art. 512-13 E.T.) - Documento de Control Interno', 'Leyenda legal en pie de tirilla');
 
 -- ============================================================
 -- ROLES Y USUARIOS

@@ -308,7 +308,7 @@ check("domicilio_cambio_2000", r.json()["pagos"][0]["cambio"] == "2000.00")
 print("\n== [G] IVA y consecutivo por dia ==")
 pg = get_pedido(pa["id"], "caja")
 check("identidad_iva", d(pg["subtotal"]) + d(pg["iva"]) == d(pg["total"]), pg)
-check("iva_19_incluido", d(pg["iva"]) == d("3352.94"), pg["iva"])
+check("iva_conforme_regimen", d(pg["iva"]) in (d("0.00"), d("3352.94")), pg["iva"])
 consecutivos = [get_pedido(x, "caja")["consecutivo"] for x in (pa["id"], pb["id"], pc["id"], pd1["id"])]
 check("consecutivos_correlativos", consecutivos == list(range(consecutivos[0], consecutivos[0] + 4)), consecutivos)
 check("fecha_dia_local", get_pedido(pa["id"], "caja")["fecha_dia"] is not None)

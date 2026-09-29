@@ -30,11 +30,11 @@ def siguiente_consecutivo(db: Session, dia: date | None = None) -> int:
 def porcentaje_iva(db: Session) -> Decimal:
     fila = db.get(Configuracion, "iva_porcentaje")
     if not fila or not fila.valor:
-        return Decimal("19")
+        return Decimal("0")
     try:
         return Decimal(fila.valor)
     except Exception:
-        return Decimal("19")
+        return Decimal("0")
 
 
 def calcular_totales(db: Session, detalles: list[DetallePedido]) -> dict[str, Decimal]:

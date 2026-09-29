@@ -204,8 +204,8 @@ export const Caja: React.FC = () => {
   const handleCobroExitoso = (resultado: CobroOut) => {
     // Generar recibo de venta si tenemos el pedido
     if (pedidoParaCobro) {
-      const subtotalCalc = Number(pedidoParaCobro.subtotal) || Math.round(resultado.total / 1.19)
-      const ivaCalc = Number(pedidoParaCobro.iva) || (resultado.total - subtotalCalc)
+      const ivaCalc = Number(pedidoParaCobro.iva) || 0
+      const subtotalCalc = Number(pedidoParaCobro.subtotal) || (resultado.total - ivaCalc)
       const itemsMap = new Map<string, { cantidad: number; nombre: string; precio_unitario: number; total: number; variaciones?: string[] }>()
       for (const l of (pedidoParaCobro.detalles || [])) {
         const cant = Number(l.cantidad) || 1
@@ -239,6 +239,7 @@ export const Caja: React.FC = () => {
           ciudad: 'Cali, Valle del Cauca',
           telefono: '(602) 555-1234',
           direccion: 'Calle 5 # 66-12, Limonar',
+          leyenda_tributaria: 'Régimen No Responsable de IVA (Art. 512-13 E.T.)',
           consecutivo: resultado.consecutivo,
           fecha: new Date().toLocaleString('es-CO'),
           canal: pedidoParaCobro.canal,
@@ -247,7 +248,7 @@ export const Caja: React.FC = () => {
           direccion_entrega: pedidoParaCobro.direccion,
           items,
           subtotal: subtotalCalc,
-          iva_porcentaje: 19,
+          iva_porcentaje: ivaCalc > 0 ? 19 : 0,
           iva_valor: ivaCalc,
           total: resultado.total,
           pagos: resultado.pagos.map((p) => ({
