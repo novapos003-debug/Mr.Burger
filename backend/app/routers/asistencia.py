@@ -156,9 +156,11 @@ def obtener_historial(
         } for t, u in turnos
     ]
 
+from app.services.websocket import ws_manager
+
 @router.post("/admin/{turno_id}/cerrar", response_model=TurnoLaboralOut)
-def cerrar_turno_admin(turno_id: int, db: Session = Depends(get_db), admin: Usuario = Depends(admin_required)):
-    """Permite al admin cerrar manualmente un turno olvidado."""
+async def cerrar_turno_admin(turno_id: int, db: Session = Depends(get_db), admin: Usuario = Depends(admin_required)):
+    """Permite al admin cerrar manualmente un turno olvidado y expulsar al usuario en tiempo real."""
     turno = db.query(TurnoLaboral).filter(TurnoLaboral.id == turno_id).first()
     if not turno:
         raise HTTPException(status_code=404, detail="Turno no encontrado")
@@ -170,6 +172,18 @@ def cerrar_turno_admin(turno_id: int, db: Session = Depends(get_db), admin: Usua
     turno.motivo_cierre = "ADMIN"
     safe_commit(db)
     db.refresh(turno)
+
+    # Notificar inmediatamente vía WebSocket al usuario afectado para cerrar su sesión
+    try:
+        await ws_manager.broadcast({
+            "evento": "cierre_turno_forzado",
+            "data": {
+                "usuario_id": turno.usuario_id,
+                "mensaje": "Tu turno de trabajo ha sido cerrado por el administrador. Tu sesión ha finalizado."
+            }
+        })
+    except Exception as e:
+        print(f"Error al emitir cierre_turno_forzado por WS: {e}")
     
     return {
         "id": turno.id,

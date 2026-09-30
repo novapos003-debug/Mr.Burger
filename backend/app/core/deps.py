@@ -34,12 +34,34 @@ def get_current_user(
 
 
 def require_roles(*roles: str):
-    def checker(current_user: Usuario = Depends(get_current_user)) -> Usuario:
+    def checker(
+        current_user: Usuario = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ) -> Usuario:
         if current_user.rol.nombre not in roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Rol '{current_user.rol.nombre}' sin permiso. Requiere: {', '.join(roles)}",
             )
+
+        # Regla de Asistencia: Los roles operativos requieren un turno laboral abierto
+        if current_user.rol.nombre != "admin":
+            from app.models.asistencia import TurnoLaboral
+            turno_activo = (
+                db.query(TurnoLaboral)
+                .filter(
+                    TurnoLaboral.usuario_id == current_user.id,
+                    TurnoLaboral.salida_en.is_(None),
+                )
+                .first()
+            )
+            if not turno_activo:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Tu turno laboral ha sido cerrado o ha finalizado. Tu sesión no está activa.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+
         return current_user
 
     return checker

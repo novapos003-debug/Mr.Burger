@@ -104,7 +104,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           try {
             const payload = JSON.parse(event.data)
             if (payload.evento === 'cierre_caja_general') {
-              alert(payload.data.mensaje || 'Día laboral finalizado. Se ha cerrado la caja.')
+              alert(payload.data?.mensaje || 'Día laboral finalizado. Se ha cerrado la caja.')
+              logout()
+            } else if (payload.evento === 'cierre_turno_forzado' && payload.data?.usuario_id === user.id) {
+              alert(payload.data?.mensaje || 'Tu turno de trabajo ha sido cerrado por el administrador.')
               logout()
             }
           } catch (e) {}
@@ -118,9 +121,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     connect()
 
+    // Sondeo de seguridad: si el turno se cerró por admin o caja (o el WS falló)
+    const verificarTurno = async () => {
+      try {
+        const miTurno = await obtenerMiTurnoApi()
+        if (!miTurno) {
+          alert('Tu turno de trabajo ha sido cerrado. Tu sesión ha finalizado.')
+          logout()
+        } else {
+          setTurno(miTurno)
+        }
+      } catch (err: any) {
+        if (err.response?.status === 401) {
+          logout()
+        }
+      }
+    }
+
+    const timerTurno = setInterval(verificarTurno, 8000)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        verificarTurno()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+
     return () => {
       if (pingInterval) clearInterval(pingInterval)
       if (ws) ws.close()
+      clearInterval(timerTurno)
+      document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [token, user])
 

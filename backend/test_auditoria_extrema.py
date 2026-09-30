@@ -121,6 +121,15 @@ asertar("Registrar salida de turno ya cerrado da error", res.status_code == 400)
 
 # 3. Pedidos Limite
 print("--- 3. CREACION DE PEDIDOS AL LIMITE ---")
+
+# 3.0 Probar que sin turno activo NO se pueden hacer pedidos
+res_sin_turno = client.post("/api/pedidos", json={"canal": "MESA", "mesa_id": 1, "lineas": [{"producto_id": 1, "cantidad": 1}]}, headers=headers_hacker)
+asertar("Empleado sin turno activo NO puede crear pedidos (Seguridad)", res_sin_turno.status_code == 401)
+
+# Abrir turno para las pruebas que siguen
+client.post("/api/asistencia/entrada", headers=headers_hacker)
+client.post("/api/asistencia/entrada", headers=headers_caja)
+
 # 3.1 Pedido sin productos
 payload = {"canal": "MESA", "mesa_id": 1, "lineas": []}
 res = client.post("/api/pedidos", json=payload, headers=headers_hacker)
