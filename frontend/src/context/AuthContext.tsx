@@ -2,12 +2,18 @@ import React, { createContext, useContext, useState, useEffect } from 'react'
 import type { Usuario, UserRole } from '../types/auth'
 import { loginApi, getMeApi } from '../api/auth'
 
+import type { TurnoLaboral } from '../types/asistencia'
+import { registrarEntradaApi, registrarSalidaApi, obtenerMiTurnoApi } from '../api/asistencia'
+import { getWsBaseUrl } from '../api/client'
+
 interface AuthContextType {
   user: Usuario | null
   token: string | null
   loading: boolean
+  turno: TurnoLaboral | null
   login: (usuario: string, password: string) => Promise<Usuario>
   logout: () => void
+  cerrarTurnoYSalir: () => Promise<void>
   isAuthenticated: boolean
   hasRole: (roles: UserRole[]) => boolean
   getRedirectPath: (role: UserRole) => string
@@ -37,7 +43,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   })
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('pos_token'))
   const [loading, setLoading] = useState<boolean>(true)
+  const [turno, setTurno] = useState<TurnoLaboral | null>(null)
 
+  // Cargar estado inicial y turno
   useEffect(() => {
     const initAuth = async () => {
       const storedToken = localStorage.getItem('pos_token')
@@ -46,22 +54,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const me = await getMeApi()
           setUser(me)
           localStorage.setItem('pos_user', JSON.stringify(me))
+          
+          if (me.rol !== 'admin') {
+            const miTurno = await obtenerMiTurnoApi()
+            setTurno(miTurno)
+          }
         } catch (err: any) {
-          // Si el servidor responde explícitamente 401, el token expiró o es inválido
           if (err.response?.status === 401) {
             localStorage.removeItem('pos_token')
             localStorage.removeItem('pos_user')
             setToken(null)
             setUser(null)
+            setTurno(null)
           } else {
-            // Si fue error de red/sin conexión, mantener el usuario guardado para operar offline
             const savedUser = localStorage.getItem('pos_user')
             if (savedUser) {
-              try {
-                setUser(JSON.parse(savedUser))
-              } catch {
-                // ignore
-              }
+              try { setUser(JSON.parse(savedUser)) } catch {}
             }
           }
         }
@@ -72,6 +80,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initAuth()
   }, [])
 
+  // Listener global de WebSocket para el evento de cierre de caja
+  useEffect(() => {
+    if (!token || !user || user.rol === 'admin') return
+
+    let ws: WebSocket
+    let pingInterval: number
+
+    const connect = () => {
+      const baseWs = getWsBaseUrl()
+      const separator = baseWs.includes('?') ? '&' : '?'
+      const wsUrl = `${baseWs}${separator}token=${encodeURIComponent(token)}`
+      
+      try {
+        ws = new WebSocket(wsUrl)
+        ws.onopen = () => {
+          pingInterval = window.setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) ws.send('ping')
+          }, 15000)
+        }
+        ws.onmessage = (event) => {
+          if (event.data === 'pong') return
+          try {
+            const payload = JSON.parse(event.data)
+            if (payload.evento === 'cierre_caja_general') {
+              alert(payload.data.mensaje || 'Día laboral finalizado. Se ha cerrado la caja.')
+              logout()
+            }
+          } catch (e) {}
+        }
+        ws.onclose = (e) => {
+          if (pingInterval) clearInterval(pingInterval)
+          if (e.code !== 1008) setTimeout(connect, 5000)
+        }
+      } catch (err) {}
+    }
+
+    connect()
+
+    return () => {
+      if (pingInterval) clearInterval(pingInterval)
+      if (ws) ws.close()
+    }
+  }, [token, user])
+
   const login = async (usuario: string, password: string): Promise<Usuario> => {
     const data = await loginApi(usuario, password)
     localStorage.setItem('pos_token', data.access_token)
@@ -80,6 +132,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const me = await getMeApi()
     setUser(me)
     localStorage.setItem('pos_user', JSON.stringify(me))
+
+    // Al iniciar sesión, registramos o traemos el turno activo automáticamente
+    if (me.rol !== 'admin') {
+      try {
+        const turnoNuevo = await registrarEntradaApi()
+        setTurno(turnoNuevo)
+      } catch (err) {
+        console.error('Error al registrar turno:', err)
+      }
+    }
+
     return me
   }
 
@@ -88,7 +151,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('pos_user')
     setToken(null)
     setUser(null)
+    setTurno(null)
     window.location.href = '/login'
+  }
+
+  const cerrarTurnoYSalir = async () => {
+    try {
+      await registrarSalidaApi()
+    } catch (err) {
+      console.error('Error cerrando turno:', err)
+    } finally {
+      logout()
+    }
   }
 
   const hasRole = (roles: UserRole[]): boolean => {
@@ -102,8 +176,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         token,
         loading,
+        turno,
         login,
         logout,
+        cerrarTurnoYSalir,
         isAuthenticated: !!user && !!token,
         hasRole,
         getRedirectPath,

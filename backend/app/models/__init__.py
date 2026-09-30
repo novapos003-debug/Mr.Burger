@@ -17,6 +17,7 @@ from app.models.pedidos import DetallePedido, Mesa, Pedido
 from app.models.preparado import Preparado
 from app.models.sync import RegistroSync
 from app.models.usuario import Rol, Usuario
+from app.models.asistencia import TurnoLaboral
 
 __all__ = [
     "Categoria",
@@ -41,6 +42,7 @@ __all__ = [
     "RegistroSync",
     "Rol",
     "TipoCategoria",
+    "TurnoLaboral",
     "Usuario",
     "Vale",
 ]

@@ -22,6 +22,7 @@ from app.routers import (
     preparados,
     productos,
     sync,
+    asistencia,
 )
 from app.services.sync_worker import sync_background_loop
 from app.services.websocket import ws_manager
@@ -88,6 +89,7 @@ routers_list = [
     preparados.router,
     admin.router,
     sync.router,
+    asistencia.router,
 ]
 
 for r in routers_list:

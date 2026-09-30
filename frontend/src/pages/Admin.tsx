@@ -30,6 +30,7 @@ import type { Producto, Categoria } from '../types/mesero'
 import { InventarioTab } from '../components/admin/InventarioTab'
 import { UsuariosTab } from '../components/admin/UsuariosTab'
 import { ConfiguracionTab } from '../components/admin/ConfiguracionTab'
+import { AsistenciaTab } from '../components/admin/AsistenciaTab'
 import {
   Shield,
   TrendingUp,
@@ -41,6 +42,7 @@ import {
   Package,
   Truck,
   History,
+  Clock,
   FileSpreadsheet,
   Plus,
   Trash2,
@@ -58,7 +60,7 @@ import {
   Pencil,
 } from 'lucide-react'
 
-type AdminTab = 'DASHBOARD' | 'PLANILLA' | 'INVENTARIO' | 'RECETAS' | 'COMPRAS' | 'PREPARADOS' | 'USUARIOS' | 'CONFIGURACION' | 'AUDITORIA'
+type AdminTab = 'DASHBOARD' | 'PLANILLA' | 'INVENTARIO' | 'RECETAS' | 'COMPRAS' | 'PREPARADOS' | 'USUARIOS' | 'ASISTENCIA' | 'CONFIGURACION' | 'AUDITORIA'
 
 export const Admin: React.FC = () => {
   const [tabActiva, setTabActiva] = useState<AdminTab>('DASHBOARD')
@@ -643,6 +645,18 @@ export const Admin: React.FC = () => {
           >
             <Users className="w-4 h-4" />
             <span>Equipo & Seguridad</span>
+          </button>
+
+          <button
+            onClick={() => setTabActiva('ASISTENCIA')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+              tabActiva === 'ASISTENCIA'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-950/50'
+                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            <span>Asistencia & Turnos</span>
           </button>
 
           <button
@@ -1833,6 +1847,15 @@ export const Admin: React.FC = () => {
         {tabActiva === 'USUARIOS' && (
           <div className="animate-fade-in">
             <UsuariosTab />
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* PESTAÑA: ASISTENCIA Y TURNOS                             */}
+        {/* ======================================================== */}
+        {tabActiva === 'ASISTENCIA' && (
+          <div className="animate-fade-in">
+            <AsistenciaTab />
           </div>
         )}
 

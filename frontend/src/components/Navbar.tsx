@@ -15,7 +15,7 @@ import { SyncBadge } from './common/SyncBadge'
 import { ServerConfigModal } from './common/ServerConfigModal'
 
 export const Navbar: React.FC<{ title?: string }> = ({ title }) => {
-  const { user, logout } = useAuth()
+  const { user, logout, cerrarTurnoYSalir, turno } = useAuth()
   const [hora, setHora] = useState<string>('')
   const [showServerModal, setShowServerModal] = useState(false)
 
@@ -97,6 +97,12 @@ export const Navbar: React.FC<{ title?: string }> = ({ title }) => {
         {/* Info Usuario */}
         {user && roleInfo && (
           <div className="flex items-center gap-2">
+            {turno && (
+              <div className="hidden lg:flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md border bg-slate-950/80 border-slate-700 text-slate-300">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                Turno Abierto
+              </div>
+            )}
             <div className={`hidden md:flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md border ${roleInfo.bg}`}>
               {roleInfo.icon}
               <span>{roleInfo.label}</span>
@@ -115,14 +121,29 @@ export const Navbar: React.FC<{ title?: string }> = ({ title }) => {
               <Settings className="w-3.5 h-3.5" />
             </button>
 
-            <button
-              onClick={logout}
-              title="Cerrar sesión"
-              className="flex items-center gap-1 bg-red-950/60 hover:bg-red-900 border border-red-800/70 text-red-300 hover:text-white px-2.5 py-1 rounded-md text-xs font-medium transition cursor-pointer"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Salir</span>
-            </button>
+            {user.rol !== 'admin' ? (
+              <button
+                onClick={() => {
+                  if (confirm('¿Estás seguro de que deseas cerrar tu turno y salir?')) {
+                    cerrarTurnoYSalir()
+                  }
+                }}
+                title="Cerrar turno"
+                className="flex items-center gap-1 bg-red-950/60 hover:bg-red-900 border border-red-800/70 text-red-300 hover:text-white px-2.5 py-1 rounded-md text-xs font-medium transition cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Cerrar Turno</span>
+              </button>
+            ) : (
+              <button
+                onClick={logout}
+                title="Cerrar sesión"
+                className="flex items-center gap-1 bg-red-950/60 hover:bg-red-900 border border-red-800/70 text-red-300 hover:text-white px-2.5 py-1 rounded-md text-xs font-medium transition cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Salir</span>
+              </button>
+            )}
           </div>
         )}
       </div>

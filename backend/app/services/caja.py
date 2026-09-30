@@ -451,7 +451,7 @@ def cerrar_turno(db: Session, cierre: Cierre, usuario, notas: str | None = None)
         db.query(Pago)
         .filter(
             or_(Pago.cierre_id == cierre.id, Pago.cierre_id.is_(None)),
-            Pago.creado_en >= cierre.abierto_en,
+            Pago.pagado_en >= cierre.abierto_en,
         )
         .all()
     )
@@ -542,6 +542,26 @@ def cerrar_turno(db: Session, cierre: Cierre, usuario, notas: str | None = None)
         p.cierre_id = cierre.id
     for m in movimientos:
         m.cierre_id = cierre.id
+
+    # CIERRE GLOBAL DE JORNADAS LABORALES
+    from app.models.asistencia import TurnoLaboral
+    from app.services.websocket import ws_manager
+    import asyncio
+    
+    turnos_abiertos = db.query(TurnoLaboral).filter(TurnoLaboral.salida_en.is_(None)).all()
+    for t in turnos_abiertos:
+        t.salida_en = func.now()
+        t.motivo_cierre = "CIERRE_CAJA"
+
+    # Lanzar notificación asíncrona de cierre general (ignora si falla el loop)
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(ws_manager.broadcast({
+            "evento": "cierre_caja_general",
+            "data": {"mensaje": "Día laboral finalizado. Se ha realizado el cierre de caja del restaurante."}
+        }))
+    except RuntimeError:
+        pass  # Si no hay loop no lanzamos websocket en este instante
 
     registrar(
         db, usuario, "CERRAR_TURNO", "cierre", cierre.id,
