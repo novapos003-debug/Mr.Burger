@@ -24,8 +24,9 @@ Si una decisión no está aquí, se discute antes de codificar. Nada se borra: s
 11. [MVP vs Futuro](#11-mvp-vs-futuro)
 12. [Estado actual de implementación](#12-estado-actual-de-implementación)
 13. [Matriz Comparativa — Lo Planeado vs. Lo Implementado](#13-matriz-comparativa--lo-planeado-vs-lo-implementado)
-14. [Hardware y Estrategia de Operación en el Local](#14-hardware-y-estrategia-de-operación-en-el-local)
-15. [Anexo A — Prompts para presentación al cliente](#anexo-a--prompts-para-presentación-al-cliente)
+15. [Anexo A — Prompts para presentación al cliente](#15-anexo-a--prompts-para-presentación-al-cliente)
+16. [Lista de Pendientes para Lanzamiento y Entrega al Cliente](#16-lista-de-pendientes-para-lanzamiento-y-entrega-al-cliente)
+17. [Módulo de Asistencia, Control de Turnos y Seguridad en Tiempo Real](#17-módulo-de-asistencia-control-de-turnos-y-seguridad-en-tiempo-real)
 
 ---
 
@@ -575,4 +576,45 @@ A continuación se resumen los puntos que quedan pendientes antes y durante el d
 ### 5. Optimización Responsiva Multi-Dispositivo (PC / Móvil) ✅
 - **Mesero en PC (Desktop / Laptop):** Se ajustó el layout a altura fija calculada (`100dvh - 58px`) con scroll interno independiente para el catálogo y la comanda (`min-h-0`, `overflow-y-auto`). Esto garantiza que los botones inferiores de "Enviar a Cocina" y totales nunca queden tapados ni se corten abajo por la barra de tareas o la ventana.
 - **Admin & Inventario en Móviles (Android 360px - 412px):** Se incorporó tipografía responsiva adaptativa (`text-base sm:text-xl md:text-2xl`), contención horizontal con `min-w-0`, `overflow-hidden` y `truncate` con atributo `title` para que los números grandes (ej. cifras millonarias en COP) y tarjetas KPI no se coman caracteres ni desborden los bordes en pantallas compactas.
+
+---
+
+## 17. Módulo de Asistencia, Control de Turnos y Seguridad en Tiempo Real 🕒
+
+### 17.1 Propósito y Requerimientos del Negocio
+A solicitud del cliente, se implementó un módulo integral para controlar la asistencia y horas efectivas de trabajo del personal operativo (**Cajero, Mesero y Cocina**), permitiendo al Administrador/Dueño auditar las jornadas desde su panel en tiempo real y asegurando el cierre ordenado de la operación al finalizar el día:
+1. **Clock-in Automático e Idempotente:** Al iniciar sesión, el sistema registra la hora exacta de entrada si el empleado no tiene un turno abierto.
+2. **Resiliencia ante Caídas de Red y Cierre de App:** Si el internet se interrumpe, el dispositivo se apaga o la aplicación se cierra, **el turno NO se cierra automáticamente**. Al volver a entrar, se preserva íntegra la hora original de entrada.
+3. **Cierre de Turno Explícito:** Los colaboradores cuentan con un botón **"Cerrar Turno"** en la barra superior (Navbar) con diálogo de confirmación, el cual registra su hora de salida y cierra su sesión.
+4. **Cierre de Caja = Cierre General del Restaurante:** Al realizar el arqueo y cierre definitivo de caja, el sistema cierra automáticamente todos los turnos abiertos asignando el motivo `"CIERRE_CAJA"` y emite un broadcast global para desautenticar a todos los dispositivos conectados.
+5. **Panel de Asistencia para el Administrador:** Pestaña dedicada en el centro de mando (`Admin.tsx` > `AsistenciaTab.tsx`) con:
+   - Tarjetas en vivo del personal actualmente activo, cálculo de tiempo transcurrido (horas y minutos transcurridos) y botón de **Forzar Cierre**.
+   - Historial detallado de jornadas pasadas con empleado, rol, entrada, salida, duración y motivo de cierre (`MANUAL`, `CIERRE_CAJA`, `ADMIN`).
+
+### 17.2 Arquitectura de Seguridad en 3 Niveles (Shift Enforcement)
+Para garantizar que un empleado cuyo turno ha sido cerrado (por el Administrador o por Cierre de Caja) no pueda continuar ejecutando operaciones:
+```mermaid
+flowchart TD
+    Admin["Supervisor / Admin"] -->|Forzar Cierre| API["API /asistencia/admin/id/cerrar"]
+    API -->|1. Broadcast WebSocket| WS["WebSocket Canal /ws/pedidos"]
+    WS -->|Evento cierre_turno_forzado| UI["Pantalla del Empleado (Milisegundos)"]
+    UI -->|Alerta y Expulsión| Logout["localStorage.clear() -> /login"]
+
+    App["Celular / Tablet (Pantalla Bloqueada)"] -->|2. Detección de Desbloqueo / Heartbeat 8s| Check["GET /asistencia/mi-turno"]
+    Check -->|Turno es null| Logout
+
+    Empleado["Empleado Intenta Operar (Click Rápido)"] -->|3. POST /api/pedidos o /caja| Backend["Middleware deps.py (require_roles)"]
+    Backend -->|Sin turno activo| Err["HTTP 401 Unauthorized"]
+    Err -->|Interceptor Axios client.ts| Logout
+```
+
+1. **Nivel 1 (Tiempo Real - WebSocket):** Evento `cierre_turno_forzado` dirigido por ID de usuario que desautentica la pantalla del trabajador de forma inmediata.
+2. **Nivel 2 (Sondeo y Heartbeat Anticaídas):** Verificación automática cada 8 segundos y al reactivar la pantalla (`visibilitychange`). Si el turno ya no existe en base de datos, purga la sesión.
+3. **Nivel 3 (Blindaje en Backend - Hard Block):** En [`deps.py`](file:///C:/Users/jhona/Documents/Default%20Project/backend/app/core/deps.py), los decoradores `staff_required`, `cashier_required` y `kitchen_required` validan que exista un registro `TurnoLaboral` abierto. Toda petición sin turno activo es rechazada con `401 Unauthorized`, bloqueando cualquier comanda o cobro.
+
+### 17.3 Auditoría Extrema y Validación E2E
+Se ejecutó la suite de pruebas de estrés [`test_auditoria_extrema.py`](file:///C:/Users/jhona/Documents/Default%20Project/backend/test_auditoria_extrema.py) cubriendo 20 escenarios críticos:
+- **Resultado:** **20 Aprobadas / 0 Fallidas (100% PASS).**
+- **Pruebas superadas:** Ataques de inyección SQL en parámetros, intentos de pedidos con cantidades negativas o mesas inexistentes, doble cobro de pedidos (*double spending*), devolución duplicada de pagos en caja, protección contra fuerza bruta en login (HTTP 429), y bloqueo de creación de pedidos sin turno activo.
+- **Bug crítico detectado y corregido:** En [`caja.py`](file:///C:/Users/jhona/Documents/Default%20Project/backend/app/services/caja.py), se corrigió el campo `Pago.creado_en` por el atributo de modelo real `Pago.pagado_en`, eliminando un error 500 al consolidar el arqueo.
 
