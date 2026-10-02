@@ -41,7 +41,7 @@ def _get_pedido(db: Session, pedido_id: int, lock: bool = False) -> Pedido:
         .filter(Pedido.id == pedido_id)
     )
     if lock:
-        q = q.with_for_update()
+        q = q.with_for_update(of=Pedido)
     pedido = q.first()
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
@@ -209,7 +209,7 @@ def abrir_turno_endpoint(
 
 
 @router.post("/turno/cerrar", response_model=CierreOut)
-def cerrar_turno_endpoint(
+async def cerrar_turno_endpoint(
     data: CierreCerrarIn | None = None,
     db: Session = Depends(get_db),
     cajero: Usuario = Depends(cashier_required),
