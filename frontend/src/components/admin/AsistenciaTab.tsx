@@ -7,13 +7,19 @@ import {
   AlertCircle,
   RefreshCw,
 } from 'lucide-react'
-import { getTurnosActivosApi, getTurnosHistorialApi, cerrarTurnoAdminApi } from '../../api/asistencia'
+import {
+  getTurnosActivosApi,
+  getTurnosHistorialApi,
+  cerrarTurnoAdminApi,
+  cerrarTodosTurnosAdminApi,
+} from '../../api/asistencia'
 import type { TurnoLaboral } from '../../types/asistencia'
 
 export const AsistenciaTab: React.FC = () => {
   const [activos, setActivos] = useState<TurnoLaboral[]>([])
   const [historial, setHistorial] = useState<TurnoLaboral[]>([])
   const [loading, setLoading] = useState(true)
+  const [cerrandoTodos, setCerrandoTodos] = useState(false)
 
   const cargarDatos = async () => {
     try {
@@ -40,8 +46,21 @@ export const AsistenciaTab: React.FC = () => {
     try {
       await cerrarTurnoAdminApi(id)
       cargarDatos()
-    } catch (err) {
+    } catch {
       alert('Error cerrando turno')
+    }
+  }
+
+  const handleCerrarTodos = async () => {
+    if (!window.confirm('¿Deseas finalizar TODOS los turnos activos de los empleados ahora mismo?')) return
+    try {
+      setCerrandoTodos(true)
+      await cerrarTodosTurnosAdminApi()
+      await cargarDatos()
+    } catch {
+      alert('Error al cerrar todos los turnos')
+    } finally {
+      setCerrandoTodos(false)
     }
   }
 
@@ -72,10 +91,22 @@ export const AsistenciaTab: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
-        <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-4">
-          <Clock className="w-5 h-5 text-emerald-400" />
-          Personal en Turno (Actualmente Activos)
-        </h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <h3 className="text-lg font-bold text-white flex items-center gap-2">
+            <Clock className="w-5 h-5 text-emerald-400" />
+            Personal en Turno (Actualmente Activos)
+          </h3>
+          {activos.length > 0 && (
+            <button
+              onClick={handleCerrarTodos}
+              disabled={cerrandoTodos}
+              className="px-3 py-1.5 bg-rose-950/80 hover:bg-rose-900 border border-rose-800 text-rose-300 rounded-lg text-xs font-bold transition cursor-pointer self-start sm:self-auto flex items-center gap-1.5"
+            >
+              {cerrandoTodos && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+              <span>Finalizar Todos los Turnos Activos</span>
+            </button>
+          )}
+        </div>
         
         {activos.length === 0 ? (
           <div className="text-center py-6 text-slate-400 bg-slate-900 rounded-lg">

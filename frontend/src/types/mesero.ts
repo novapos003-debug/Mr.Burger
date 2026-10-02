@@ -37,6 +37,15 @@ export interface Producto {
   es_cocina?: boolean
   ingredientes_receta?: string[]
   empaque_llevar_id?: number | null
+  permite_adiciones?: boolean
+  es_combo?: boolean
+  componentes_combo?: Array<{
+    id: number
+    producto_hijo_id: number
+    producto_hijo_nombre: string
+    cantidad: number
+    precio_unitario: number
+  }>
 }
 
 export interface DetallePedido {

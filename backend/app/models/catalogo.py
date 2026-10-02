@@ -54,6 +54,7 @@ class Producto(Base):
     precio = Column(Numeric(12, 2), nullable=False, default=0)
     iva_incluido = Column(Boolean, nullable=False, default=True)
     empaque_llevar_id = Column(Integer, ForeignKey("producto.id"))
+    permite_adiciones = Column(Boolean, nullable=False, default=True)
     manual_disponible = Column(Boolean)  # NULL=auto por stock, TRUE/FALSE=forzado
     activo = Column(Boolean, nullable=False, default=True)
     creado_en = Column(DateTime(timezone=True), server_default=func.now())

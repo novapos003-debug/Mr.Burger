@@ -213,6 +213,11 @@ if st_cp == 201 and prod_creado.get("id"):
     st_del, _ = req(f"/productos/{pid}", method="DELETE", token=tok_a)
     assert_test("Admin desactiva producto (soft-delete sin romper historial)", st_del == 204)
 
+# 6. LIMPIEZA FINAL DE PRUEBAS
+print("\n--- FASE 6: Limpieza de Turnos de Prueba ---")
+st_clean, _ = req("/asistencia/admin/cerrar-todos", method="POST", token=tok_a)
+assert_test("Limpieza: Admin finaliza turnos temporales de prueba", st_clean == 200)
+
 print("\n==================================================")
 print(f" RESUMEN DE PRUEBAS: {PASSES} PASARON, {FAILS} FALLARON")
 print("==================================================")

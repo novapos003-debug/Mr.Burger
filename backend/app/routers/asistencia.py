@@ -194,3 +194,24 @@ async def cerrar_turno_admin(turno_id: int, db: Session = Depends(get_db), admin
         "salida_en": turno.salida_en,
         "motivo_cierre": turno.motivo_cierre
     }
+
+
+@router.post("/admin/cerrar-todos")
+async def cerrar_todos_turnos_admin(db: Session = Depends(get_db), admin: Usuario = Depends(admin_required)):
+    """Cierra todos los turnos abiertos que hayan quedado activos (ej. por pruebas o fin de jornada)."""
+    turnos = db.query(TurnoLaboral).filter(TurnoLaboral.salida_en.is_(None)).all()
+    for t in turnos:
+        t.salida_en = func.now()
+        t.motivo_cierre = "ADMIN_GENERAL"
+    safe_commit(db)
+    try:
+        await ws_manager.broadcast({
+            "evento": "cierre_caja_general",
+            "data": {
+                "mensaje": "Todos los turnos laborales activos han sido cerrados por el administrador."
+            }
+        })
+    except Exception as e:
+        print(f"Error al emitir cierre general por WS: {e}")
+    return {"cerrados": len(turnos)}
+

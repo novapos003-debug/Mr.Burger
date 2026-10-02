@@ -15,8 +15,11 @@ import {
   crearProductoApi,
   actualizarProductoApi,
   eliminarProductoApi,
+  getComponentesComboApi,
+  guardarComponentesComboApi,
 } from '../api/admin'
 import { getProductosApi, getCategoriasApi } from '../api/mesero'
+import { imprimirHtmlTirilla } from '../utils/printer'
 import type {
   DashboardOut,
   ReporteVentasOut,
@@ -82,6 +85,18 @@ export const Admin: React.FC = () => {
   const [canalFiltro, setCanalFiltro] = useState<string>('TODOS')
   const [reporteData, setReporteData] = useState<ReporteVentasOut | null>(null)
   const [reporteLoading, setReporteLoading] = useState(false)
+  const [reporteError, setReporteError] = useState<string | null>(null)
+  const [dashboardPlanilla, setDashboardPlanilla] = useState<DashboardOut | null>(null)
+
+  // Estado Combos
+  const [esModoCombo, setEsModoCombo] = useState(false)
+  const [comboLineas, setComboLineas] = useState<Array<{ producto_hijo_id: number; cantidad: number }>>([])
+  const [guardandoCombo, setGuardandoCombo] = useState(false)
+  const [comboError, setComboError] = useState<string | null>(null)
+
+  // Estado Adiciones por producto
+  const [nuevoProdPermiteAdiciones, setNuevoProdPermiteAdiciones] = useState(true)
+  const [editarProdPermiteAdiciones, setEditarProdPermiteAdiciones] = useState(true)
 
   // Estado Compras
   const [compras, setCompras] = useState<CompraOut[]>([])
@@ -164,11 +179,19 @@ export const Admin: React.FC = () => {
   // 2. Cargar Reporte
   const cargarReporte = async () => {
     setReporteLoading(true)
+    setReporteError(null)
     try {
-      const data = await getReporteVentasApi(fechaDesde, fechaHasta, canalFiltro)
+      const [data, dash] = await Promise.all([
+        getReporteVentasApi(fechaDesde, fechaHasta, canalFiltro),
+        getDashboardApi(fechaHasta).catch(() => null),
+      ])
       setReporteData(data)
+      if (dash) setDashboardPlanilla(dash)
+      setBannerSuccess('✓ Cuadre y planilla diaria generada correctamente.')
+      setTimeout(() => setBannerSuccess(null), 4000)
     } catch (err: any) {
       console.error('Error cargando reportes:', err)
+      setReporteError(err.response?.data?.detail || 'Error al generar el cuadre de ventas')
     } finally {
       setReporteLoading(false)
     }
@@ -264,8 +287,21 @@ export const Admin: React.FC = () => {
     setProductoSeleccionado(prod)
     setRecetaLoading(true)
     setRecetaError(null)
+    setComboError(null)
+
+    const cat = categorias.find((c) => c.id === prod.categoria_id)
+    const esComboAuto =
+      cat?.nombre.toUpperCase().includes('COMBO') ||
+      Boolean(prod.es_combo) ||
+      (prod.componentes_combo && prod.componentes_combo.length > 0)
+    setEsModoCombo(Boolean(esComboAuto))
+
     try {
-      const lineas = await getRecetaProductoApi(prod.id)
+      const [lineas, comps] = await Promise.all([
+        getRecetaProductoApi(prod.id).catch(() => []),
+        getComponentesComboApi(prod.id).catch(() => []),
+      ])
+
       setRecetaLineas(
         lineas.map((l) => ({
           ingrediente_id: l.ingrediente_id,
@@ -273,11 +309,97 @@ export const Admin: React.FC = () => {
           unidad: l.unidad,
         }))
       )
+
+      if (comps && comps.length > 0) {
+        setComboLineas(
+          comps.map((c) => ({
+            producto_hijo_id: c.producto_hijo_id,
+            cantidad: Number(c.cantidad),
+          }))
+        )
+        setEsModoCombo(true)
+      } else {
+        setComboLineas([])
+      }
     } catch (err: any) {
       setRecetaError(err.response?.data?.detail || 'Error al cargar receta')
       setRecetaLineas([])
     } finally {
       setRecetaLoading(false)
+    }
+  }
+
+  // Métodos para Combos
+  const handleAgregarLineaCombo = () => {
+    const otrosProds = productos.filter((p) => p.id !== productoSeleccionado?.id)
+    if (otrosProds.length === 0) return
+    setComboLineas((prev) => [
+      ...prev,
+      { producto_hijo_id: otrosProds[0].id, cantidad: 1 },
+    ])
+  }
+
+  const handleEliminarLineaCombo = (idx: number) => {
+    setComboLineas((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  const handleModificarLineaCombo = (
+    idx: number,
+    campo: 'producto_hijo_id' | 'cantidad',
+    valor: any
+  ) => {
+    setComboLineas((prev) => {
+      const copy = [...prev]
+      copy[idx] = { ...copy[idx], [campo]: valor }
+      return copy
+    })
+  }
+
+  const handleGuardarCombo = async () => {
+    if (!productoSeleccionado) return
+    if (comboLineas.length === 0) {
+      alert('Debes agregar al menos un producto al combo')
+      return
+    }
+    setGuardandoCombo(true)
+    setComboError(null)
+    try {
+      await guardarComponentesComboApi(productoSeleccionado.id, comboLineas)
+      setBannerSuccess(
+        `✓ ¡Componentes del Combo "${productoSeleccionado.nombre}" guardados correctamente!`
+      )
+      setTimeout(() => setBannerSuccess(null), 5000)
+      await cargarProductosYRecetas()
+    } catch (err: any) {
+      setComboError(
+        err.response?.data?.detail || 'Error al guardar los componentes del combo'
+      )
+    } finally {
+      setGuardandoCombo(false)
+    }
+  }
+
+  const handleToggleAdicionesProducto = async () => {
+    if (!productoSeleccionado) return
+    const nuevoValor = productoSeleccionado.permite_adiciones === false ? true : false
+    try {
+      const actualizado = await actualizarProductoApi(productoSeleccionado.id, {
+        permite_adiciones: nuevoValor,
+      })
+      setProductoSeleccionado((prev) =>
+        prev ? { ...prev, permite_adiciones: nuevoValor } : null
+      )
+      setProductos((prev) =>
+        prev.map((p) =>
+          p.id === actualizado.id ? { ...p, permite_adiciones: nuevoValor } : p
+        )
+      )
+      setBannerSuccess(
+        `✓ Adiciones ${nuevoValor ? 'habilitadas' : 'deshabilitadas'} para "${productoSeleccionado.nombre}"`
+      )
+      setTimeout(() => setBannerSuccess(null), 4000)
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error al cambiar opción de adiciones')
     }
   }
 
@@ -366,6 +488,7 @@ export const Admin: React.FC = () => {
     setEditarProdDescripcion(prod.descripcion || '')
     setEditarProdCategoriaId(prod.categoria_id)
     setEditarProdEmpaqueId(prod.empaque_llevar_id || '')
+    setEditarProdPermiteAdiciones(prod.permite_adiciones !== false)
     setEditarProdModalOpen(true)
   }
 
@@ -387,6 +510,7 @@ export const Admin: React.FC = () => {
         descripcion: editarProdDescripcion.trim(),
         categoria_id: editarProdCategoriaId ? Number(editarProdCategoriaId) : undefined,
         empaque_llevar_id: editarProdEmpaqueId === '' ? null : Number(editarProdEmpaqueId),
+        permite_adiciones: editarProdPermiteAdiciones,
       })
       setProductoSeleccionado(prodActualizado)
       setBannerSuccess(
@@ -426,13 +550,15 @@ export const Admin: React.FC = () => {
         descripcion: nuevoProdDescripcion.trim() || undefined,
         iva_incluido: true,
         empaque_llevar_id: nuevoProdEmpaqueId === '' ? undefined : Number(nuevoProdEmpaqueId),
+        permite_adiciones: nuevoProdPermiteAdiciones,
       })
-      setBannerSuccess(`✓ ¡Plato "${nuevo.nombre}" creado exitosamente! Ahora puedes definir sus ingredientes y receta.`)
+      setBannerSuccess(`✓ ¡Plato "${nuevo.nombre}" creado exitosamente! Ahora puedes definir sus ingredientes o combo.`)
       setTimeout(() => setBannerSuccess(null), 6000)
       setNuevoProdModalOpen(false)
       setNuevoProdNombre('')
       setNuevoProdDescripcion('')
       setNuevoProdPrecio(22000)
+      setNuevoProdPermiteAdiciones(true)
       await cargarProductosYRecetas()
       setProductoSeleccionado(nuevo)
     } catch (err: any) {
@@ -516,6 +642,141 @@ export const Admin: React.FC = () => {
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Error al descartar preparado')
     }
+  }
+
+  const handleImprimirPlanilla = () => {
+    if (!reporteData) {
+      alert('Primero haz clic en "Generar Cuadre" para cargar la información del período')
+      return
+    }
+
+    const ventasEfectivo = dashboardPlanilla?.pagos_por_metodo?.['EFECTIVO'] || 0
+    const ventasTarjeta = dashboardPlanilla?.pagos_por_metodo?.['TARJETA'] || 0
+    const ventasTransferencia = dashboardPlanilla?.pagos_por_metodo?.['TRANSFERENCIA'] || 0
+    const ventasDidi = (Number(dashboardPlanilla?.pagos_por_metodo?.['DIDI_TARJETA'] || 0) + Number(dashboardPlanilla?.pagos_por_metodo?.['DIDI_EFECTIVO'] || 0))
+    const salidasCaja = Number(dashboardPlanilla?.salidas_caja || 0)
+    const entradasCaja = Number(dashboardPlanilla?.entradas_caja || 0)
+
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 24px; color: #111; max-width: 800px; margin: 0 auto; line-height: 1.4;">
+        <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 18px;">
+          <h1 style="margin: 0; font-size: 22px; font-weight: 900; letter-spacing: 1px;">MR. BURGER CALI</h1>
+          <p style="margin: 3px 0 0 0; font-size: 13px; font-weight: bold; text-transform: uppercase;">Planilla Oficial de Cuadre Diario y Control de Ventas</p>
+          <p style="margin: 3px 0; font-size: 10px; color: #555;">Régimen No Responsable de IVA (Art. 512-13 E.T.) • Cali, Valle del Cauca</p>
+          <div style="margin-top: 6px; font-size: 11px; display: flex; justify-content: space-between; border-top: 1px dashed #ccc; padding-top: 6px;">
+            <span>Período: <strong>${fechaDesde}</strong> hasta <strong>${fechaHasta}</strong></span>
+            <span>Canal: <strong>${canalFiltro}</strong></span>
+            <span>Impreso: <strong>${new Date().toLocaleString('es-CO')}</strong></span>
+          </div>
+        </div>
+
+        <div style="border: 1px solid #000; border-radius: 6px; padding: 12px; margin-bottom: 18px; background-color: #fafafa;">
+          <h3 style="margin: 0 0 8px 0; font-size: 12px; text-transform: uppercase; border-bottom: 1px solid #ddd; padding-bottom: 4px;">
+            Fórmula de Cuadre de Caja (Efectivo Físico en Gaveta)
+          </h3>
+          <div style="font-size: 11px; line-height: 1.8;">
+            <div style="display: flex; justify-content: space-between;">
+              <span>(+) Total Ventas Reportadas:</span>
+              <strong style="font-size: 12px;">$${Number(reporteData.total_ventas).toLocaleString('es-CO')} COP</strong>
+            </div>
+            ${dashboardPlanilla ? `
+            <div style="display: flex; justify-content: space-between; padding-left: 12px; color: #444;">
+              <span>• Cobrado en Efectivo:</span>
+              <span>$${Number(ventasEfectivo).toLocaleString('es-CO')}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding-left: 12px; color: #444;">
+              <span>• Cobrado por Transferencias / QR:</span>
+              <span>$${Number(ventasTransferencia).toLocaleString('es-CO')}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding-left: 12px; color: #444;">
+              <span>• Cobrado por Datáfono / Tarjeta:</span>
+              <span>$${Number(ventasTarjeta).toLocaleString('es-CO')}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding-left: 12px; color: #444;">
+              <span>• Cobrado vía DiDi Food:</span>
+              <span>$${Number(ventasDidi).toLocaleString('es-CO')}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-top: 1px dashed #ccc; margin-top: 4px; padding-top: 4px; color: #b91c1c;">
+              <span>(-) Salidas de Caja Menor / Gastos:</span>
+              <strong>-$${Number(salidasCaja).toLocaleString('es-CO')}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; color: #047857;">
+              <span>(+) Entradas de Caja Menor:</span>
+              <strong>+$${Number(entradasCaja).toLocaleString('es-CO')}</strong>
+            </div>
+            ` : ''}
+          </div>
+        </div>
+
+        <h3 style="margin: 0 0 6px 0; font-size: 12px; text-transform: uppercase;">Desglose Diario de Operaciones</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 20px;">
+          <thead>
+            <tr style="background-color: #eee; border-top: 1px solid #000; border-bottom: 1px solid #000;">
+              <th style="padding: 6px; text-align: left;">Fecha</th>
+              <th style="padding: 6px; text-align: center;">Pedidos</th>
+              <th style="padding: 6px; text-align: right;">Total Facturado</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${reporteData.desglose_diario && reporteData.desglose_diario.length > 0 ? (
+              reporteData.desglose_diario.map(d => `
+                <tr style="border-bottom: 1px solid #e5e5e5;">
+                  <td style="padding: 6px;">${d.fecha}</td>
+                  <td style="padding: 6px; text-align: center;">${d.pedidos_count}</td>
+                  <td style="padding: 6px; text-align: right; font-weight: bold;">$${Number(d.total).toLocaleString('es-CO')}</td>
+                </tr>
+              `).join('')
+            ) : `
+              <tr>
+                <td colspan="3" style="padding: 12px; text-align: center; color: #888;">Sin operaciones en este período</td>
+              </tr>
+            `}
+          </tbody>
+          <tfoot>
+            <tr style="border-top: 2px solid #000; font-weight: bold; background-color: #fafafa;">
+              <td style="padding: 8px 6px;">TOTAL GENERAL</td>
+              <td style="padding: 8px 6px; text-align: center;">${reporteData.total_pedidos}</td>
+              <td style="padding: 8px 6px; text-align: right; font-size: 13px;">$${Number(reporteData.total_ventas).toLocaleString('es-CO')}</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div style="display: flex; gap: 16px; margin-bottom: 24px; font-size: 11px;">
+          <div style="flex: 1; border: 1px solid #ddd; border-radius: 6px; padding: 10px;">
+            <div style="font-weight: bold; margin-bottom: 6px; text-transform: uppercase;">Ventas por Canal:</div>
+            ${Object.entries(reporteData.ventas_por_canal || {}).map(([canal, tot]) => `
+              <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+                <span>${canal}:</span>
+                <strong>$${Number(tot).toLocaleString('es-CO')}</strong>
+              </div>
+            `).join('')}
+          </div>
+          <div style="flex: 1; border: 1px solid #ddd; border-radius: 6px; padding: 10px;">
+            <div style="font-weight: bold; margin-bottom: 6px; text-transform: uppercase;">Indicadores:</div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+              <span>Ticket Promedio:</span>
+              <strong>$${Number(reporteData.ticket_promedio).toLocaleString('es-CO')}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+              <span>Régimen:</span>
+              <strong>No Responsable IVA (0%)</strong>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 40px; display: flex; justify-content: space-between; text-align: center; font-size: 11px;">
+          <div style="width: 42%; border-top: 1px solid #000; padding-top: 6px;">
+            <strong>Firma Cajero(a) de Turno</strong>
+            <p style="margin: 2px 0 0 0; font-size: 9px; color: #666;">C.C. _______________________</p>
+          </div>
+          <div style="width: 42%; border-top: 1px solid #000; padding-top: 6px;">
+            <strong>Firma Administrador / Auditor</strong>
+            <p style="margin: 2px 0 0 0; font-size: 9px; color: #666;">Aprobación de Cierre</p>
+          </div>
+        </div>
+      </div>
+    `
+    imprimirHtmlTirilla(html)
   }
 
   return (
@@ -919,11 +1180,19 @@ export const Admin: React.FC = () => {
               <button
                 onClick={cargarReporte}
                 disabled={reporteLoading}
-                className="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                className="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
               >
-                Generar Cuadre
+                {reporteLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>{reporteLoading ? 'Generando...' : 'Generar Cuadre'}</span>
               </button>
             </div>
+
+            {reporteError && (
+              <div className="p-3 bg-rose-950/80 border border-rose-800 rounded-xl text-xs text-rose-300 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{reporteError}</span>
+              </div>
+            )}
 
             {/* Réplica Digital de la Planilla Manual Mr. Burger */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 sm:p-5 shadow-xl">
@@ -934,14 +1203,15 @@ export const Admin: React.FC = () => {
                     <span className="truncate">Planilla Oficial de Cuadre Diario</span>
                   </h2>
                   <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5">
-                    Base Inicial + Ventas Totales - Compras - Gastos = Efectivo en Cajón
+                    Fórmula Contable: Base Inicial + Ventas Totales - Compras - Gastos = Efectivo en Cajón
                   </p>
                 </div>
                 <button
-                  onClick={() => window.print()}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition cursor-pointer shrink-0 self-start sm:self-auto"
+                  onClick={handleImprimirPlanilla}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition cursor-pointer shrink-0 self-start sm:self-auto flex items-center gap-1.5"
                 >
-                  Imprimir Planilla
+                  <Receipt className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Imprimir Planilla Oficial</span>
                 </button>
               </div>
 
@@ -972,15 +1242,54 @@ export const Admin: React.FC = () => {
                 </div>
               </div>
 
+              {/* Arqueo de Caja del Día */}
+              {dashboardPlanilla && (
+                <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 mb-6">
+                  <h4 className="text-xs font-bold uppercase text-amber-400 mb-2.5 flex items-center gap-1.5">
+                    <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Flujo de Caja Real ({fechaHasta})</span>
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                    <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                      <span className="text-[10px] text-slate-400 block">Ventas en Efectivo:</span>
+                      <span className="font-mono font-bold text-emerald-400 text-sm">
+                        ${Number(dashboardPlanilla.pagos_por_metodo?.['EFECTIVO'] || 0).toLocaleString('es-CO')}
+                      </span>
+                    </div>
+                    <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                      <span className="text-[10px] text-slate-400 block">Transferencias / QR:</span>
+                      <span className="font-mono font-bold text-sky-400 text-sm">
+                        ${(
+                          Number(dashboardPlanilla.pagos_por_metodo?.['TRANSFERENCIA'] || 0) +
+                          Number(dashboardPlanilla.pagos_por_metodo?.['TARJETA'] || 0) +
+                          Number(dashboardPlanilla.pagos_por_metodo?.['DIDI_TARJETA'] || 0)
+                        ).toLocaleString('es-CO')}
+                      </span>
+                    </div>
+                    <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                      <span className="text-[10px] text-slate-400 block">(-) Salidas de Caja / Gastos:</span>
+                      <span className="font-mono font-bold text-red-400 text-sm">
+                        -${Number(dashboardPlanilla.salidas_caja || 0).toLocaleString('es-CO')}
+                      </span>
+                    </div>
+                    <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                      <span className="text-[10px] text-slate-400 block">(+) Entradas a Caja:</span>
+                      <span className="font-mono font-bold text-emerald-400 text-sm">
+                        +${Number(dashboardPlanilla.entradas_caja || 0).toLocaleString('es-CO')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Tabla de Desglose Día por Día */}
               <div className="overflow-x-auto">
                 <table className="w-full text-xs text-left">
                   <thead className="bg-slate-950 border-b border-slate-800 text-slate-400 font-bold uppercase">
                     <tr>
                       <th className="p-3">Fecha</th>
-                      <th className="p-3 text-center">Pedidos</th>
+                      <th className="p-3 text-center">Pedidos Atendidos</th>
                       <th className="p-3 text-right">Subtotal</th>
-                      <th className="p-3 text-right">Impuesto (0%)</th>
                       <th className="p-3 text-right">Total Facturado</th>
                     </tr>
                   </thead>
@@ -991,14 +1300,13 @@ export const Admin: React.FC = () => {
                           <td className="p-3 font-mono font-bold text-slate-200">{dia.fecha}</td>
                           <td className="p-3 text-center font-semibold text-slate-300">{dia.pedidos_count}</td>
                           <td className="p-3 text-right font-mono text-slate-400">${Number(dia.subtotal).toLocaleString('es-CO')}</td>
-                          <td className="p-3 text-right font-mono text-slate-400">${Number(dia.iva).toLocaleString('es-CO')}</td>
                           <td className="p-3 text-right font-mono font-bold text-emerald-400">${Number(dia.total).toLocaleString('es-CO')}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={5} className="text-center py-6 text-slate-500 text-xs">
-                          No hay operaciones registradas en el rango seleccionado.
+                        <td colSpan={4} className="text-center py-6 text-slate-500 text-xs">
+                          No hay operaciones registradas en el rango seleccionado. Haz clic en "Generar Cuadre" para consultar.
                         </td>
                       </tr>
                     )}
@@ -1613,235 +1921,479 @@ export const Admin: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Explicación de impacto */}
-                    <div className="p-3 bg-purple-950/30 border border-purple-800/40 rounded-xl text-xs text-purple-200">
-                      <strong>💡 Impacto en el Restaurante:</strong> Cada ingrediente que agregues aquí se
-                      descontará automáticamente del stock al preparar pedidos en cocina, y se mostrará
-                      en la comanda como opción de <strong>"Quitar / Modificar" (ej. "Sin tomate", "Sin tocineta")</strong>.
-                    </div>
-
-                    {/* Finanzas del Plato en Tiempo Real */}
-                    {(() => {
-                      const costoReceta = recetaLineas.reduce((acc, l) => {
-                        const ing = ingredientes.find((i) => i.id === l.ingrediente_id)
-                        const c = ing ? Number(ing.costo_unitario || 0) : 0
-                        return acc + (Number(l.cantidad) || 0) * c
-                      }, 0)
-                      const precio = Number(productoSeleccionado.precio || 0)
-                      const utilidad = precio - costoReceta
-                      const margen = precio > 0 ? (utilidad / precio) * 100 : 0
-
-                      return (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-slate-950 border border-slate-800 rounded-xl font-mono text-center">
-                          <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
-                            <span className="text-[10px] text-slate-500 font-sans block">Costo de Insumos</span>
-                            <span className="text-xs sm:text-sm font-bold text-amber-400">
-                              ${costoReceta.toLocaleString('es-CO')}
-                            </span>
-                          </div>
-                          <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
-                            <span className="text-[10px] text-slate-500 font-sans block">Precio Carta</span>
-                            <span className="text-xs sm:text-sm font-bold text-white">
-                              ${precio.toLocaleString('es-CO')}
-                            </span>
-                          </div>
-                          <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
-                            <span className="text-[10px] text-slate-500 font-sans block">Utilidad Bruta</span>
-                            <span
-                              className={`text-xs sm:text-sm font-bold ${
-                                utilidad >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                              }`}
-                            >
-                              ${utilidad.toLocaleString('es-CO')}
-                            </span>
-                          </div>
-                          <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
-                            <span className="text-[10px] text-slate-500 font-sans block">Margen</span>
-                            <span
-                              className={`text-xs sm:text-sm font-bold ${
-                                margen >= 50 ? 'text-emerald-400' : 'text-amber-400'
-                              }`}
-                            >
-                              {margen.toFixed(1)}%
-                            </span>
-                          </div>
-                        </div>
-                      )
-                    })()}
-
-                    {recetaError && (
-                      <div className="p-2.5 bg-rose-950/80 border border-rose-800 text-rose-300 rounded-xl text-xs">
-                        {recetaError}
-                      </div>
-                    )}
-
-                    {/* Tabla de Ingredientes de la Receta */}
-                    <div className="flex-1 overflow-y-auto space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                          Ingredientes que componen este producto ({recetaLineas.length}):
-                        </label>
+                    {/* Barra de Opciones Rápidas: Adiciones y Tipo */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-slate-950 border border-slate-800 rounded-xl gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-300">Adiciones en Comanda:</span>
                         <button
                           type="button"
-                          onClick={handleAgregarLineaReceta}
-                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-purple-300 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition"
+                          onClick={handleToggleAdicionesProducto}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border ${
+                            productoSeleccionado.permite_adiciones !== false
+                              ? 'bg-emerald-950/60 border-emerald-600 text-emerald-400 hover:bg-emerald-900/60'
+                              : 'bg-rose-950/60 border-rose-800 text-rose-300 hover:bg-rose-900/60'
+                          }`}
+                          title="Controla si el mesero puede agregar adiciones (tocineta, queso, salsas) a este producto"
                         >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Añadir Ingrediente</span>
+                          {productoSeleccionado.permite_adiciones !== false ? (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>Permite Adiciones</span>
+                            </>
+                          ) : (
+                            <>
+                              <X className="w-3.5 h-3.5 text-rose-400" />
+                              <span>Sin Adiciones (Botón Oculto)</span>
+                            </>
+                          )}
                         </button>
                       </div>
+                      <span className="text-[10px] text-slate-500">
+                        {productoSeleccionado.permite_adiciones !== false
+                          ? '✓ El mesero verá el botón "Adiciones" para este plato'
+                          : '✕ El botón de adiciones estará deshabilitado para este producto (ej. bebidas/cervezas)'}
+                      </span>
+                    </div>
 
-                      {recetaLoading ? (
-                        <div className="py-12 flex flex-col items-center justify-center text-slate-500 text-xs">
-                          <RefreshCw className="w-6 h-6 animate-spin text-purple-500 mb-2" />
-                          <span>Cargando receta...</span>
+                    {/* Selector de Modo: Receta Directa de Insumos vs Combo de Productos */}
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950 border border-slate-800 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setEsModoCombo(false)}
+                        className={`py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                          !esModoCombo
+                            ? 'bg-purple-600 text-white shadow-md shadow-purple-950/50'
+                            : 'text-slate-400 hover:text-white bg-slate-900/40 border border-transparent'
+                        }`}
+                      >
+                        <UtensilsCrossed className="w-3.5 h-3.5" />
+                        <span>Receta de Insumos ({recetaLineas.length})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEsModoCombo(true)}
+                        className={`py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                          esModoCombo
+                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-950/50'
+                            : 'text-slate-400 hover:text-white bg-slate-900/40 border border-transparent'
+                        }`}
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        <span>Componentes de Combo ({comboLineas.length})</span>
+                      </button>
+                    </div>
+
+                    {/* ======================================================== */}
+                    {/* VISTA 1: MODO COMBO (PRODUCTOS LISTOS DENTRO DEL COMBO) */}
+                    {/* ======================================================== */}
+                    {esModoCombo ? (
+                      <div className="flex-1 flex flex-col space-y-3">
+                        <div className="p-3 bg-indigo-950/30 border border-indigo-800/40 rounded-xl text-xs text-indigo-200">
+                          <strong>🍔 ¿Cómo funcionan los Combos?</strong> Selecciona los productos ya existentes en tu carta
+                          que componen este combo (ej. <strong>Hamburguesa Clásica + Papas a la Francesa + Gaseosa</strong>).
+                          No necesitas ingresar insumo por insumo: al vender este combo, el sistema descontará automáticamente
+                          los insumos de cada uno de sus productos componentes de forma recursiva.
                         </div>
-                      ) : recetaLineas.length === 0 ? (
-                        <div className="py-10 text-center border-2 border-dashed border-slate-800 rounded-xl text-slate-500 text-xs">
-                          Este producto actualmente no tiene receta configurada.
-                          <div className="mt-2">
+
+                        {/* Finanzas del Combo */}
+                        {(() => {
+                          const sumaPreciosHijos = comboLineas.reduce((acc, l) => {
+                            const prodHijo = productos.find((p) => p.id === l.producto_hijo_id)
+                            return acc + (Number(prodHijo?.precio || 0) * (Number(l.cantidad) || 1))
+                          }, 0)
+                          const precioCombo = Number(productoSeleccionado.precio || 0)
+                          const ahorroCliente = sumaPreciosHijos - precioCombo
+
+                          return (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 bg-slate-950 border border-slate-800 rounded-xl font-mono text-center">
+                              <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                                <span className="text-[10px] text-slate-500 font-sans block">Suma por separado</span>
+                                <span className="text-xs sm:text-sm font-bold text-white">
+                                  ${sumaPreciosHijos.toLocaleString('es-CO')}
+                                </span>
+                              </div>
+                              <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                                <span className="text-[10px] text-slate-500 font-sans block">Precio Combo</span>
+                                <span className="text-xs sm:text-sm font-bold text-emerald-400">
+                                  ${precioCombo.toLocaleString('es-CO')}
+                                </span>
+                              </div>
+                              <div className="col-span-2 sm:col-span-1 bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                                <span className="text-[10px] text-slate-500 font-sans block">Ahorro Promocional</span>
+                                <span className={`text-xs sm:text-sm font-bold ${ahorroCliente > 0 ? 'text-amber-400' : 'text-slate-400'}`}>
+                                  {ahorroCliente > 0 ? `-$${ahorroCliente.toLocaleString('es-CO')}` : '$0'}
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        })()}
+
+                        {comboError && (
+                          <div className="p-2.5 bg-rose-950/80 border border-rose-800 text-rose-300 rounded-xl text-xs">
+                            {comboError}
+                          </div>
+                        )}
+
+                        {/* Listado de Productos del Combo */}
+                        <div className="flex-1 overflow-y-auto space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                              Productos incluidos en este Combo ({comboLineas.length}):
+                            </label>
+                            <button
+                              type="button"
+                              onClick={handleAgregarLineaCombo}
+                              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Añadir Producto</span>
+                            </button>
+                          </div>
+
+                          {comboLineas.length === 0 ? (
+                            <div className="py-10 text-center border-2 border-dashed border-slate-800 rounded-xl text-slate-500 text-xs">
+                              Este producto no tiene componentes de combo asignados.
+                              <div className="mt-2">
+                                <button
+                                  type="button"
+                                  onClick={handleAgregarLineaCombo}
+                                  className="text-indigo-400 hover:underline font-bold"
+                                >
+                                  + Haz clic aquí para añadir el primer plato (ej. Hamburguesa, Papas, Bebida)
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {comboLineas.map((linea, idx) => (
+                                <div
+                                  key={idx}
+                                  className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl group hover:border-slate-700 transition"
+                                >
+                                  <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      <label className="block text-[10px] text-slate-500 mb-0.5">
+                                        Producto de la Carta
+                                      </label>
+                                      <select
+                                        value={linea.producto_hijo_id}
+                                        onChange={(e) =>
+                                          handleModificarLineaCombo(idx, 'producto_hijo_id', Number(e.target.value))
+                                        }
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-semibold"
+                                      >
+                                        {productos
+                                          .filter((p) => p.id !== productoSeleccionado.id)
+                                          .map((p) => (
+                                            <option key={p.id} value={p.id}>
+                                              {p.nombre} (${Number(p.precio || 0).toLocaleString('es-CO')})
+                                            </option>
+                                          ))}
+                                      </select>
+                                    </div>
+
+                                    <div className="flex items-end gap-2">
+                                      <div className="w-24 shrink-0">
+                                        <label className="block text-[10px] text-slate-500 mb-0.5">
+                                          Cantidad
+                                        </label>
+                                        <input
+                                          type="number"
+                                          step="1"
+                                          min="1"
+                                          value={linea.cantidad}
+                                          onChange={(e) =>
+                                            handleModificarLineaCombo(idx, 'cantidad', parseInt(e.target.value) || 1)
+                                          }
+                                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono text-center font-bold"
+                                        />
+                                      </div>
+
+                                      <div className="shrink-0">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleEliminarLineaCombo(idx)}
+                                          className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white transition cursor-pointer"
+                                          title="Quitar este producto del combo"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Botón Guardar Componentes del Combo */}
+                        <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
+                          <button
+                            type="button"
+                            onClick={handleAgregarLineaCombo}
+                            className="py-2.5 px-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Añadir Otro Producto</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={guardandoCombo}
+                            onClick={handleGuardarCombo}
+                            className="py-2.5 px-5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-xl shadow-indigo-950/50 flex items-center gap-2 cursor-pointer transition disabled:opacity-50"
+                          >
+                            {guardandoCombo ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                <span>Guardando Combo...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Save className="w-4 h-4" />
+                                <span>Guardar Componentes del Combo</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* ======================================================== */
+                      /* VISTA 2: MODO RECETA TRADICIONAL DE INSUMOS (COCINA)     */
+                      /* ======================================================== */
+                      <div className="flex-1 flex flex-col space-y-4">
+                        {/* Explicación de impacto */}
+                        <div className="p-3 bg-purple-950/30 border border-purple-800/40 rounded-xl text-xs text-purple-200">
+                          <strong>💡 Impacto en el Restaurante:</strong> Cada ingrediente que agregues aquí se
+                          descontará automáticamente del stock al preparar pedidos en cocina, y se mostrará
+                          en la comanda como opción de <strong>"Quitar / Modificar" (ej. "Sin tomate", "Sin tocineta")</strong>.
+                        </div>
+
+                        {/* Finanzas del Plato en Tiempo Real */}
+                        {(() => {
+                          const costoReceta = recetaLineas.reduce((acc, l) => {
+                            const ing = ingredientes.find((i) => i.id === l.ingrediente_id)
+                            const c = ing ? Number(ing.costo_unitario || 0) : 0
+                            return acc + (Number(l.cantidad) || 0) * c
+                          }, 0)
+                          const precio = Number(productoSeleccionado.precio || 0)
+                          const utilidad = precio - costoReceta
+                          const margen = precio > 0 ? (utilidad / precio) * 100 : 0
+
+                          return (
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-slate-950 border border-slate-800 rounded-xl font-mono text-center">
+                              <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                                <span className="text-[10px] text-slate-500 font-sans block">Costo de Insumos</span>
+                                <span className="text-xs sm:text-sm font-bold text-amber-400">
+                                  ${costoReceta.toLocaleString('es-CO')}
+                                </span>
+                              </div>
+                              <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                                <span className="text-[10px] text-slate-500 font-sans block">Precio Carta</span>
+                                <span className="text-xs sm:text-sm font-bold text-white">
+                                  ${precio.toLocaleString('es-CO')}
+                                </span>
+                              </div>
+                              <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                                <span className="text-[10px] text-slate-500 font-sans block">Utilidad Bruta</span>
+                                <span
+                                  className={`text-xs sm:text-sm font-bold ${
+                                    utilidad >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                                  }`}
+                                >
+                                  ${utilidad.toLocaleString('es-CO')}
+                                </span>
+                              </div>
+                              <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+                                <span className="text-[10px] text-slate-500 font-sans block">Margen</span>
+                                <span
+                                  className={`text-xs sm:text-sm font-bold ${
+                                    margen >= 50 ? 'text-emerald-400' : 'text-amber-400'
+                                  }`}
+                                >
+                                  {margen.toFixed(1)}%
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        })()}
+
+                        {recetaError && (
+                          <div className="p-2.5 bg-rose-950/80 border border-rose-800 text-rose-300 rounded-xl text-xs">
+                            {recetaError}
+                          </div>
+                        )}
+
+                        {/* Tabla de Ingredientes de la Receta */}
+                        <div className="flex-1 overflow-y-auto space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                              Ingredientes que componen este producto ({recetaLineas.length}):
+                            </label>
                             <button
                               type="button"
                               onClick={handleAgregarLineaReceta}
-                              className="text-purple-400 hover:underline font-bold"
+                              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-purple-300 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition"
                             >
-                              + Haz clic aquí para añadir el primer ingrediente
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Añadir Ingrediente</span>
                             </button>
                           </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {recetaLineas.map((linea, idx) => (
-                            <div
-                              key={idx}
-                              className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl group hover:border-slate-700 transition"
-                            >
-                              {/* Mobile: stacked layout / Desktop: horizontal */}
-                              <div className="flex flex-col sm:flex-row sm:items-end gap-2">
-                                {/* Selector de Ingrediente */}
-                                <div className="flex-1 min-w-0">
-                                  <label className="block text-[10px] text-slate-500 mb-0.5">
-                                    Ingrediente / Insumo
-                                  </label>
-                                  <select
-                                    value={linea.ingrediente_id}
-                                    onChange={(e) =>
-                                      handleModificarLineaReceta(idx, 'ingrediente_id', Number(e.target.value))
-                                    }
-                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 font-semibold"
-                                  >
-                                    {ingredientes.map((ing) => (
-                                      <option key={ing.id} value={ing.id}>
-                                        {ing.nombre} ({ing.stock_actual} {ing.unidad_base} en stock)
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
 
-                                {/* Cantidad + Unidad + Eliminar en fila */}
-                                <div className="flex items-end gap-2">
-                                  <div className="w-20 sm:w-24 shrink-0">
-                                    <label className="block text-[10px] text-slate-500 mb-0.5">
-                                      Cantidad
-                                    </label>
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      min="0.01"
-                                      value={linea.cantidad}
-                                      onChange={(e) =>
-                                        handleModificarLineaReceta(idx, 'cantidad', parseFloat(e.target.value) || 0)
-                                      }
-                                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 font-mono text-center font-bold"
-                                    />
-                                  </div>
-
-                                  <div className="w-20 sm:w-24 shrink-0">
-                                    <label className="block text-[10px] text-slate-500 mb-0.5">
-                                      Unidad
-                                    </label>
-                                    <input
-                                      type="text"
-                                      value={linea.unidad}
-                                      onChange={(e) =>
-                                        handleModificarLineaReceta(idx, 'unidad', e.target.value)
-                                      }
-                                      placeholder="u, lonja, g..."
-                                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 font-mono text-center"
-                                    />
-                                  </div>
-
-                                  {/* Botón Eliminar Fila */}
-                                  <div className="shrink-0">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleEliminarLineaReceta(idx)}
-                                      className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white transition cursor-pointer"
-                                      title="Quitar este ingrediente de la receta"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </div>
+                          {recetaLoading ? (
+                            <div className="py-12 flex flex-col items-center justify-center text-slate-500 text-xs">
+                              <RefreshCw className="w-6 h-6 animate-spin text-purple-500 mb-2" />
+                              <span>Cargando receta...</span>
+                            </div>
+                          ) : recetaLineas.length === 0 ? (
+                            <div className="py-10 text-center border-2 border-dashed border-slate-800 rounded-xl text-slate-500 text-xs">
+                              Este producto actualmente no tiene receta configurada.
+                              <div className="mt-2">
+                                <button
+                                  type="button"
+                                  onClick={handleAgregarLineaReceta}
+                                  className="text-purple-400 hover:underline font-bold"
+                                >
+                                  + Haz clic aquí para añadir el primer ingrediente
+                                </button>
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {recetaLineas.map((linea, idx) => (
+                                <div
+                                  key={idx}
+                                  className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl group hover:border-slate-700 transition"
+                                >
+                                  {/* Mobile: stacked layout / Desktop: horizontal */}
+                                  <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+                                    {/* Selector de Ingrediente */}
+                                    <div className="flex-1 min-w-0">
+                                      <label className="block text-[10px] text-slate-500 mb-0.5">
+                                        Ingrediente / Insumo
+                                      </label>
+                                      <select
+                                        value={linea.ingrediente_id}
+                                        onChange={(e) =>
+                                          handleModificarLineaReceta(idx, 'ingrediente_id', Number(e.target.value))
+                                        }
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 font-semibold"
+                                      >
+                                        {ingredientes.map((ing) => (
+                                          <option key={ing.id} value={ing.id}>
+                                            {ing.nombre} ({ing.stock_actual} {ing.unidad_base} en stock)
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
 
-                    {/* Vista Previa de Opciones en Comanda */}
-                    {recetaLineas.length > 0 && (
-                      <div className="p-3 bg-slate-950/90 border border-slate-800 rounded-xl">
-                        <span className="text-[10px] uppercase font-bold tracking-wider text-orange-400 block mb-1.5">
-                          Vista previa: Opciones que verá el mesero y la caja para este plato:
-                        </span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {recetaLineas.map((linea, i) => {
-                            const ing = ingredientes.find((item) => item.id === linea.ingrediente_id)
-                            return (
-                              <span
-                                key={i}
-                                className="text-[10px] bg-orange-950/70 border border-orange-800/70 text-orange-300 px-2 py-0.5 rounded-md font-medium"
-                              >
-                                Sin {ing?.nombre || `Insumo #${linea.ingrediente_id}`}
-                              </span>
-                            )
-                          })}
+                                    {/* Cantidad + Unidad + Eliminar en fila */}
+                                    <div className="flex items-end gap-2">
+                                      <div className="w-20 sm:w-24 shrink-0">
+                                        <label className="block text-[10px] text-slate-500 mb-0.5">
+                                          Cantidad
+                                        </label>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          min="0.01"
+                                          value={linea.cantidad}
+                                          onChange={(e) =>
+                                            handleModificarLineaReceta(idx, 'cantidad', parseFloat(e.target.value) || 0)
+                                          }
+                                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 font-mono text-center font-bold"
+                                        />
+                                      </div>
+
+                                      <div className="w-20 sm:w-24 shrink-0">
+                                        <label className="block text-[10px] text-slate-500 mb-0.5">
+                                          Unidad
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={linea.unidad}
+                                          onChange={(e) =>
+                                            handleModificarLineaReceta(idx, 'unidad', e.target.value)
+                                          }
+                                          placeholder="u, lonja, g..."
+                                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 font-mono text-center"
+                                        />
+                                      </div>
+
+                                      {/* Botón Eliminar Fila */}
+                                      <div className="shrink-0">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleEliminarLineaReceta(idx)}
+                                          className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white transition cursor-pointer"
+                                          title="Quitar este ingrediente de la receta"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Vista Previa de Opciones en Comanda */}
+                        {recetaLineas.length > 0 && (
+                          <div className="p-3 bg-slate-950/90 border border-slate-800 rounded-xl">
+                            <span className="text-[10px] uppercase font-bold tracking-wider text-orange-400 block mb-1.5">
+                              Vista previa: Opciones que verá el mesero y la caja para este plato:
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {recetaLineas.map((linea, i) => {
+                                const ing = ingredientes.find((item) => item.id === linea.ingrediente_id)
+                                return (
+                                  <span
+                                    key={i}
+                                    className="text-[10px] bg-orange-950/70 border border-orange-800/70 text-orange-300 px-2 py-0.5 rounded-md font-medium"
+                                  >
+                                    Sin {ing?.nombre || `Insumo #${linea.ingrediente_id}`}
+                                  </span>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Botón Guardar Receta */}
+                        <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
+                          <button
+                            type="button"
+                            onClick={handleAgregarLineaReceta}
+                            className="py-2.5 px-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Añadir Otro Insumo</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={guardandoReceta}
+                            onClick={handleGuardarReceta}
+                            className="py-2.5 px-5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-xl shadow-purple-950/50 flex items-center gap-2 cursor-pointer transition disabled:opacity-50"
+                          >
+                            {guardandoReceta ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                <span>Guardando Receta...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Save className="w-4 h-4" />
+                                <span>Guardar Receta del Producto</span>
+                              </>
+                            )}
+                          </button>
                         </div>
                       </div>
                     )}
-
-                    {/* Botón Guardar Receta */}
-                    <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
-                      <button
-                        type="button"
-                        onClick={handleAgregarLineaReceta}
-                        className="py-2.5 px-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Añadir Otro Insumo</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={guardandoReceta}
-                        onClick={handleGuardarReceta}
-                        className="py-2.5 px-5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-xl shadow-purple-950/50 flex items-center gap-2 cursor-pointer transition disabled:opacity-50"
-                      >
-                        {guardandoReceta ? (
-                          <>
-                            <RefreshCw className="w-4 h-4 animate-spin" />
-                            <span>Guardando Receta...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Save className="w-4 h-4" />
-                            <span>Guardar Receta del Producto</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
                   </div>
                 ) : (
                   <div className="py-20 flex flex-col items-center justify-center text-slate-500 text-xs">
@@ -2075,6 +2627,19 @@ export const Admin: React.FC = () => {
                       ))}
                   </select>
                 </div>
+
+                <div className="flex items-center gap-2 p-2.5 bg-slate-950 border border-slate-800 rounded-xl">
+                  <input
+                    type="checkbox"
+                    id="nuevoProdPermiteAdiciones"
+                    checked={nuevoProdPermiteAdiciones}
+                    onChange={(e) => setNuevoProdPermiteAdiciones(e.target.checked)}
+                    className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 bg-slate-900 border-slate-700 cursor-pointer"
+                  />
+                  <label htmlFor="nuevoProdPermiteAdiciones" className="text-xs font-semibold text-slate-300 cursor-pointer">
+                    Permite adiciones extra con costo en comanda (tocineta, queso, etc.)
+                  </label>
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-800 mt-4">
@@ -2191,6 +2756,19 @@ export const Admin: React.FC = () => {
                         </option>
                       ))}
                   </select>
+                </div>
+
+                <div className="flex items-center gap-2 p-2.5 bg-slate-950 border border-slate-800 rounded-xl">
+                  <input
+                    type="checkbox"
+                    id="editarProdPermiteAdiciones"
+                    checked={editarProdPermiteAdiciones}
+                    onChange={(e) => setEditarProdPermiteAdiciones(e.target.checked)}
+                    className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 bg-slate-900 border-slate-700 cursor-pointer"
+                  />
+                  <label htmlFor="editarProdPermiteAdiciones" className="text-xs font-semibold text-slate-300 cursor-pointer">
+                    Permite adiciones extra con costo en comanda (tocineta, queso, etc.)
+                  </label>
                 </div>
               </div>
 

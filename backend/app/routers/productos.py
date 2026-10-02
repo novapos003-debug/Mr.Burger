@@ -69,6 +69,10 @@ def producto_out(
                     )
                 )
 
+    permite_adiciones = getattr(prod, "permite_adiciones", True)
+    if permite_adiciones is None:
+        permite_adiciones = False if not es_cocina else True
+
     return ProductoOut(
         id=prod.id,
         categoria_id=prod.categoria_id,
@@ -77,6 +81,8 @@ def producto_out(
         imagen_url=prod.imagen_url,
         precio=prod.precio,
         iva_incluido=prod.iva_incluido,
+        empaque_llevar_id=prod.empaque_llevar_id,
+        permite_adiciones=permite_adiciones,
         disponible=disponible,
         activo=prod.activo,
         es_cocina=es_cocina,

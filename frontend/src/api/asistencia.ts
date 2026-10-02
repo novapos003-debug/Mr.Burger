@@ -30,3 +30,8 @@ export const cerrarTurnoAdminApi = async (turnoId: number): Promise<TurnoLaboral
   const { data } = await api.post<TurnoLaboral>(`/asistencia/admin/${turnoId}/cerrar`)
   return data
 }
+
+export const cerrarTodosTurnosAdminApi = async (): Promise<{ cerrados: number }> => {
+  const { data } = await api.post<{ cerrados: number }>('/asistencia/admin/cerrar-todos')
+  return data
+}

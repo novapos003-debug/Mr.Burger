@@ -185,6 +185,7 @@ export const crearProductoApi = async (data: {
   precio: number
   iva_incluido?: boolean
   empaque_llevar_id?: number | null
+  permite_adiciones?: boolean
 }): Promise<Producto> => {
   const res = await api.post<Producto>('/productos', data)
   return res.data
@@ -200,6 +201,7 @@ export const actualizarProductoApi = async (
     iva_incluido: boolean
     manual_disponible: boolean | null
     empaque_llevar_id: number | null
+    permite_adiciones: boolean
   }>
 ): Promise<Producto> => {
   const res = await api.put<Producto>(`/productos/${id}`, data)
@@ -208,6 +210,27 @@ export const actualizarProductoApi = async (
 
 export const eliminarProductoApi = async (id: number): Promise<void> => {
   await api.delete(`/productos/${id}`)
+}
+
+export const getComponentesComboApi = async (
+  productoId: number
+): Promise<Array<{
+  id: number
+  producto_hijo_id: number
+  producto_hijo_nombre: string
+  cantidad: number
+  precio_unitario: number
+}>> => {
+  const res = await api.get(`/inventario/combos/${productoId}/componentes`)
+  return res.data
+}
+
+export const guardarComponentesComboApi = async (
+  productoId: number,
+  componentes: Array<{ producto_hijo_id: number; cantidad: number }>
+): Promise<any> => {
+  const res = await api.put(`/inventario/combos/${productoId}/componentes`, componentes)
+  return res.data
 }
 
 export const limpiarDatosPruebaApi = async (): Promise<{ status: string; mensaje: string }> => {

@@ -227,7 +227,7 @@ export const VariacionModal: React.FC<Props> = ({ producto, onClose, onAdd }) =>
           )}
 
           {/* 1. SECCIÓN: ADICIONES CON PRECIO EXTRA (Solo productos de cocina) */}
-          {esCocina && (
+          {producto?.permite_adiciones !== false && esCocina && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
