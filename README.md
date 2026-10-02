@@ -429,6 +429,11 @@ control avanzado de merma (conteo vs teórico), exportaciones a Excel.
     - **Tarifa Oficial 0%:** Se ajustó la configuración por defecto de impuestos a 0% para cumplir con la legislación colombiana aplicable a personas naturales del sector gastronómico con ingresos menores a 3.500 UVT.
     - **Tirilla Legal Térmica 80mm:** Se suprimió la discriminación indebida de IVA en el tiquete y se incorporó la leyenda legal obligatoria: *"Régimen No Responsable de IVA (Art. 512-13 E.T.) - Documento de Control Interno"*.
     - **Panel de Configuración Flexible:** En `ConfiguracionTab.tsx` se documentó la selección de tarifas (0% No Responsable, 8% Impoconsumo ordinario, 19% Franquicias) permitiendo evolucionar si el cliente cambia de régimen tributario.
+16. **Resolución Crítica Pre-Despliegue (Octubre 2026):**
+    - **Apertura de Cajón Monedero:** Implementación de driver nativo WebUSB que inyecta bytes `ESC p 0 25 250` al puerto RJ11 de la impresora para la expulsión automática de la gaveta al procesar cobros en efectivo.
+    - **Fix Notificaciones WebSocket:** Resolución de tipado (`async def`) en el cierre de caja, garantizando que el KDS y los meseros sean deslogueados en tiempo real.
+    - **Resolución Error 500 Lock:** Corrección del bloqueo pesimista en PostgreSQL (`with_for_update(of=Pedido)`) para prevenir colisiones en canales sin mesas (mostrador, DiDi).
+    - **Protección de Producción:** Regeneración criptográfica de todos los `.env` secrets, contraseñas de rol modificadas, ocultamiento de atajos de desarrollo (`import.meta.env.DEV`) en el Login y borrado seguro en cascada de transacciones falsas sin violar llaves foráneas.
 
 ---
 
