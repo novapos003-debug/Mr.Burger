@@ -227,17 +227,20 @@ export async function imprimirViaWebUSB(rawBytes: Uint8Array): Promise<{ success
 
   try {
     const device = await (navigator as any).usb.requestDevice({
-      filters: [] // Permite seleccionar cualquier dispositivo USB conectado
+      filters: [{ classCode: 7 }] // Clase 7 = Impresora
     })
 
     await device.open()
     if (device.configuration === null) {
       await device.selectConfiguration(1)
     }
-    await device.claimInterface(0)
+    
+    // Auto-claim the first available interface
+    const iface = device.configuration.interfaces[0]
+    await device.claimInterface(iface.interfaceNumber)
 
     // Buscar endpoint de salida (Out)
-    const endpoint = device.configuration.interfaces[0].alternate.endpoints.find(
+    const endpoint = iface.alternate.endpoints.find(
       (e: any) => e.direction === 'out'
     )
 
@@ -274,3 +277,40 @@ export function generarBytesEscPos(texto: string): Uint8Array {
 
   return totalBytes
 }
+
+export async function abrirCajonMonedero(): Promise<boolean> {
+  if (!('usb' in navigator)) return false
+
+  try {
+    const device = await (navigator as any).usb.requestDevice({
+      filters: [{ classCode: 7 }]
+    })
+
+    await device.open()
+    if (device.configuration === null) {
+      await device.selectConfiguration(1)
+    }
+    
+    const iface = device.configuration.interfaces[0]
+    await device.claimInterface(iface.interfaceNumber)
+
+    const endpoint = iface.alternate.endpoints.find(
+      (e: any) => e.direction === 'out'
+    )
+
+    if (!endpoint) {
+      await device.close()
+      return false
+    }
+
+    // Comando ESC p 0 25 250 (abrir cajón vía RJ11)
+    const cmd = new Uint8Array([0x1B, 0x70, 0x00, 0x19, 0xFA])
+    await device.transferOut(endpoint.endpointNumber, cmd)
+    await device.close()
+    return true
+  } catch (err) {
+    console.error('Error al abrir cajón:', err)
+    return false
+  }
+}
+

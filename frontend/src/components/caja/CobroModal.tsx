@@ -170,6 +170,15 @@ export const CobroModal: React.FC<Props> = ({ isOpen, pedido, onClose, onSuccess
       }
 
       const resultado = await cobrarPedido(pedido.id, payload)
+      
+      // Abrir cajón monedero si hubo pago en efectivo
+      const tieneEfectivo = payload.pagos.some(p => p.metodo === 'EFECTIVO' || p.metodo === 'DIDI_EFECTIVO')
+      if (tieneEfectivo) {
+        import('../../utils/printer').then(printer => {
+          printer.abrirCajonMonedero().catch(e => console.error(e))
+        })
+      }
+
       onSuccess(resultado)
       onClose()
     } catch (err: any) {
