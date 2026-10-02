@@ -131,6 +131,7 @@ export const Admin: React.FC = () => {
   const [nuevoProdCategoriaId, setNuevoProdCategoriaId] = useState<number | ''>('')
   const [nuevoProdPrecio, setNuevoProdPrecio] = useState<number>(22000)
   const [nuevoProdDescripcion, setNuevoProdDescripcion] = useState('')
+  const [nuevoProdEmpaqueId, setNuevoProdEmpaqueId] = useState<number | ''>('')
   const [creandoProducto, setCreandoProducto] = useState(false)
 
   // Modal editar producto (precio / nombre / descripcion)
@@ -139,6 +140,7 @@ export const Admin: React.FC = () => {
   const [editarProdPrecio, setEditarProdPrecio] = useState<number>(0)
   const [editarProdDescripcion, setEditarProdDescripcion] = useState('')
   const [editarProdCategoriaId, setEditarProdCategoriaId] = useState<number | ''>('')
+  const [editarProdEmpaqueId, setEditarProdEmpaqueId] = useState<number | ''>('')
   const [guardandoEdicionProd, setGuardandoEdicionProd] = useState(false)
   const [eliminandoProducto, setEliminandoProducto] = useState(false)
 
@@ -363,6 +365,7 @@ export const Admin: React.FC = () => {
     setEditarProdPrecio(Number(prod.precio || 0))
     setEditarProdDescripcion(prod.descripcion || '')
     setEditarProdCategoriaId(prod.categoria_id)
+    setEditarProdEmpaqueId(prod.empaque_llevar_id || '')
     setEditarProdModalOpen(true)
   }
 
@@ -383,6 +386,7 @@ export const Admin: React.FC = () => {
         precio: Number(editarProdPrecio),
         descripcion: editarProdDescripcion.trim(),
         categoria_id: editarProdCategoriaId ? Number(editarProdCategoriaId) : undefined,
+        empaque_llevar_id: editarProdEmpaqueId === '' ? null : Number(editarProdEmpaqueId),
       })
       setProductoSeleccionado(prodActualizado)
       setBannerSuccess(
@@ -421,6 +425,7 @@ export const Admin: React.FC = () => {
         precio: Number(nuevoProdPrecio),
         descripcion: nuevoProdDescripcion.trim() || undefined,
         iva_incluido: true,
+        empaque_llevar_id: nuevoProdEmpaqueId === '' ? undefined : Number(nuevoProdEmpaqueId),
       })
       setBannerSuccess(`✓ ¡Plato "${nuevo.nombre}" creado exitosamente! Ahora puedes definir sus ingredientes y receta.`)
       setTimeout(() => setBannerSuccess(null), 6000)
@@ -2038,9 +2043,29 @@ export const Admin: React.FC = () => {
                     rows={2}
                     value={nuevoProdDescripcion}
                     onChange={(e) => setNuevoProdDescripcion(e.target.value)}
-                    placeholder="ej. Pan brioche, 150g carne angus, queso cheddar y tocineta crocante..."
+                    placeholder="ej. Pan brioche, 150g carne angus..."
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 resize-none"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Empaque para Llevar Dinámico (Opcional)
+                  </label>
+                  <select
+                    value={nuevoProdEmpaqueId}
+                    onChange={(e) => setNuevoProdEmpaqueId(e.target.value ? Number(e.target.value) : '')}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-amber-300 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="">(Sin empaque dinámico)</option>
+                    {productos
+                      .filter((p) => p.categoria_id === 99 || p.nombre.toLowerCase().includes('empaque'))
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.nombre} (+${Number(p.precio || 0).toLocaleString('es-CO')})
+                        </option>
+                      ))}
+                  </select>
                 </div>
               </div>
 
@@ -2138,6 +2163,26 @@ export const Admin: React.FC = () => {
                     onChange={(e) => setEditarProdDescripcion(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500 resize-none"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Empaque para Llevar Dinámico (Opcional)
+                  </label>
+                  <select
+                    value={editarProdEmpaqueId}
+                    onChange={(e) => setEditarProdEmpaqueId(e.target.value ? Number(e.target.value) : '')}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-amber-300 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="">(Sin empaque dinámico)</option>
+                    {productos
+                      .filter((p) => p.categoria_id === 99 || p.nombre.toLowerCase().includes('empaque'))
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.nombre} (+${Number(p.precio || 0).toLocaleString('es-CO')})
+                        </option>
+                      ))}
+                  </select>
                 </div>
               </div>
 

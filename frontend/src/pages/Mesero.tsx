@@ -55,6 +55,7 @@ export const Mesero: React.FC = () => {
   const [errorBanner, setErrorBanner] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [offlineCount, setOfflineCount] = useState<number>(() => getPendingOrders().length)
+  const [tipoConsumo, setTipoConsumo] = useState<'LOCAL' | 'LLEVAR'>('LOCAL')
 
   // Cargar datos
   const cargarDatos = useCallback(async () => {
@@ -209,6 +210,35 @@ export const Mesero: React.FC = () => {
     setCartItems([])
   }
 
+  // --- LÓGICA DE EMPAQUE AUTOMÁTICO DINÁMICO ---
+  const itemsConEmpaque = [...cartItems]
+  
+  if (tipoConsumo === 'LLEVAR') {
+    // Agrupar los empaques por su ID
+    const empaquesRequeridos = new Map<number, number>()
+    
+    for (const item of cartItems) {
+      if (item.producto.empaque_llevar_id) {
+        const idEmpaque = item.producto.empaque_llevar_id
+        empaquesRequeridos.set(idEmpaque, (empaquesRequeridos.get(idEmpaque) || 0) + item.cantidad)
+      }
+    }
+
+    // Agregar las líneas de empaque al carrito final
+    empaquesRequeridos.forEach((cantidad, idEmpaque) => {
+      const productoEmpaque = productos.find(p => p.id === idEmpaque)
+      if (productoEmpaque) {
+        itemsConEmpaque.push({
+          uid: `empaque_auto_${idEmpaque}`,
+          producto: productoEmpaque,
+          cantidad: cantidad,
+          precio_unitario: Number(productoEmpaque.precio || 0),
+          variacion: { notas: 'Cargo Automático (Para Llevar)' }
+        })
+      }
+    })
+  }
+
   // Enviar a cocina
   const handleSubmitComanda = async () => {
     setErrorBanner(null)
@@ -219,7 +249,7 @@ export const Mesero: React.FC = () => {
       return
     }
 
-    if (cartItems.length === 0) return
+    if (itemsConEmpaque.length === 0) return
 
     setSubmitting(true)
     const idempotencyKey = `ord-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
@@ -227,7 +257,7 @@ export const Mesero: React.FC = () => {
     // Consolidar ítems idénticos para que no se dupliquen las líneas en cocina ni caja
     const lineasConsolidadas = (() => {
       const map = new Map<string, { producto_id: number; cantidad: number; variacion_snapshot?: any; preparado_id?: number }>()
-      for (const item of cartItems) {
+      for (const item of itemsConEmpaque) {
         const key = `${item.producto.id}__${JSON.stringify(item.variacion || {})}__${item.variacion?.preparado_id || ''}`
         const existing = map.get(key)
         if (existing) {
@@ -260,6 +290,7 @@ export const Mesero: React.FC = () => {
         // CREAR NUEVO PEDIDO EN LA MESA Y ENVIAR A COCINA
         const payloadNuevo = {
           canal: 'MESA',
+          tipo_consumo: tipoConsumo,
           mesa_id: mesaSeleccionada.id,
           idempotency_key: idempotencyKey,
           lineas: lineasConsolidadas,
@@ -290,7 +321,7 @@ export const Mesero: React.FC = () => {
             mesaNumero: mesaSeleccionada.numero,
             payloadRonda: {
               ronda: nextRonda,
-              lineas: cartItems.map((item) => ({
+              lineas: itemsConEmpaque.map((item) => ({
                 producto_id: item.producto.id,
                 cantidad: item.cantidad,
                 variacion_snapshot: item.variacion,
@@ -304,9 +335,10 @@ export const Mesero: React.FC = () => {
             mesaNumero: mesaSeleccionada.numero,
             payloadNuevo: {
               canal: 'MESA',
+              tipo_consumo: tipoConsumo,
               mesa_id: mesaSeleccionada.id,
               idempotency_key: idempotencyKey,
-              lineas: cartItems.map((item) => ({
+              lineas: itemsConEmpaque.map((item) => ({
                 producto_id: item.producto.id,
                 cantidad: item.cantidad,
                 variacion_snapshot: item.variacion,
@@ -428,9 +460,11 @@ export const Mesero: React.FC = () => {
         {/* Columna Derecha en Pantallas Grandes (Tablet horizontal / Desktop) */}
         <div className="hidden lg:flex w-84 xl:w-96 flex-col shrink-0 min-h-0 h-full">
           <ComandaSidebar
-            items={cartItems}
+            items={itemsConEmpaque}
             mesa={mesaSeleccionada}
             pedidoActivo={pedidoActivo}
+            tipoConsumo={tipoConsumo}
+            onTipoConsumoChange={setTipoConsumo}
             onUpdateCantidad={handleUpdateCantidad}
             onRemoveItem={handleRemoveItem}
             onClearCart={handleClearCart}
@@ -506,9 +540,11 @@ export const Mesero: React.FC = () => {
 
               <div className="flex-1 min-h-0 overflow-y-auto">
                 <ComandaSidebar
-                  items={cartItems}
+                  items={itemsConEmpaque}
                   mesa={mesaSeleccionada}
                   pedidoActivo={pedidoActivo}
+                  tipoConsumo={tipoConsumo}
+                  onTipoConsumoChange={setTipoConsumo}
                   onUpdateCantidad={handleUpdateCantidad}
                   onRemoveItem={handleRemoveItem}
                   onClearCart={handleClearCart}

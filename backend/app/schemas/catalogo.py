@@ -38,6 +38,7 @@ class ProductoIn(BaseModel):
     descripcion: str | None = None
     precio: Decimal = Field(ge=0)
     iva_incluido: bool = True
+    empaque_llevar_id: int | None = None
     imagen_url: str | None = None
     manual_disponible: bool | None = None
 
@@ -48,6 +49,7 @@ class ProductoUpdate(BaseModel):
     descripcion: str | None = None
     precio: Decimal | None = Field(default=None, ge=0)
     iva_incluido: bool | None = None
+    empaque_llevar_id: int | None = None
     imagen_url: str | None = None
     manual_disponible: bool | None = None
 
@@ -96,6 +98,7 @@ class ProductoOut(BaseModel):
     imagen_url: str | None
     precio: Decimal | None  # None para mesero/cocina (NO ven dinero)
     iva_incluido: bool
+    empaque_llevar_id: int | None = None
     disponible: bool
     activo: bool
     es_cocina: bool = True

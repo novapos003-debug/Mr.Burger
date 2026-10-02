@@ -36,6 +36,7 @@ export interface Producto {
   precio?: number | null // null para mesero por regla
   es_cocina?: boolean
   ingredientes_receta?: string[]
+  empaque_llevar_id?: number | null
 }
 
 export interface DetallePedido {
@@ -53,11 +54,14 @@ export interface DetallePedido {
   cancelado_en?: string | null
 }
 
+export type TipoConsumo = 'LOCAL' | 'LLEVAR'
+
 export interface Pedido {
   id: number
   consecutivo: number
   fecha_dia: string
   canal: CanalVenta
+  tipo_consumo?: TipoConsumo
   mesa_id?: number | null
   mesa_numero?: number | null
   estado: EstadoPedido

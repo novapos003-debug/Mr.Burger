@@ -35,6 +35,7 @@ export const getPedidoByIdApi = async (id: number): Promise<Pedido> => {
 
 export interface CrearPedidoPayload {
   canal: string
+  tipo_consumo?: string
   mesa_id?: number | null
   cliente?: string | null
   telefono?: string | null

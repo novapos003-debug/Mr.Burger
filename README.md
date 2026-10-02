@@ -436,6 +436,10 @@ control avanzado de merma (conteo vs teÃ³rico), exportaciones a Excel.
     - **ProtecciÃ³n de ProducciÃ³n:** RegeneraciÃ³n criptogrÃ¡fica de todos los `.env` secrets, contraseÃ±as de rol modificadas, ocultamiento de atajos de desarrollo (`import.meta.env.DEV`) en el Login y borrado seguro en cascada de transacciones falsas sin violar llaves forÃ¡neas.
     - **MitigaciÃ³n de RalentizaciÃ³n Wi-Fi (Polling Agresivo):** Se espaciaron drÃ¡sticamente las frecuencias de sincronizaciÃ³n en segundo plano de la PWA del Mesero, el AuthContext y el Login (de 5s a 30s-60s) reduciendo el volumen de peticiones ociosas al servidor local y salvaguardando el ancho de banda del router.
 
+  17. **Módulo Avanzado de Inventario, Insumos vs Gastos y Empaque Dinámico (Octubre 2026):**
+      - **Separación Contable Estricta:** Implementación de la columna 	ipo_articulo (INSUMO vs GASTO_OPERATIVO) a nivel de base de datos ( 3_migracion_arquitectura_e_insumos.sql). Se impide a nivel arquitectónico que artículos de aseo (Fabuloso, Esponjas) o mantenimiento sean asignados por error a las recetas de los platillos.
+      - **Cobro de Desechables Dinámico por Producto:** Refactorización total de Mesero.tsx y la UI del Admin.tsx. Ahora el dueño puede enlazar un contenedor de empaque específico a cada platillo (Ej: Hamburguesa -> c1, Costillas -> c2). El sistema detecta el tipo de consumo (Para llevar) e inyecta dinámicamente el ítem de cargo de empaque en la comanda para cobro del cliente.
+      - **Inyección de Inventario Real:** Seed completo de todas las categorías, proveedores y materias primas vivas de Mr. Burger (Carnes, Panadería, Salsas, Vegetales, Desechables).
 ---
 
 ## 13. Matriz Comparativa â€” Lo Planeado vs. Lo Implementado

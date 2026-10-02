@@ -53,10 +53,13 @@ class Producto(Base):
     imagen_url = Column(Text)
     precio = Column(Numeric(12, 2), nullable=False, default=0)
     iva_incluido = Column(Boolean, nullable=False, default=True)
+    empaque_llevar_id = Column(Integer, ForeignKey("producto.id"))
     manual_disponible = Column(Boolean)  # NULL=auto por stock, TRUE/FALSE=forzado
     activo = Column(Boolean, nullable=False, default=True)
     creado_en = Column(DateTime(timezone=True), server_default=func.now())
     actualizado_en = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    empaque_llevar = relationship("Producto", remote_side=[id])
 
     categoria = relationship("Categoria", back_populates="productos")
     receta = relationship(

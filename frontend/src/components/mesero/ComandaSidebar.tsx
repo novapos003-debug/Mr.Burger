@@ -14,6 +14,8 @@ interface Props {
   items: CartItem[]
   mesa: Mesa | null
   pedidoActivo: Pedido | null
+  tipoConsumo: 'LOCAL' | 'LLEVAR'
+  onTipoConsumoChange: (tipo: 'LOCAL' | 'LLEVAR') => void
   onUpdateCantidad: (uid: string, delta: number) => void
   onRemoveItem: (uid: string) => void
   onClearCart: () => void
@@ -25,6 +27,8 @@ export const ComandaSidebar: React.FC<Props> = ({
   items,
   mesa,
   pedidoActivo,
+  tipoConsumo,
+  onTipoConsumoChange,
   onUpdateCantidad,
   onRemoveItem,
   onClearCart,
@@ -67,6 +71,28 @@ export const ComandaSidebar: React.FC<Props> = ({
             <Trash2 className="w-4 h-4" />
           </button>
         )}
+      </div>
+
+      {/* Selector de Tipo de Consumo (Fricción Positiva) */}
+      <div className="flex bg-slate-950 p-1 rounded-xl mb-2.5 border border-slate-800 shrink-0">
+        <button
+          type="button"
+          onClick={() => onTipoConsumoChange('LOCAL')}
+          className={`flex-1 text-[11px] font-bold py-2 rounded-lg transition ${
+            tipoConsumo === 'LOCAL' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          🍽️ Comer Aquí
+        </button>
+        <button
+          type="button"
+          onClick={() => onTipoConsumoChange('LLEVAR')}
+          className={`flex-1 text-[11px] font-bold py-2 rounded-lg transition ${
+            tipoConsumo === 'LLEVAR' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          🥡 Para Llevar
+        </button>
       </div>
 
       {/* Si hay pedido activo en esta mesa, mostrar lo que ya se ordenó */}
@@ -185,13 +211,15 @@ export const ComandaSidebar: React.FC<Props> = ({
                     )}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => onRemoveItem(item.uid)}
-                    className="text-slate-600 hover:text-red-400 p-1 transition cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {!item.variacion?.notas?.includes('Cargo Automático') && (
+                    <button
+                      type="button"
+                      onClick={() => onRemoveItem(item.uid)}
+                      className="text-slate-600 hover:text-red-400 p-1 transition cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
 
                 {/* Stepper de Cantidad */}
@@ -200,25 +228,29 @@ export const ComandaSidebar: React.FC<Props> = ({
                     ${item.precio_unitario.toLocaleString('es-CO')} c/u
                   </span>
 
-                  <div className="flex items-center gap-2 bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => onUpdateCantidad(item.uid, -1)}
-                      className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-white transition"
-                    >
-                      <Minus className="w-2.5 h-2.5" />
-                    </button>
-                    <span className="text-xs font-black text-white w-4 text-center">
-                      {item.cantidad}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => onUpdateCantidad(item.uid, 1)}
-                      className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-white transition"
-                    >
-                      <Plus className="w-2.5 h-2.5" />
-                    </button>
-                  </div>
+                  {!item.variacion?.notas?.includes('Cargo Automático') ? (
+                    <div className="flex items-center gap-2 bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => onUpdateCantidad(item.uid, -1)}
+                        className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-white transition"
+                      >
+                        <Minus className="w-2.5 h-2.5" />
+                      </button>
+                      <span className="text-xs font-black text-white w-4 text-center">
+                        {item.cantidad}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onUpdateCantidad(item.uid, 1)}
+                        className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-white transition"
+                      >
+                        <Plus className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-xs font-black text-amber-500">Autocalculado: {item.cantidad}</span>
+                  )}
                 </div>
               </div>
             )
