@@ -98,8 +98,14 @@ export const SyncBadge: React.FC = () => {
 
   function renderModal() {
     return (
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-        <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl max-w-md w-full p-5 text-left text-white animate-in fade-in duration-150">
+      <div 
+        className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4"
+        onClick={() => setModalAbierto(false)}
+      >
+        <div 
+          className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-md w-full p-5 text-left text-white animate-in fade-in duration-150"
+          onClick={(e) => e.stopPropagation()}
+        >
           {/* Header */}
           <div className="flex items-center justify-between pb-3 border-b border-slate-800">
             <div className="flex items-center gap-2">
@@ -110,10 +116,12 @@ export const SyncBadge: React.FC = () => {
               </div>
             </div>
             <button
+              type="button"
               onClick={() => setModalAbierto(false)}
-              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+              className="text-slate-400 hover:text-white p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 transition cursor-pointer flex items-center justify-center"
+              aria-label="Cerrar modal"
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5" />
             </button>
           </div>
 
@@ -183,23 +191,35 @@ export const SyncBadge: React.FC = () => {
           </div>
 
           {/* Footer Actions */}
-          <div className="mt-4 flex items-center justify-between pt-3 border-t border-slate-800">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-800">
             <button
+              type="button"
               onClick={() => refrescar()}
               className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition cursor-pointer"
             >
-              <RefreshCw className="w-3 h-3" />
-              <span>Actualizar estado</span>
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Actualizar</span>
             </button>
 
-            <button
-              onClick={handleForzar}
-              disabled={ejecutandoForzado || sincronizando}
-              className="px-3.5 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-orange-600/20"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${ejecutandoForzado ? 'animate-spin' : ''}`} />
-              <span>Sincronizar Ahora</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setModalAbierto(false)}
+                className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition cursor-pointer"
+              >
+                Cerrar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleForzar}
+                disabled={ejecutandoForzado || sincronizando}
+                className="px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-orange-600/20"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${ejecutandoForzado ? 'animate-spin' : ''}`} />
+                <span>Sincronizar Ahora</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
