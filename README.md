@@ -434,6 +434,7 @@ control avanzado de merma (conteo vs teórico), exportaciones a Excel.
     - **Fix Notificaciones WebSocket:** Resolución de tipado (`async def`) en el cierre de caja, garantizando que el KDS y los meseros sean deslogueados en tiempo real.
     - **Resolución Error 500 Lock:** Corrección del bloqueo pesimista en PostgreSQL (`with_for_update(of=Pedido)`) para prevenir colisiones en canales sin mesas (mostrador, DiDi).
     - **Protección de Producción:** Regeneración criptográfica de todos los `.env` secrets, contraseñas de rol modificadas, ocultamiento de atajos de desarrollo (`import.meta.env.DEV`) en el Login y borrado seguro en cascada de transacciones falsas sin violar llaves foráneas.
+    - **Mitigación de Ralentización Wi-Fi (Polling Agresivo):** Se espaciaron drásticamente las frecuencias de sincronización en segundo plano de la PWA del Mesero, el AuthContext y el Login (de 5s a 30s-60s) reduciendo el volumen de peticiones ociosas al servidor local y salvaguardando el ancho de banda del router.
 
 ---
 
