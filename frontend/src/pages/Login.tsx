@@ -215,83 +215,91 @@ export const Login: React.FC = () => {
           </form>
 
           {/* Separador */}
-          {import.meta.env.DEV && (
-            <>
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-800"></div>
-                </div>
-                <div className="relative flex justify-center text-[11px] uppercase tracking-wider">
-                  <span className="bg-slate-900 px-3 text-slate-500 font-semibold">
-                    Acceso Rápido por Rol (Demostración)
-                  </span>
-                </div>
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-800"></div>
+            </div>
+            <div className="relative flex justify-center text-[11px] uppercase tracking-wider">
+              <span className="bg-slate-900 px-3 text-slate-500 font-semibold">
+                ROLES DEL SISTEMA
+              </span>
+            </div>
+          </div>
+
+          {/* Botones de Acceso Rápido para Pruebas y Presentación */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                if (import.meta.env.DEV) handleQuickLogin('mesero', 'mesero123')
+                else setUsuario('mesero')
+              }}
+              disabled={loading}
+              className="flex items-center gap-2 p-2.5 rounded-xl bg-orange-950/40 hover:bg-orange-950/80 border border-orange-800/60 text-orange-200 transition text-left cursor-pointer group"
+            >
+              <div className="w-7 h-7 rounded-lg bg-orange-600/30 flex items-center justify-center group-hover:scale-110 transition shrink-0">
+                <Smartphone className="w-4 h-4 text-orange-400" />
               </div>
-
-              {/* Botones de Acceso Rápido para Pruebas y Presentación */}
-              <div className="grid grid-cols-2 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin('mesero', 'mesero123')}
-                  disabled={loading}
-                  className="flex items-center gap-2 p-2.5 rounded-xl bg-orange-950/40 hover:bg-orange-950/80 border border-orange-800/60 text-orange-200 transition text-left cursor-pointer group"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-orange-600/30 flex items-center justify-center group-hover:scale-110 transition shrink-0">
-                    <Smartphone className="w-4 h-4 text-orange-400" />
-                  </div>
-                  <div className="overflow-hidden">
-                    <p className="text-xs font-bold leading-tight truncate">Mesero</p>
-                    <p className="text-[10px] text-orange-400/80 truncate">Móvil / Tablet</p>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin('cocina', 'cocina123')}
-                  disabled={loading}
-                  className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-950/40 hover:bg-amber-950/80 border border-amber-800/60 text-amber-200 transition text-left cursor-pointer group"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-amber-600/30 flex items-center justify-center group-hover:scale-110 transition shrink-0">
-                    <ChefHat className="w-4 h-4 text-amber-400" />
-                  </div>
-                  <div className="overflow-hidden">
-                    <p className="text-xs font-bold leading-tight truncate">Cocina KDS</p>
-                    <p className="text-[10px] text-amber-400/80 truncate">Pantalla Tickets</p>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin('caja', 'caja123')}
-                  disabled={loading}
-                  className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-950/80 border border-emerald-800/60 text-emerald-200 transition text-left cursor-pointer group"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-emerald-600/30 flex items-center justify-center group-hover:scale-110 transition shrink-0">
-                    <Receipt className="w-4 h-4 text-emerald-400" />
-                  </div>
-                  <div className="overflow-hidden">
-                    <p className="text-xs font-bold leading-tight truncate">Caja / POS</p>
-                    <p className="text-[10px] text-emerald-400/80 truncate">Cobros y Arqueo</p>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin('admin', 'admin123')}
-                  disabled={loading}
-                  className="flex items-center gap-2 p-2.5 rounded-xl bg-purple-950/40 hover:bg-purple-950/80 border border-purple-800/60 text-purple-200 transition text-left cursor-pointer group"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-purple-600/30 flex items-center justify-center group-hover:scale-110 transition shrink-0">
-                    <Shield className="w-4 h-4 text-purple-400" />
-                  </div>
-                  <div className="overflow-hidden">
-                    <p className="text-xs font-bold leading-tight truncate">Admin / Dueño</p>
-                    <p className="text-[10px] text-purple-400/80 truncate">Dashboard y Control</p>
-                  </div>
-                </button>
+              <div className="overflow-hidden">
+                <p className="text-xs font-bold leading-tight truncate">Mesero</p>
+                <p className="text-[10px] text-orange-400/80 truncate">Móvil / Tablet</p>
               </div>
-            </>
-          )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (import.meta.env.DEV) handleQuickLogin('cocina', 'cocina123')
+                else setUsuario('cocina')
+              }}
+              disabled={loading}
+              className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-950/40 hover:bg-amber-950/80 border border-amber-800/60 text-amber-200 transition text-left cursor-pointer group"
+            >
+              <div className="w-7 h-7 rounded-lg bg-amber-600/30 flex items-center justify-center group-hover:scale-110 transition shrink-0">
+                <ChefHat className="w-4 h-4 text-amber-400" />
+              </div>
+              <div className="overflow-hidden">
+                <p className="text-xs font-bold leading-tight truncate">Cocina KDS</p>
+                <p className="text-[10px] text-amber-400/80 truncate">Pantalla Tickets</p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (import.meta.env.DEV) handleQuickLogin('caja', 'caja123')
+                else setUsuario('caja')
+              }}
+              disabled={loading}
+              className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-950/80 border border-emerald-800/60 text-emerald-200 transition text-left cursor-pointer group"
+            >
+              <div className="w-7 h-7 rounded-lg bg-emerald-600/30 flex items-center justify-center group-hover:scale-110 transition shrink-0">
+                <Receipt className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div className="overflow-hidden">
+                <p className="text-xs font-bold leading-tight truncate">Caja / POS</p>
+                <p className="text-[10px] text-emerald-400/80 truncate">Cobros y Arqueo</p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (import.meta.env.DEV) handleQuickLogin('admin', 'admin123')
+                else setUsuario('admin')
+              }}
+              disabled={loading}
+              className="flex items-center gap-2 p-2.5 rounded-xl bg-purple-950/40 hover:bg-purple-950/80 border border-purple-800/60 text-purple-200 transition text-left cursor-pointer group"
+            >
+              <div className="w-7 h-7 rounded-lg bg-purple-600/30 flex items-center justify-center group-hover:scale-110 transition shrink-0">
+                <Shield className="w-4 h-4 text-purple-400" />
+              </div>
+              <div className="overflow-hidden">
+                <p className="text-xs font-bold leading-tight truncate">Admin / Dueño</p>
+                <p className="text-[10px] text-purple-400/80 truncate">Dashboard y Control</p>
+              </div>
+            </button>
+          </div>
         </div>
 
         {/* Pie de página con versión */}
