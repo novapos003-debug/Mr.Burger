@@ -184,6 +184,7 @@ export const crearProductoApi = async (data: {
   descripcion?: string
   precio: number
   iva_incluido?: boolean
+  empaque_llevar_id?: number | null
 }): Promise<Producto> => {
   const res = await api.post<Producto>('/productos', data)
   return res.data
@@ -198,6 +199,7 @@ export const actualizarProductoApi = async (
     precio: number
     iva_incluido: boolean
     manual_disponible: boolean | null
+    empaque_llevar_id: number | null
   }>
 ): Promise<Producto> => {
   const res = await api.put<Producto>(`/productos/${id}`, data)
