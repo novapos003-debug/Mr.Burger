@@ -478,6 +478,19 @@ INSERT INTO usuario (rol_id, nombre, usuario, password_hash) VALUES
 ((SELECT id FROM rol WHERE nombre='cocina'), 'Cocina Demo',    'cocina', '$2b$12$vMsDVdpD.xW494pwpmb2k.gyxGbDLOvKdRRo2KLUDOErIjy75yiwa');
 
 -- ============================================================
+-- TABLA DE TURNO LABORAL (ASISTENCIA)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS turno_laboral (
+    id              SERIAL PRIMARY KEY,
+    usuario_id      INT NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+    entrada_en      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    salida_en       TIMESTAMPTZ,
+    motivo_cierre   VARCHAR(50)
+);
+
+CREATE INDEX IF NOT EXISTS idx_turno_laboral_usuario ON turno_laboral (usuario_id, salida_en);
+
+-- ============================================================
 -- TABLA DE SINCRONIZACIÓN OFFLINE / NUBE (PATRÓN OUTBOX)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS registro_sync (
@@ -485,6 +498,7 @@ CREATE TABLE IF NOT EXISTS registro_sync (
     op_id           VARCHAR(64) NOT NULL UNIQUE,
     sucursal_id     VARCHAR(32) NOT NULL,
     dispositivo_id  VARCHAR(64),
+    origen          VARCHAR(10) NOT NULL DEFAULT 'LOCAL',
     tipo            VARCHAR(50) NOT NULL,
     entidad         VARCHAR(50) NOT NULL,
     entidad_id      INT,
@@ -493,6 +507,7 @@ CREATE TABLE IF NOT EXISTS registro_sync (
     estado          VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
     reintentos      INT NOT NULL DEFAULT 0,
     ultimo_error    TEXT,
+    resolucion_nota TEXT,
     creado_en       TIMESTAMPTZ NOT NULL DEFAULT now(),
     sincronizado_en TIMESTAMPTZ
 );

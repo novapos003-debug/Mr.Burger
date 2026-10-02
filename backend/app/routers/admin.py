@@ -162,8 +162,6 @@ def listar_usuarios(
 ):
     """Lista todos los usuarios del sistema ordenados por id."""
     usuarios = db.query(Usuario).order_by(Usuario.id.asc()).all()
-    # Filtrar usuarios dummy de auditoría interna
-    usuarios_reales = [u for u in usuarios if not u.nombre.startswith("Audit Inactivo")]
     return [
         UsuarioAdminOut(
             id=u.id,
@@ -174,7 +172,7 @@ def listar_usuarios(
             activo=u.activo,
             creado_en=u.creado_en,
         )
-        for u in usuarios_reales
+        for u in usuarios
     ]
 
 
@@ -308,36 +306,47 @@ def limpiar_datos_prueba(
     - Restablece el stock de insumos a un nivel operativo seguro.
     - MANTIENE intactos: usuarios, catálogo, productos, categorías y recetas."""
     try:
-        # 1. Eliminar preparados
+        from app.models.asistencia import TurnoLaboral
+        from app.models.compra import Compra, DetalleCompra
+        from app.models.auditoria import HistorialAccion
+        from app.models.usuario import Usuario
+        
+        # 1. Eliminar datos transaccionales de pedidos, pagos y preparados
         db.query(Preparado).delete(synchronize_session=False)
-
-        # 2. Eliminar detalles de pedidos y pedidos
         db.query(DetallePedido).delete(synchronize_session=False)
         db.query(Pago).delete(synchronize_session=False)
         db.query(Vale).delete(synchronize_session=False)
         db.query(Pedido).delete(synchronize_session=False)
+        db.query(TurnoLaboral).delete(synchronize_session=False)
 
-        # 3. Eliminar movimientos de caja y cierres de turno
+        # 2. Eliminar movimientos de caja y cierres de turno
         db.query(MovimientoCaja).delete(synchronize_session=False)
         db.query(Cierre).delete(synchronize_session=False)
 
+        # 3. Eliminar compras a proveedores
+        db.query(DetalleCompra).delete(synchronize_session=False)
+        db.query(Compra).delete(synchronize_session=False)
+
         # 4. Eliminar movimientos de inventario de ventas
         db.query(MovimientoInventario).delete(synchronize_session=False)
+        
+        # 5. Limpiar bitacora de auditoria de prueba
+        db.query(HistorialAccion).delete(synchronize_session=False)
+        
+        # 6. Eliminar usuarios de prueba (mantener roles base)
+        db.query(Usuario).filter(Usuario.usuario.not_in(['admin', 'caja', 'mesero', 'cocina'])).delete(synchronize_session=False)
 
-        # 5. Limpiar cola outbox de sincronización
+        # 7. Limpiar cola outbox de sincronización
         try:
             db.query(RegistroSync).delete(synchronize_session=False)
         except Exception:
             pass
 
-        # 6. Liberar todas las mesas a DISPONIBLE
+        # 8. Liberar todas las mesas a DISPONIBLE
         db.query(Mesa).update({"estado": "DISPONIBLE"}, synchronize_session=False)
 
-        # 7. Restablecer stock base para insumos
-        ings = db.query(Ingrediente).all()
-        for ing in ings:
-            minimo = ing.stock_minimo or Decimal("10")
-            ing.stock_actual = max(minimo * Decimal("4"), Decimal("50"))
+        # 9. Restablecer stock_actual a 0 (el dueño los cargará después)
+        db.query(Ingrediente).update({"stock_actual": Decimal("0")}, synchronize_session=False)
 
         registrar(
             db, admin, "LIMPIAR_DATOS_PRUEBA", "sistema", None,

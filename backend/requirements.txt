@@ -9,4 +9,4 @@ passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 python-multipart==0.0.20
 websockets==14.1
-httpx==0.28.1  # usado por los harness E2E (e2e_*.py); no lo usa la app en runtime
+httpx==0.28.1  # usado por sync_worker.py en runtime y por los harness E2E
