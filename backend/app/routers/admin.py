@@ -311,29 +311,31 @@ def limpiar_datos_prueba(
         from app.models.auditoria import HistorialAccion
         from app.models.usuario import Usuario
         
-        # 1. Eliminar datos transaccionales de pedidos, pagos y preparados
-        db.query(Preparado).delete(synchronize_session=False)
-        db.query(DetallePedido).delete(synchronize_session=False)
-        db.query(Pago).delete(synchronize_session=False)
-        db.query(Vale).delete(synchronize_session=False)
-        db.query(Pedido).delete(synchronize_session=False)
-        db.query(TurnoLaboral).delete(synchronize_session=False)
+        # 1. Eliminar auditoria y movimientos de inventario
+        db.query(HistorialAccion).delete(synchronize_session=False)
+        db.query(MovimientoInventario).delete(synchronize_session=False)
 
-        # 2. Eliminar movimientos de caja y cierres de turno
+        # 2. Eliminar movimientos de caja (tienen FK a pedido, vale, cierre)
         db.query(MovimientoCaja).delete(synchronize_session=False)
-        db.query(Cierre).delete(synchronize_session=False)
 
         # 3. Eliminar compras a proveedores
         db.query(DetalleCompra).delete(synchronize_session=False)
         db.query(Compra).delete(synchronize_session=False)
 
-        # 4. Eliminar movimientos de inventario de ventas
-        db.query(MovimientoInventario).delete(synchronize_session=False)
+        # 4. Eliminar preparados y detalles de pedidos
+        db.query(Preparado).delete(synchronize_session=False)
+        db.query(DetallePedido).delete(synchronize_session=False)
+
+        # 5. Eliminar pagos y vales
+        db.query(Pago).delete(synchronize_session=False)
+        db.query(Vale).delete(synchronize_session=False)
         
-        # 5. Limpiar bitacora de auditoria de prueba
-        db.query(HistorialAccion).delete(synchronize_session=False)
+        # 6. Eliminar cierres, turnos y pedidos
+        db.query(Cierre).delete(synchronize_session=False)
+        db.query(Pedido).delete(synchronize_session=False)
+        db.query(TurnoLaboral).delete(synchronize_session=False)
         
-        # 6. Eliminar usuarios de prueba (mantener roles base)
+        # 7. Eliminar usuarios de prueba (mantener roles base)
         db.query(Usuario).filter(Usuario.usuario.not_in(['admin', 'caja', 'mesero', 'cocina'])).delete(synchronize_session=False)
 
         # 7. Limpiar cola outbox de sincronización
