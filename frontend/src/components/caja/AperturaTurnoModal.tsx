@@ -37,7 +37,7 @@ export const AperturaTurnoModal: React.FC<Props> = ({ isOpen, onClose, onConfirm
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
         {/* Cabecera */}
         <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-800/40">
           <div className="flex items-center gap-2 text-emerald-400">

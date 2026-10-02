@@ -517,7 +517,7 @@ export const InventarioTab: React.FC = () => {
       {/* ======================================================== */}
       {isNuevoInsumoOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center pb-2 border-b border-slate-800">
               <h3 className="text-sm font-black text-white flex items-center gap-2">
                 <Plus className="w-4 h-4 text-purple-400" />
@@ -638,7 +638,7 @@ export const InventarioTab: React.FC = () => {
       {/* ======================================================== */}
       {isNuevaCatOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center pb-2 border-b border-slate-800">
               <h3 className="text-sm font-black text-white flex items-center gap-2">
                 <Layers className="w-4 h-4 text-purple-400" />
@@ -699,7 +699,7 @@ export const InventarioTab: React.FC = () => {
       {/* ======================================================== */}
       {insumoAjustando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center pb-2 border-b border-slate-800">
               <h3 className="text-sm font-black text-white flex items-center gap-2">
                 <Scale className="w-4 h-4 text-purple-400" />

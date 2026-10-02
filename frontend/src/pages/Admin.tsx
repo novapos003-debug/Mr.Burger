@@ -435,7 +435,6 @@ export const Admin: React.FC = () => {
       setNuevoProdPrecio(22000)
       await cargarProductosYRecetas()
       setProductoSeleccionado(nuevo)
-      handleSeleccionarProducto(nuevo)
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Error al crear el producto')
     } finally {
@@ -927,20 +926,20 @@ export const Admin: React.FC = () => {
             </div>
 
             {/* Réplica Digital de la Planilla Manual Mr. Burger */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-              <div className="border-b border-slate-800 pb-4 mb-4 flex justify-between items-center">
-                <div>
-                  <h2 className="text-base font-black text-white flex items-center gap-2">
-                    <FileSpreadsheet className="w-5 h-5 text-amber-400" />
-                    Planilla Oficial de Cuadre Diario • Mr. Burger Cali
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 sm:p-5 shadow-xl">
+              <div className="border-b border-slate-800 pb-4 mb-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
+                    <FileSpreadsheet className="w-5 h-5 text-amber-400 shrink-0" />
+                    <span className="truncate">Planilla Oficial de Cuadre Diario</span>
                   </h2>
-                  <p className="text-xs text-slate-400">
-                    Fórmula Contable: Base Inicial + Ventas Totales - Compras Insumos - Gastos Menores = Efectivo en Cajón
+                  <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5">
+                    Base Inicial + Ventas Totales - Compras - Gastos = Efectivo en Cajón
                   </p>
                 </div>
                 <button
                   onClick={() => window.print()}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition cursor-pointer shrink-0 self-start sm:self-auto"
                 >
                   Imprimir Planilla
                 </button>
@@ -1020,7 +1019,7 @@ export const Admin: React.FC = () => {
         {/* ======================================================== */}
         {tabActiva === 'COMPRAS' && (
           <div className="space-y-6 animate-fade-in">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
                   <Truck className="w-5 h-5 text-sky-400" />
@@ -1050,7 +1049,7 @@ export const Admin: React.FC = () => {
                   </h3>
 
                   <form onSubmit={handleGuardarCompra} className="space-y-4 text-xs">
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-slate-400 font-bold mb-1">Proveedor / Razón Social:</label>
                         <input
@@ -1088,8 +1087,9 @@ export const Admin: React.FC = () => {
 
                       <div className="space-y-2">
                         {compraLineas.map((linea, idx) => (
-                          <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-slate-950 p-2 rounded-lg border border-slate-800">
-                            <div className="col-span-5">
+                          <div key={idx} className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 space-y-2 sm:space-y-0 sm:grid sm:grid-cols-12 sm:gap-2 sm:items-center">
+                            <div className="sm:col-span-5">
+                              <label className="block text-[10px] text-slate-500 mb-0.5 sm:hidden">Insumo</label>
                               <select
                                 value={linea.ingrediente_id}
                                 onChange={(e) => {
@@ -1097,7 +1097,7 @@ export const Admin: React.FC = () => {
                                   n[idx].ingrediente_id = Number(e.target.value)
                                   setCompraLineas(n)
                                 }}
-                                className="w-full bg-slate-900 border border-slate-700 rounded p-1 text-slate-200 text-xs"
+                                className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 sm:p-1 text-slate-200 text-xs"
                               >
                                 {ingredientes.map((ing) => (
                                   <option key={ing.id} value={ing.id}>
@@ -1107,47 +1107,51 @@ export const Admin: React.FC = () => {
                               </select>
                             </div>
 
-                            <div className="col-span-3">
-                              <input
-                                type="number"
-                                min="0.1"
-                                step="0.1"
-                                value={linea.cantidad}
-                                onChange={(e) => {
-                                  const n = [...compraLineas]
-                                  n[idx].cantidad = Number(e.target.value)
-                                  setCompraLineas(n)
-                                }}
-                                placeholder="Cant"
-                                className="w-full bg-slate-900 border border-slate-700 rounded p-1 text-white font-mono text-xs text-center"
-                              />
-                            </div>
+                            <div className="flex items-end gap-2 sm:contents">
+                              <div className="flex-1 sm:col-span-3">
+                                <label className="block text-[10px] text-slate-500 mb-0.5 sm:hidden">Cantidad</label>
+                                <input
+                                  type="number"
+                                  min="0.1"
+                                  step="0.1"
+                                  value={linea.cantidad}
+                                  onChange={(e) => {
+                                    const n = [...compraLineas]
+                                    n[idx].cantidad = Number(e.target.value)
+                                    setCompraLineas(n)
+                                  }}
+                                  placeholder="Cant"
+                                  className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 sm:p-1 text-white font-mono text-xs text-center"
+                                />
+                              </div>
 
-                            <div className="col-span-3">
-                              <input
-                                type="number"
-                                min="0"
-                                value={linea.costo_unitario}
-                                onChange={(e) => {
-                                  const n = [...compraLineas]
-                                  n[idx].costo_unitario = Number(e.target.value)
-                                  setCompraLineas(n)
-                                }}
-                                placeholder="Costo Unit"
-                                className="w-full bg-slate-900 border border-slate-700 rounded p-1 text-emerald-400 font-mono text-xs text-right"
-                              />
-                            </div>
+                              <div className="flex-1 sm:col-span-3">
+                                <label className="block text-[10px] text-slate-500 mb-0.5 sm:hidden">Costo Unit.</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={linea.costo_unitario}
+                                  onChange={(e) => {
+                                    const n = [...compraLineas]
+                                    n[idx].costo_unitario = Number(e.target.value)
+                                    setCompraLineas(n)
+                                  }}
+                                  placeholder="Costo Unit"
+                                  className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 sm:p-1 text-emerald-400 font-mono text-xs text-right"
+                                />
+                              </div>
 
-                            <div className="col-span-1 text-center">
-                              {compraLineas.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => setCompraLineas(compraLineas.filter((_, i) => i !== idx))}
-                                  className="text-red-400 hover:text-red-300"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
+                              <div className="sm:col-span-1 text-center shrink-0">
+                                {compraLineas.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setCompraLineas(compraLineas.filter((_, i) => i !== idx))}
+                                    className="text-red-400 hover:text-red-300"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -1183,8 +1187,8 @@ export const Admin: React.FC = () => {
             )}
 
             {/* Listado de Compras Previas */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-              <table className="w-full text-xs text-left">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl overflow-x-auto">
+              <table className="w-full text-xs text-left min-w-[600px]">
                 <thead className="bg-slate-950 border-b border-slate-800 text-slate-400 font-bold uppercase">
                   <tr>
                     <th className="p-3">Fecha</th>
@@ -1351,8 +1355,8 @@ export const Admin: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-              <table className="w-full text-xs text-left">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl overflow-x-auto">
+              <table className="w-full text-xs text-left min-w-[700px]">
                 <thead className="bg-slate-950 border-b border-slate-800 text-slate-400 font-bold uppercase">
                   <tr>
                     <th className="p-3">Fecha / Hora</th>
@@ -1418,7 +1422,7 @@ export const Admin: React.FC = () => {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
                 <button
                   type="button"
                   onClick={() => {
@@ -1445,7 +1449,7 @@ export const Admin: React.FC = () => {
             {/* Layout Dividido: Catálogo a la izquierda, Editor a la derecha */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
               {/* Columna Izquierda: Selector de Productos (5 cols) */}
-              <div className="lg:col-span-5 bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 flex flex-col max-h-[750px] shadow-lg">
+              <div className="lg:col-span-5 bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 flex flex-col max-h-[400px] sm:max-h-[550px] lg:max-h-[750px] shadow-lg">
                 {/* Buscador & Categorías */}
                 <div className="space-y-2 mb-3">
                   <div className="relative">
@@ -1710,10 +1714,12 @@ export const Admin: React.FC = () => {
                           {recetaLineas.map((linea, idx) => (
                             <div
                               key={idx}
-                              className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl flex items-center gap-2 group hover:border-slate-700 transition"
+                              className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl group hover:border-slate-700 transition"
                             >
+                              {/* Mobile: stacked layout / Desktop: horizontal */}
+                              <div className="flex flex-col sm:flex-row sm:items-end gap-2">
                                 {/* Selector de Ingrediente */}
-                                <div className="flex-1">
+                                <div className="flex-1 min-w-0">
                                   <label className="block text-[10px] text-slate-500 mb-0.5">
                                     Ingrediente / Insumo
                                   </label>
@@ -1732,52 +1738,54 @@ export const Admin: React.FC = () => {
                                   </select>
                                 </div>
 
-                                {/* Cantidad */}
-                                <div className="w-24">
-                                  <label className="block text-[10px] text-slate-500 mb-0.5">
-                                    Cantidad
-                                  </label>
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0.01"
-                                    value={linea.cantidad}
-                                    onChange={(e) =>
-                                      handleModificarLineaReceta(idx, 'cantidad', parseFloat(e.target.value) || 0)
-                                    }
-                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 font-mono text-center font-bold"
-                                  />
-                                </div>
+                                {/* Cantidad + Unidad + Eliminar en fila */}
+                                <div className="flex items-end gap-2">
+                                  <div className="w-20 sm:w-24 shrink-0">
+                                    <label className="block text-[10px] text-slate-500 mb-0.5">
+                                      Cantidad
+                                    </label>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0.01"
+                                      value={linea.cantidad}
+                                      onChange={(e) =>
+                                        handleModificarLineaReceta(idx, 'cantidad', parseFloat(e.target.value) || 0)
+                                      }
+                                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 font-mono text-center font-bold"
+                                    />
+                                  </div>
 
-                                {/* Unidad */}
-                                <div className="w-24">
-                                  <label className="block text-[10px] text-slate-500 mb-0.5">
-                                    Unidad
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={linea.unidad}
-                                    onChange={(e) =>
-                                      handleModificarLineaReceta(idx, 'unidad', e.target.value)
-                                    }
-                                    placeholder="u, lonja, g..."
-                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 font-mono text-center"
-                                  />
-                                </div>
+                                  <div className="w-20 sm:w-24 shrink-0">
+                                    <label className="block text-[10px] text-slate-500 mb-0.5">
+                                      Unidad
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={linea.unidad}
+                                      onChange={(e) =>
+                                        handleModificarLineaReceta(idx, 'unidad', e.target.value)
+                                      }
+                                      placeholder="u, lonja, g..."
+                                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 font-mono text-center"
+                                    />
+                                  </div>
 
-                                {/* Botón Eliminar Fila */}
-                                <div className="pt-4">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleEliminarLineaReceta(idx)}
-                                    className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white transition cursor-pointer"
-                                    title="Quitar este ingrediente de la receta"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                  {/* Botón Eliminar Fila */}
+                                  <div className="shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEliminarLineaReceta(idx)}
+                                      className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white transition cursor-pointer"
+                                      title="Quitar este ingrediente de la receta"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
-                            ))}
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -1876,7 +1884,7 @@ export const Admin: React.FC = () => {
         {/* Modal Rápido: Crear Nuevo Ingrediente */}
         {nuevoIngModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 animate-fade-in">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
                 <h3 className="text-base font-black text-white flex items-center gap-2">
                   <Plus className="w-4 h-4 text-purple-400" />
@@ -1974,7 +1982,7 @@ export const Admin: React.FC = () => {
         {/* Modal: Crear Nuevo Producto / Hamburguesa */}
         {nuevoProdModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 animate-fade-in">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
                 <h3 className="text-base font-black text-white flex items-center gap-2">
                   <Plus className="w-4 h-4 text-emerald-400" />
@@ -2093,7 +2101,7 @@ export const Admin: React.FC = () => {
         {/* Modal: Editar Plato / Precio / Datos */}
         {editarProdModalOpen && productoSeleccionado && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 animate-fade-in">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
                 <h3 className="text-base font-black text-white flex items-center gap-2">
                   <Pencil className="w-4 h-4 text-amber-400" />

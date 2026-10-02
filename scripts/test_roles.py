@@ -54,6 +54,18 @@ print(" AUDITORIA EXHAUSTIVA MULTI-ROL (MR. BURGER POS)  ")
 print(" Servidor: " + BASE)
 print("==================================================\n")
 
+import time
+
+# Warm-up ping para despertar el servicio Render si está en sleep
+print("Verificando estado del servidor...")
+for intento in range(6):
+    st_h, h = req("/health")
+    if st_h == 200:
+        print(f"  -> Servidor en línea: {h}\n")
+        break
+    print(f"  -> Esperando respuesta del servidor (intento {intento+1}/6)...")
+    time.sleep(5)
+
 # 1. AUTENTICACION Y CONTROL DE ACCESO
 print("--- FASE 1: Verificacion de Tokens y Roles ---")
 roles = ["admin", "mesero", "cocina", "caja"]
@@ -61,28 +73,34 @@ tokens = {}
 for r_name in roles:
     pwd = f"{r_name}123"
     st, res = req("/auth/login", method="POST", data={"username": r_name, "password": pwd})
-    assert_test(f"Login rol: {r_name}", st == 200 and "access_token" in res, f"status={st}")
-    if st == 200:
+    if st != 200:
+        time.sleep(2)
+        st, res = req("/auth/login", method="POST", data={"username": r_name, "password": pwd})
+    assert_test(f"Login rol: {r_name}", st == 200 and isinstance(res, dict) and "access_token" in res, f"status={st}")
+    if st == 200 and isinstance(res, dict) and "access_token" in res:
         tokens[r_name] = res["access_token"]
+        if r_name != "admin":
+            # Abre o valida el turno laboral para que el guardia deps.py permita peticiones
+            req("/asistencia/entrada", method="POST", token=res["access_token"])
 
 # 2. ROL MESERO
 print("\n--- FASE 2: Rol Mesero (Salón, Mesas, Comanda) ---")
 tok_m = tokens.get("mesero")
 st_mesas, mesas = req("/pedidos/mesas", token=tok_m)
-assert_test("Mesero consulta mapa de mesas (1 a 9)", st_mesas == 200 and len(mesas) >= 9)
+assert_test("Mesero consulta mapa de mesas (1 a 9)", st_mesas == 200 and isinstance(mesas, list) and len(mesas) >= 9)
 
 st_cat, cats = req("/categorias", token=tok_m)
-assert_test("Mesero consulta categorias de productos", st_cat == 200 and len(cats) >= 5)
+assert_test("Mesero consulta categorias de productos", st_cat == 200 and isinstance(cats, list) and len(cats) >= 5)
 
 st_prods, prods = req("/productos", token=tok_m)
-assert_test("Mesero consulta catalogo de productos", st_prods == 200 and len(prods) > 0)
+assert_test("Mesero consulta catalogo de productos", st_prods == 200 and isinstance(prods, list) and len(prods) > 0)
 
 # Verificar regla de seguridad: Mesero NO puede ver dashboard del admin
 st_hack_admin, _ = req("/admin/dashboard", token=tok_m)
 assert_test("Seguridad: Mesero bloqueado de ver Dashboard Admin (403)", st_hack_admin == 403)
 
-# Seleccionar mesa libre o usar MOSTRADOR
-mesa_libre = next((m for m in mesas if m["estado"] == "LIBRE"), None)
+# Seleccionar mesa libre (estado DISPONIBLE) o usar MOSTRADOR
+mesa_libre = next((m for m in mesas if isinstance(m, dict) and m.get("estado") == "DISPONIBLE"), None) if isinstance(mesas, list) else None
 canal_prueba = "MESA" if mesa_libre else "MOSTRADOR"
 mesa_id_prueba = mesa_libre["id"] if mesa_libre else None
 
