@@ -138,7 +138,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    const timerTurno = setInterval(verificarTurno, 8000)
+    // Verificación menos agresiva para no inundar el servidor (de 8s pasó a 60s)
+    const timerTurno = setInterval(verificarTurno, 60000)
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         verificarTurno()

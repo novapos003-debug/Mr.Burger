@@ -90,8 +90,8 @@ export const Mesero: React.FC = () => {
 
   useEffect(() => {
     cargarDatos()
-    // Polling ligero cada 8s para sincronizar estado de mesas
-    const interval = setInterval(cargarDatos, 8000)
+    // Polling más espaciado para evitar saturar la red Wi-Fi (30s en lugar de 8s)
+    const interval = setInterval(cargarDatos, 30000)
     return () => clearInterval(interval)
   }, [cargarDatos])
 
@@ -106,7 +106,8 @@ export const Mesero: React.FC = () => {
     }
 
     window.addEventListener('online', handleSync)
-    const interval = setInterval(handleSync, 5000)
+    // Reducido de 5s a 15s para no sobrecargar el servidor
+    const interval = setInterval(handleSync, 15000)
 
     return () => {
       window.removeEventListener('online', handleSync)

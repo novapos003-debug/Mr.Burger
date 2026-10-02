@@ -46,7 +46,7 @@ export const Login: React.FC = () => {
       if (mounted) setBackendOnline(ok)
     }
     check()
-    const interval = setInterval(check, 8000)
+    const interval = setInterval(check, 30000)
     return () => {
       mounted = false
       clearInterval(interval)
