@@ -235,10 +235,10 @@ export const Caja: React.FC = () => {
         datosRecibo: {
           restaurante: 'MR. BURGER',
           lema: 'Simple por fuera. Inteligente por dentro.',
-          nit: '901.234.567-8',
+          nit: '[NIT PENDIENTE DUEÑO]',
           ciudad: 'Cali, Valle del Cauca',
-          telefono: '(602) 555-1234',
-          direccion: 'Calle 5 # 66-12, Limonar',
+          telefono: '[TEL PENDIENTE DUEÑO]',
+          direccion: '[DIRECCIÓN PENDIENTE DUEÑO]',
           leyenda_tributaria: 'Régimen No Responsable de IVA (Art. 512-13 E.T.)',
           consecutivo: resultado.consecutivo,
           fecha: new Date().toLocaleString('es-CO'),
