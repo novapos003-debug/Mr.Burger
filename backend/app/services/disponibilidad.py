@@ -108,6 +108,7 @@ def disponibilidad_masiva(db: Session, productos: list[Producto]) -> dict[int, t
                 resultado[p.id] = (True, None)
         return resultado
 
+    productos_map = {p.id: p for p in productos}
     for p in productos:
         if p.manual_disponible is not None:
             resultado[p.id] = (
@@ -116,7 +117,7 @@ def disponibilidad_masiva(db: Session, productos: list[Producto]) -> dict[int, t
             )
             continue
 
-        insumos = expandir_insumos_producto(db, p.id, Decimal("1"))
+        insumos = expandir_insumos_producto(db, p.id, Decimal("1"), productos_map=productos_map)
         if not insumos:
             resultado[p.id] = (True, None)
             continue

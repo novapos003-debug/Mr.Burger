@@ -28,6 +28,7 @@ def producto_out(
     disponible: bool,
     db: Session | None = None,
     es_admin: bool = False,
+    incluir_finanzas: bool = False,
 ) -> ProductoOut:
     es_cocina = True
     if prod.categoria:
@@ -49,7 +50,7 @@ def producto_out(
     costo_produccion = None
     utilidad_bruta = None
     margen_porcentaje = None
-    if es_admin and db is not None:
+    if incluir_finanzas and es_admin and db is not None:
         try:
             finanzas = calcular_costo_y_margen(db, prod)
             costo_produccion = finanzas["costo_produccion"]
@@ -216,7 +217,7 @@ def obtener_producto(
         raise HTTPException(status_code=404, detail="Producto no encontrado")
     disponible, _ = disponibilidad_producto(db, prod)
     es_admin = usuario.rol.nombre == "admin"
-    item = producto_out(prod, disponible, db=db, es_admin=es_admin)
+    item = producto_out(prod, disponible, db=db, es_admin=es_admin, incluir_finanzas=True)
     if usuario.rol.nombre not in VIDEN_PRECIO:
         item.precio = None
     return item

@@ -21,6 +21,7 @@ def expandir_insumos_producto(
     producto_id: int,
     cantidad_producto: Decimal = Decimal("1"),
     visitados: set[int] | None = None,
+    productos_map: dict[int, Any] | None = None,
 ) -> dict[int, dict[str, Any]]:
     """Expande recursivamente todos los insumos necesarios para producir `cantidad_producto`
     de un producto dado.
@@ -50,15 +51,18 @@ def expandir_insumos_producto(
         return {}
     visitados.add(producto_id)
 
-    producto = (
-        db.query(Producto)
-        .options(
-            joinedload(Producto.receta).joinedload(DetalleReceta.ingrediente),
-            joinedload(Producto.componentes_combo).joinedload(ComponenteCombo.producto_hijo),
+    if productos_map and producto_id in productos_map:
+        producto = productos_map[producto_id]
+    else:
+        producto = (
+            db.query(Producto)
+            .options(
+                joinedload(Producto.receta).joinedload(DetalleReceta.ingrediente),
+                joinedload(Producto.componentes_combo).joinedload(ComponenteCombo.producto_hijo),
+            )
+            .filter(Producto.id == producto_id)
+            .first()
         )
-        .filter(Producto.id == producto_id)
-        .first()
-    )
     if not producto:
         return {}
 
@@ -69,7 +73,7 @@ def expandir_insumos_producto(
         for comp in producto.componentes_combo:
             cant_hijo = comp.cantidad * cantidad_producto
             sub_insumos = expandir_insumos_producto(
-                db, comp.producto_hijo_id, cant_hijo, visitados.copy()
+                db, comp.producto_hijo_id, cant_hijo, visitados.copy(), productos_map=productos_map
             )
             for ing_id, datos in sub_insumos.items():
                 if ing_id not in insumos_agrupados:
