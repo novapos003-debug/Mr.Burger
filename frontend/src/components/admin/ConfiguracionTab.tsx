@@ -13,6 +13,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { getConfiguracionApi, setConfiguracionApi, limpiarDatosPruebaApi } from '../../api/admin'
+import { AdicionesManager } from './AdicionesManager'
 
 export const ConfiguracionTab: React.FC = () => {
   const [loading, setLoading] = useState(true)
@@ -308,6 +309,25 @@ export const ConfiguracionTab: React.FC = () => {
               </select>
             </div>
           </div>
+        </div>
+
+        {/* SECCIÓN 3: CATÁLOGO DE ADICIONES EXTRA CON COSTO */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400 shrink-0">
+              <Sliders className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                Catálogo de Adiciones Extra con Costo (Opciones en Comanda)
+              </h2>
+              <p className="text-xs text-slate-400">
+                Establece qué adiciones aparecen para los meseros al personalizar platos, cuáles se ocultan, precios y nuevos adicionales.
+              </p>
+            </div>
+          </div>
+
+          <AdicionesManager />
         </div>
 
         {/* ZONA DE MANTENIMIENTO: RESTABLECER A CERO PARA PRODUCCIÓN */}

@@ -1,9 +1,12 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.deps import admin_required, staff_required
 from app.database import get_db, safe_commit
-from app.models import Categoria, ComponenteCombo, DetalleReceta, Producto, Usuario
+from app.models import Categoria, ComponenteCombo, Configuracion, DetalleReceta, Producto, Usuario
 from app.schemas import (
     ComponenteComboOut,
     ProductoDisponibilidadUpdate,
@@ -132,6 +135,65 @@ def listar_productos(
             item.precio = None
         salida.append(item)
     return salida
+
+
+class AdicionItem(BaseModel):
+    id: str
+    nombre: str
+    precio: float
+    activo: bool = True
+
+
+ADICIONES_DEFAULT = [
+    {"id": "ad-tocineta", "nombre": "Tocineta Ahumada", "precio": 3000, "activo": True},
+    {"id": "ad-cheddar", "nombre": "Doble Queso Cheddar", "precio": 2500, "activo": True},
+    {"id": "ad-carne", "nombre": "Carne Extra 125g", "precio": 5000, "activo": True},
+    {"id": "ad-huevo", "nombre": "Huevo Frito", "precio": 2000, "activo": True},
+    {"id": "ad-cebolla-caram", "nombre": "Cebolla Caramelizada", "precio": 1500, "activo": True},
+    {"id": "ad-costeno", "nombre": "Queso Costeño Rallado", "precio": 2000, "activo": True},
+    {"id": "ad-papas", "nombre": "Porción Papas Extra", "precio": 4000, "activo": True},
+]
+
+
+@router.get("/adiciones/configuracion", response_model=list[AdicionItem])
+def listar_adiciones_configuracion(
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(staff_required),
+):
+    """Retorna las adiciones configuradas para comanda y meseros."""
+    cfg = db.get(Configuracion, "adiciones_disponibles")
+    if not cfg or not cfg.valor:
+        return ADICIONES_DEFAULT
+    try:
+        data = json.loads(cfg.valor)
+        return data
+    except Exception:
+        return ADICIONES_DEFAULT
+
+
+@router.put("/adiciones/configuracion", response_model=list[AdicionItem])
+def guardar_adiciones_configuracion(
+    adiciones: list[AdicionItem],
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(admin_required),
+):
+    """Permite al admin configurar qué adiciones aparecen, sus precios y estado activo/inactivo."""
+    cfg = db.get(Configuracion, "adiciones_disponibles")
+    data_dict = [a.model_dump() for a in adiciones]
+    valor_json = json.dumps(data_dict, ensure_ascii=False)
+    if not cfg:
+        cfg = Configuracion(
+            clave="adiciones_disponibles",
+            valor=valor_json,
+            descripcion="Catálogo de adiciones extra con costo disponibles en comanda",
+        )
+        db.add(cfg)
+    else:
+        cfg.valor = valor_json
+    registrar(db, usuario, "MODIFICAR_ADICIONES", "configuracion", None, f"total={len(adiciones)}")
+    safe_commit(db)
+    db.refresh(cfg)
+    return adiciones
 
 
 @router.get("/{producto_id}", response_model=ProductoOut)

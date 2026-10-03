@@ -1,5 +1,5 @@
 import api from './client'
-import type { Producto } from '../types/mesero'
+import type { Producto, AdicionExtra } from '../types/mesero'
 import type {
   DashboardOut,
   ReporteVentasOut,
@@ -237,4 +237,15 @@ export const limpiarDatosPruebaApi = async (): Promise<{ status: string; mensaje
   const res = await api.post<{ status: string; mensaje: string }>('/admin/sistema/limpiar-pruebas')
   return res.data
 }
+
+export const getAdicionesConfigApi = async (): Promise<AdicionExtra[]> => {
+  const res = await api.get<AdicionExtra[]>('/productos/adiciones/configuracion')
+  return res.data
+}
+
+export const guardarAdicionesConfigApi = async (adiciones: AdicionExtra[]): Promise<AdicionExtra[]> => {
+  const res = await api.put<AdicionExtra[]>('/productos/adiciones/configuracion', adiciones)
+  return res.data
+}
+
 

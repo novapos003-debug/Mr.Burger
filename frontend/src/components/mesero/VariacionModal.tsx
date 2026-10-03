@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import type { Producto, PreparadoItem, AdicionExtra } from '../../types/mesero'
-import { getPreparadosDisponiblesApi } from '../../api/mesero'
+import { getPreparadosDisponiblesApi, getAdicionesApi } from '../../api/mesero'
 import { X, Check, Plus, Minus, Zap } from 'lucide-react'
 
 interface Props {
@@ -20,15 +20,15 @@ interface Props {
   ) => void
 }
 
-// Lista de adiciones estándar de Mr. Burger con precio (solo para cocina)
-const ADICIONES_DISPONIBLES: AdicionExtra[] = [
-  { id: 'ad-tocineta', nombre: 'Tocineta Ahumada', precio: 3000 },
-  { id: 'ad-cheddar', nombre: 'Doble Queso Cheddar', precio: 2500 },
-  { id: 'ad-carne', nombre: 'Carne Extra 125g', precio: 5000 },
-  { id: 'ad-huevo', nombre: 'Huevo Frito', precio: 2000 },
-  { id: 'ad-cebolla-caram', nombre: 'Cebolla Caramelizada', precio: 1500 },
-  { id: 'ad-costeno', nombre: 'Queso Costeño Rallado', precio: 2000 },
-  { id: 'ad-papas', nombre: 'Porción Papas Extra', precio: 4000 },
+// Lista de adiciones estándar de Mr. Burger fallback
+const ADICIONES_DEFAULT: AdicionExtra[] = [
+  { id: 'ad-tocineta', nombre: 'Tocineta Ahumada', precio: 3000, activo: true },
+  { id: 'ad-cheddar', nombre: 'Doble Queso Cheddar', precio: 2500, activo: true },
+  { id: 'ad-carne', nombre: 'Carne Extra 125g', precio: 5000, activo: true },
+  { id: 'ad-huevo', nombre: 'Huevo Frito', precio: 2000, activo: true },
+  { id: 'ad-cebolla-caram', nombre: 'Cebolla Caramelizada', precio: 1500, activo: true },
+  { id: 'ad-costeno', nombre: 'Queso Costeño Rallado', precio: 2000, activo: true },
+  { id: 'ad-papas', nombre: 'Porción Papas Extra', precio: 4000, activo: true },
 ]
 
 // Lista de modificaciones fallback para cocina (cuando no hay receta detallada)
@@ -58,6 +58,7 @@ export const VariacionModal: React.FC<Props> = ({ producto, onClose, onAdd }) =>
   const [cantidad, setCantidad] = useState(1)
   const [modificaciones, setModificaciones] = useState<string[]>([])
   const [adiciones, setAdiciones] = useState<AdicionExtra[]>([])
+  const [adicionesDisponibles, setAdicionesDisponibles] = useState<AdicionExtra[]>(ADICIONES_DEFAULT)
   const [notas, setNotas] = useState('')
   const [preparadoDisponible, setPreparadoDisponible] = useState<PreparadoItem | null>(null)
   const [usarPreparado, setUsarPreparado] = useState(false)
@@ -87,6 +88,18 @@ export const VariacionModal: React.FC<Props> = ({ producto, onClose, onAdd }) =>
 
     return MODIFICACIONES_COMUNES
   }, [producto, esCocina])
+
+  useEffect(() => {
+    getAdicionesApi()
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setAdicionesDisponibles(data.filter((a) => a.activo !== false))
+        }
+      })
+      .catch(() => {
+        // Fallback a ADICIONES_DEFAULT
+      })
+  }, [])
 
   useEffect(() => {
     if (!producto) return
@@ -242,7 +255,7 @@ export const VariacionModal: React.FC<Props> = ({ producto, onClose, onAdd }) =>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {ADICIONES_DISPONIBLES.map((ad) => {
+                {adicionesDisponibles.map((ad) => {
                   const isSelected = adiciones.some((a) => a.id === ad.id)
                   return (
                     <button

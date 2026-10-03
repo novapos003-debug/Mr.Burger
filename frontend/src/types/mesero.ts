@@ -93,6 +93,7 @@ export interface AdicionExtra {
   id: string
   nombre: string
   precio: number
+  activo?: boolean
 }
 
 export interface CartItem {

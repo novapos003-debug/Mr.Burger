@@ -5,6 +5,7 @@ import type {
   Producto,
   Pedido,
   PreparadoItem,
+  AdicionExtra,
 } from '../types/mesero'
 
 export const getMesasApi = async (): Promise<Mesa[]> => {
@@ -84,3 +85,9 @@ export const getPreparadosDisponiblesApi = async (productoId?: number): Promise<
   const res = await api.get<PreparadoItem[]>('/preparados', { params })
   return res.data
 }
+
+export const getAdicionesApi = async (): Promise<AdicionExtra[]> => {
+  const res = await api.get<AdicionExtra[]>('/productos/adiciones/configuracion')
+  return res.data
+}
+
