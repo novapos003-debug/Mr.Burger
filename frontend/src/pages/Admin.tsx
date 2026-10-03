@@ -17,6 +17,7 @@ import {
   eliminarProductoApi,
   getComponentesComboApi,
   guardarComponentesComboApi,
+  getParametrosConfiguracion,
 } from '../api/admin'
 import { getProductosApi, getCategoriasApi } from '../api/mesero'
 import { imprimirHtmlTirilla } from '../utils/printer'
@@ -89,6 +90,7 @@ export const Admin: React.FC = () => {
   const [reporteLoading, setReporteLoading] = useState(false)
   const [reporteError, setReporteError] = useState<string | null>(null)
   const [dashboardPlanilla, setDashboardPlanilla] = useState<DashboardOut | null>(null)
+  const [ivaConfig, setIvaConfig] = useState<number>(0)
 
   // Estado Combos
   const [esModoCombo, setEsModoCombo] = useState(false)
@@ -594,9 +596,19 @@ export const Admin: React.FC = () => {
 
   useEffect(() => {
     cargarDashboard()
+    getParametrosConfiguracion().then((cfg) => {
+      if (cfg.iva_porcentaje !== undefined) {
+        setIvaConfig(Number(cfg.iva_porcentaje) || 0)
+      }
+    }).catch(() => {})
   }, [])
 
   useEffect(() => {
+    getParametrosConfiguracion().then((cfg) => {
+      if (cfg.iva_porcentaje !== undefined) {
+        setIvaConfig(Number(cfg.iva_porcentaje) || 0)
+      }
+    }).catch(() => {})
     if (tabActiva === 'PLANILLA') cargarReporte()
     if (tabActiva === 'COMPRAS') cargarCompras()
     if (tabActiva === 'AUDITORIA') cargarAuditoria()
@@ -665,7 +677,7 @@ export const Admin: React.FC = () => {
         <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 18px;">
           <h1 style="margin: 0; font-size: 22px; font-weight: 900; letter-spacing: 1px;">MR. BURGER CALI</h1>
           <p style="margin: 3px 0 0 0; font-size: 13px; font-weight: bold; text-transform: uppercase;">Planilla Oficial de Cuadre Diario y Control de Ventas</p>
-          <p style="margin: 3px 0; font-size: 10px; color: #555;">Régimen No Responsable de IVA (Art. 512-13 E.T.) • Cali, Valle del Cauca</p>
+          <p style="margin: 3px 0; font-size: 10px; color: #555;">${ivaConfig > 0 ? `Régimen Responsable de IVA (${ivaConfig}%)` : 'Régimen No Responsable de IVA (Art. 512-13 E.T. - Tarifa 0%)'} • Cali, Valle del Cauca</p>
           <div style="margin-top: 6px; font-size: 11px; display: flex; justify-content: space-between; border-top: 1px dashed #ccc; padding-top: 6px;">
             <span>Período: <strong>${fechaDesde}</strong> hasta <strong>${fechaHasta}</strong></span>
             <span>Canal: <strong>${canalFiltro}</strong></span>
@@ -762,7 +774,7 @@ export const Admin: React.FC = () => {
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
               <span>Régimen:</span>
-              <strong>No Responsable IVA (0%)</strong>
+              <strong>${ivaConfig > 0 ? `Responsable IVA (${ivaConfig}%)` : 'Exento de IVA (0%)'}</strong>
             </div>
           </div>
         </div>
@@ -1238,10 +1250,12 @@ export const Admin: React.FC = () => {
 
                 <div className="p-3 sm:p-4 rounded-xl bg-slate-950 border border-slate-800 min-w-0 overflow-hidden">
                   <span className="text-xs text-slate-400 font-bold uppercase truncate block">Régimen Tributario</span>
-                  <p className="text-base sm:text-lg font-black text-sky-400 mt-1 truncate" title="No Responsable de IVA (Art. 512-13 E.T.)">
-                    No Responsable
+                  <p className="text-base sm:text-lg font-black text-sky-400 mt-1 truncate" title={ivaConfig > 0 ? `Régimen Responsable de IVA (${ivaConfig}%)` : "No Responsable de IVA (Art. 512-13 E.T.)"}>
+                    {ivaConfig > 0 ? `IVA ${ivaConfig}%` : 'Exento (0%)'}
                   </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5 truncate">Art. 512-13 E.T. • Tarifa 0%</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                    {ivaConfig > 0 ? 'Régimen Ordinario / Gravado' : 'Art. 512-13 E.T. • No Responsable'}
+                  </p>
                 </div>
               </div>
 

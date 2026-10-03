@@ -135,6 +135,9 @@ export const descartarPreparadoApi = async (id: number, motivo: string): Promise
   await api.post(`/preparados/${id}/descartar`, { motivo })
 }
 
+let _configCache: Record<string, string> | null = null
+let _configTimestamp = 0
+
 export const getConfiguracionApi = async (): Promise<
   { clave: string; valor: string; descripcion?: string }[]
 > => {
@@ -142,10 +145,30 @@ export const getConfiguracionApi = async (): Promise<
   return res.data
 }
 
+export const getParametrosConfiguracion = async (forceRefresh = false): Promise<Record<string, string>> => {
+  const now = Date.now()
+  if (!forceRefresh && _configCache && (now - _configTimestamp < 30000)) {
+    return _configCache
+  }
+  try {
+    const data = await getConfiguracionApi()
+    const mapa: Record<string, string> = {}
+    for (const item of data) {
+      mapa[item.clave] = item.valor
+    }
+    _configCache = mapa
+    _configTimestamp = now
+    return mapa
+  } catch {
+    return _configCache || {}
+  }
+}
+
 export const setConfiguracionApi = async (
   clave: string,
   valor: string
 ): Promise<any> => {
+  _configCache = null
   const res = await api.put(`/admin/configuracion/${clave}`, { valor })
   return res.data
 }

@@ -15,6 +15,7 @@ interface Props {
   mesa: Mesa | null
   pedidoActivo: Pedido | null
   tipoConsumo: 'LOCAL' | 'LLEVAR'
+  ivaPorcentaje?: number
   onTipoConsumoChange: (tipo: 'LOCAL' | 'LLEVAR') => void
   onUpdateCantidad: (uid: string, delta: number) => void
   onRemoveItem: (uid: string) => void
@@ -28,6 +29,7 @@ export const ComandaSidebar: React.FC<Props> = ({
   mesa,
   pedidoActivo,
   tipoConsumo,
+  ivaPorcentaje = 0,
   onTipoConsumoChange,
   onUpdateCantidad,
   onRemoveItem,
@@ -265,7 +267,11 @@ export const ComandaSidebar: React.FC<Props> = ({
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block leading-none">
               Total Comanda ({totalItemsCount} ítems)
             </span>
-            <span className="text-[10px] text-slate-500">IVA 19% incluido</span>
+            {ivaPorcentaje && Number(ivaPorcentaje) > 0 ? (
+              <span className="text-[10px] text-slate-400">IVA {ivaPorcentaje}% incluido</span>
+            ) : (
+              <span className="text-[10px] text-emerald-400/90 font-medium">Exento de IVA (0%)</span>
+            )}
           </div>
           <span className="text-lg font-black font-mono text-emerald-400">
             ${totalNuevosItems.toLocaleString('es-CO')}

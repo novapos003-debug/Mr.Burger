@@ -48,7 +48,13 @@ export const TirillaModal: React.FC<TirillaModalProps> = ({
       t += '         MR. BURGER RESTAURANTE         \n'
       t += '   SIMPLE POR FUERA. INTELIGENTE POR DENTRO   \n'
       t += '------------------------------------------\n'
-      t += '  Régimen No Responsable de IVA (Art. 512-13 E.T.)\n'
+      if (datosRecibo.leyenda_tributaria) {
+        t += `  ${datosRecibo.leyenda_tributaria}\n`
+      } else if (datosRecibo.iva_porcentaje > 0 && datosRecibo.iva_valor > 0) {
+        t += `  Régimen Responsable de IVA (${datosRecibo.iva_porcentaje}%)\n`
+      } else {
+        t += '  Régimen No Responsable de IVA (Art. 512-13 E.T.)\n'
+      }
       t += '       Documento de Control Interno       \n'
       t += `NIT: ${datosRecibo.nit} - ${datosRecibo.ciudad}\n`
       t += `Tel: ${datosRecibo.telefono}\n`
@@ -74,6 +80,9 @@ export const TirillaModal: React.FC<TirillaModalProps> = ({
       if (datosRecibo.iva_porcentaje > 0 && datosRecibo.iva_valor > 0) {
         t += `SUBTOTAL:                  $${Number(datosRecibo.subtotal).toLocaleString('es-CO')}\n`
         t += `IVA (${datosRecibo.iva_porcentaje}% INCLUIDO): $${Number(datosRecibo.iva_valor).toLocaleString('es-CO')}\n`
+      } else {
+        t += `SUBTOTAL:                  $${Number(datosRecibo.subtotal || datosRecibo.total).toLocaleString('es-CO')}\n`
+        t += `IVA:                       Exento (0%)\n`
       }
       t += `TOTAL A PAGAR:             $${Number(datosRecibo.total).toLocaleString('es-CO')}\n`
       t += '------------------------------------------\n'
@@ -155,8 +164,17 @@ export const TirillaModal: React.FC<TirillaModalProps> = ({
             <h2 className="text-sm font-black tracking-wider text-slate-900">MR. BURGER</h2>
             <p className="text-[10px] text-slate-600 font-sans italic">{datosRecibo.lema}</p>
             <div className="my-1 py-0.5 px-2 bg-slate-100 rounded border border-slate-200 inline-block">
-              <p className="text-[9px] font-bold text-slate-800 uppercase tracking-tight">Régimen No Responsable de IVA</p>
-              <p className="text-[8px] text-slate-500">Documento de Control Interno (Art. 512-13 E.T.)</p>
+              {datosRecibo.iva_porcentaje > 0 && datosRecibo.iva_valor > 0 ? (
+                <>
+                  <p className="text-[9px] font-bold text-slate-800 uppercase tracking-tight">Régimen Responsable de IVA</p>
+                  <p className="text-[8px] text-slate-500">Tarifa IVA {datosRecibo.iva_porcentaje}% Incluido</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[9px] font-bold text-slate-800 uppercase tracking-tight">Régimen No Responsable de IVA</p>
+                  <p className="text-[8px] text-slate-500">Documento de Control Interno (Art. 512-13 E.T. - Tarifa 0%)</p>
+                </>
+              )}
             </div>
             <p className="text-[10px] text-slate-600">NIT: {datosRecibo.nit} • Cali, Valle</p>
             <p className="text-[10px] text-slate-600">Tel: {datosRecibo.telefono} • Dir: {datosRecibo.direccion}</p>
@@ -214,7 +232,18 @@ export const TirillaModal: React.FC<TirillaModalProps> = ({
                   <span>${Number(datosRecibo.iva_valor).toLocaleString('es-CO')}</span>
                 </div>
               </>
-            ) : null}
+            ) : (
+              <>
+                <div className="flex justify-between text-slate-600">
+                  <span>Subtotal:</span>
+                  <span>${Number(datosRecibo.subtotal || datosRecibo.total).toLocaleString('es-CO')}</span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>IVA:</span>
+                  <span className="font-semibold text-slate-700">Exento (0%)</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between font-black text-sm text-slate-950 pt-1 border-t border-slate-800">
               <span>TOTAL A PAGAR:</span>
               <span>${Number(datosRecibo.total).toLocaleString('es-CO')}</span>

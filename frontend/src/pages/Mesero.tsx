@@ -13,6 +13,7 @@ import {
   enviarCocinaApi,
   agregarRondaApi,
 } from '../api/mesero'
+import { getParametrosConfiguracion } from '../api/admin'
 import type {
   Mesa,
   Categoria,
@@ -56,16 +57,22 @@ export const Mesero: React.FC = () => {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [offlineCount, setOfflineCount] = useState<number>(() => getPendingOrders().length)
   const [tipoConsumo, setTipoConsumo] = useState<'LOCAL' | 'LLEVAR'>('LOCAL')
+  const [ivaPorcentaje, setIvaPorcentaje] = useState<number>(0)
 
   // Cargar datos
   const cargarDatos = useCallback(async () => {
     try {
-      const [mRes, cRes, pRes, actRes] = await Promise.allSettled([
+      const [mRes, cRes, pRes, actRes, cfgRes] = await Promise.allSettled([
         getMesasApi(),
         getCategoriasApi(),
         getProductosApi(),
         getPedidosActivosApi(),
+        getParametrosConfiguracion(),
       ])
+
+      if (cfgRes.status === 'fulfilled' && cfgRes.value.iva_porcentaje !== undefined) {
+        setIvaPorcentaje(Number(cfgRes.value.iva_porcentaje) || 0)
+      }
 
       let menuOk = true
       if (mRes.status === 'fulfilled') setMesas(mRes.value)
@@ -464,6 +471,7 @@ export const Mesero: React.FC = () => {
             mesa={mesaSeleccionada}
             pedidoActivo={pedidoActivo}
             tipoConsumo={tipoConsumo}
+            ivaPorcentaje={ivaPorcentaje}
             onTipoConsumoChange={setTipoConsumo}
             onUpdateCantidad={handleUpdateCantidad}
             onRemoveItem={handleRemoveItem}
@@ -544,6 +552,7 @@ export const Mesero: React.FC = () => {
                   mesa={mesaSeleccionada}
                   pedidoActivo={pedidoActivo}
                   tipoConsumo={tipoConsumo}
+                  ivaPorcentaje={ivaPorcentaje}
                   onTipoConsumoChange={setTipoConsumo}
                   onUpdateCantidad={handleUpdateCantidad}
                   onRemoveItem={handleRemoveItem}

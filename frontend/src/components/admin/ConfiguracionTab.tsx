@@ -274,10 +274,21 @@ export const ConfiguracionTab: React.FC = () => {
 
             {/* Porcentaje IVA / Impuesto */}
             <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Percent className="w-3.5 h-3.5 text-blue-400" />
-                Tarifa de Impuesto / IVA (%)
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <Percent className="w-3.5 h-3.5 text-blue-400" />
+                  Tarifa de Impuesto / IVA (%)
+                </label>
+                {Number(ivaPorcentaje) === 0 ? (
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    EXENTO (0%)
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    GRAVADO ({ivaPorcentaje}%)
+                  </span>
+                )}
+              </div>
               <input
                 type="number"
                 min="0"
@@ -287,10 +298,20 @@ export const ConfiguracionTab: React.FC = () => {
                 onChange={(e) => setIvaPorcentaje(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition"
               />
-              <p className="text-[11px] text-slate-500 mt-1">
-                <strong>0%:</strong> Régimen No Responsable (Art. 512-13 E.T. - Comida rápida local).<br />
-                <strong>8%:</strong> Impoconsumo (Régimen ordinario). <strong>19%:</strong> Franquicias.
-              </p>
+              <div className="text-[11px] text-slate-400 mt-2 space-y-1">
+                {Number(ivaPorcentaje) === 0 ? (
+                  <p className="text-emerald-400 font-medium">
+                    ✓ <strong>Estado Activo:</strong> Todo el sistema (tirillas, comandas, caja y reportes) opera como <strong>Exento de IVA</strong> bajo el Régimen No Responsable (Art. 512-13 E.T.). No se desglosa ni se cobra impuesto al cliente.
+                  </p>
+                ) : (
+                  <p className="text-amber-400 font-medium">
+                    ⚠ <strong>Estado Activo:</strong> El sistema calculará y desglosará automáticamente la tarifa del <strong>{ivaPorcentaje}%</strong> en todas las tirillas y comandas.
+                  </p>
+                )}
+                <p className="text-[10px] text-slate-500">
+                  Guía: <strong>0%:</strong> Exento / No Responsable | <strong>8%:</strong> Impuesto Nacional al Consumo (INC) | <strong>19%:</strong> IVA General.
+                </p>
+              </div>
             </div>
 
             {/* Modo Impuestos */}

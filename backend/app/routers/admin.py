@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.deps import admin_required
+from app.core.deps import admin_required, get_current_user
 from app.database import get_db, safe_commit
 from app.models import Usuario
 from app.schemas.admin import (
@@ -115,9 +115,21 @@ class ConfiguracionUpdateIn(BaseModel):
 @router.get("/configuracion")
 def listar_configuracion(
     db: Session = Depends(get_db),
-    _: Usuario = Depends(admin_required),
+    _: Usuario = Depends(get_current_user),
 ):
-    """Retorna las configuraciones globales del restaurante."""
+    """Retorna las configuraciones globales del restaurante (accesible para mesero, caja, cocina y admin)."""
+    return db.query(Configuracion).all()
+
+
+configuracion_alias_router = APIRouter(tags=["configuracion"])
+
+
+@configuracion_alias_router.get("/configuracion")
+def listar_configuracion_alias(
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(get_current_user),
+):
+    """Alias raíz para consultar configuraciones del restaurante."""
     return db.query(Configuracion).all()
 
 

@@ -18,11 +18,12 @@ import {
 interface Props {
   isOpen: boolean
   pedido: Pedido | null
+  ivaPorcentaje?: number
   onClose: () => void
   onSuccess: (resultado: CobroOut) => void
 }
 
-export const CobroModal: React.FC<Props> = ({ isOpen, pedido, onClose, onSuccess }) => {
+export const CobroModal: React.FC<Props> = ({ isOpen, pedido, ivaPorcentaje = 0, onClose, onSuccess }) => {
   const [metodo, setMetodo] = useState<MetodoPago | 'MIXTO'>('EFECTIVO')
   const [recibidoEfectivo, setRecibidoEfectivo] = useState<number>(0)
   const [refTarjeta, setRefTarjeta] = useState<string>('')
@@ -252,8 +253,15 @@ export const CobroModal: React.FC<Props> = ({ isOpen, pedido, onClose, onSuccess
               {pedido.subtotal && (
                 <div>Subtotal base: <strong className="text-slate-200 font-mono">${Number(pedido.subtotal).toLocaleString('es-CO')}</strong></div>
               )}
-              {pedido.iva && Number(pedido.iva) > 0 && (
-                <div>IVA (19% inc.): <strong className="text-slate-200 font-mono">${Number(pedido.iva).toLocaleString('es-CO')}</strong></div>
+              {pedido.iva && Number(pedido.iva) > 0 ? (
+                <div>
+                  IVA ({ivaPorcentaje && ivaPorcentaje > 0 ? ivaPorcentaje : 19}% inc.):{' '}
+                  <strong className="text-slate-200 font-mono">${Number(pedido.iva).toLocaleString('es-CO')}</strong>
+                </div>
+              ) : (
+                <div>
+                  IVA: <strong className="text-emerald-400 font-semibold">Exento (0%)</strong>
+                </div>
               )}
               <div>Productos: <strong className="text-slate-200">{pedido.detalles?.length || 0} ítems</strong></div>
             </div>

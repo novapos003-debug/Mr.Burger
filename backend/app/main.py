@@ -92,6 +92,7 @@ routers_list = [
     sync.router,
     asistencia.router,
     inventario.combo_alias_router,
+    admin.configuracion_alias_router,
 ]
 
 for r in routers_list:

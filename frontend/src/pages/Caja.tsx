@@ -7,6 +7,7 @@ import {
   getPedidosActivos,
   getVales,
 } from '../api/caja'
+import { getParametrosConfiguracion } from '../api/admin'
 import { useCocinaWebSocket } from '../hooks/useCocinaWebSocket'
 import { CajaHeader } from '../components/caja/CajaHeader'
 import { CobroModal } from '../components/caja/CobroModal'
@@ -113,6 +114,7 @@ export const Caja: React.FC = () => {
   const [isMovimientosOpen, setIsMovimientosOpen] = useState(false)
   const [isValesOpen, setIsValesOpen] = useState(false)
   const [isNuevoPedidoOpen, setIsNuevoPedidoOpen] = useState(false)
+  const [configLocal, setConfigLocal] = useState<Record<string, string>>({})
   const [tirillaConfig, setTirillaConfig] = useState<{
     isOpen: boolean
     tipo: TipoTirilla
@@ -127,14 +129,16 @@ export const Caja: React.FC = () => {
   const cargarDatos = useCallback(async (showLoader = false) => {
     try {
       if (showLoader) setIsRefreshing(true)
-      const [turnoRes, pedidosRes, valesRes] = await Promise.all([
+      const [turnoRes, pedidosRes, valesRes, cfgRes] = await Promise.allSettled([
         getTurnoActual(),
         getPedidosActivos('activos'),
         getVales('PENDIENTE'),
+        getParametrosConfiguracion(),
       ])
-      setTurno(turnoRes)
-      setPedidos(pedidosRes)
-      setValesPendientes(valesRes.length)
+      if (turnoRes.status === 'fulfilled') setTurno(turnoRes.value)
+      if (pedidosRes.status === 'fulfilled') setPedidos(pedidosRes.value)
+      if (valesRes.status === 'fulfilled') setValesPendientes(valesRes.value.length)
+      if (cfgRes.status === 'fulfilled') setConfigLocal(cfgRes.value)
     } catch (err) {
       console.error('Error cargando datos de caja:', err)
     } finally {
@@ -228,18 +232,21 @@ export const Caja: React.FC = () => {
         }
       }
       const items = Array.from(itemsMap.values())
+      const ivaPorc = Number(configLocal.iva_porcentaje) || 0
 
       setTirillaConfig({
         isOpen: true,
         tipo: 'RECIBO',
         datosRecibo: {
-          restaurante: 'MR. BURGER',
+          restaurante: configLocal.nombre_local || 'MR. BURGER',
           lema: 'Simple por fuera. Inteligente por dentro.',
-          nit: '[NIT PENDIENTE DUEÑO]',
-          ciudad: 'Cali, Valle del Cauca',
-          telefono: '[TEL PENDIENTE DUEÑO]',
-          direccion: '[DIRECCIÓN PENDIENTE DUEÑO]',
-          leyenda_tributaria: 'Régimen No Responsable de IVA (Art. 512-13 E.T.)',
+          nit: configLocal.nit_local || '[NIT PENDIENTE DUEÑO]',
+          ciudad: configLocal.ciudad_local || 'Cali, Valle del Cauca',
+          telefono: configLocal.telefono_local || '[TEL PENDIENTE DUEÑO]',
+          direccion: configLocal.direccion_local || '[DIRECCIÓN PENDIENTE DUEÑO]',
+          leyenda_tributaria: (ivaCalc > 0 || ivaPorc > 0)
+            ? `Régimen Responsable de IVA (${ivaPorc > 0 ? ivaPorc : 19}%)`
+            : 'Régimen No Responsable de IVA (Art. 512-13 E.T.)',
           consecutivo: resultado.consecutivo,
           fecha: new Date().toLocaleString('es-CO'),
           canal: pedidoParaCobro.canal,
@@ -248,7 +255,7 @@ export const Caja: React.FC = () => {
           direccion_entrega: pedidoParaCobro.direccion,
           items,
           subtotal: subtotalCalc,
-          iva_porcentaje: ivaCalc > 0 ? 19 : 0,
+          iva_porcentaje: ivaCalc > 0 ? (ivaPorc > 0 ? ivaPorc : 19) : 0,
           iva_valor: ivaCalc,
           total: resultado.total,
           pagos: resultado.pagos.map((p) => ({
@@ -593,6 +600,7 @@ export const Caja: React.FC = () => {
       <CobroModal
         isOpen={pedidoParaCobro !== null}
         pedido={pedidoParaCobro}
+        ivaPorcentaje={Number(configLocal.iva_porcentaje) || 0}
         onClose={() => setPedidoParaCobro(null)}
         onSuccess={handleCobroExitoso}
       />
