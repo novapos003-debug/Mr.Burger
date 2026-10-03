@@ -18,6 +18,7 @@ import { MovimientosModal } from '../components/caja/MovimientosModal'
 import { ValesModal } from '../components/caja/ValesModal'
 import { NuevoPedidoModal } from '../components/caja/NuevoPedidoModal'
 import { TirillaModal, type TipoTirilla } from '../components/common/TirillaModal'
+import { FooterCredits } from '../components/common/FooterCredits'
 import type { DatosReciboVenta, DatosReporteZ } from '../utils/printer'
 import {
   DollarSign,
@@ -679,6 +680,9 @@ export const Caja: React.FC = () => {
           </div>
         )}
       </main>
+
+      {/* Pie de Página con Créditos */}
+      <FooterCredits className="border-t border-slate-900 bg-slate-950 mt-auto" />
 
       {/* Modales del Módulo de Caja */}
       <AperturaTurnoModal

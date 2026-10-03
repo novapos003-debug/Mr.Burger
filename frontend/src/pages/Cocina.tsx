@@ -212,12 +212,14 @@ export const Cocina: React.FC = () => {
       {/* Barra de estado inferior */}
       <footer className="bg-slate-950 border-t border-slate-900 px-4 py-2 flex items-center justify-between text-[11px] text-slate-500">
         <div className="flex items-center gap-2">
-          <span>Mr. Burger Fast-Food POS</span>
+          <span>Mr. Burger POS</span>
           <span>•</span>
-          <span className="text-slate-400">Módulo de Cocina KDS v1.0</span>
+          <span className="text-slate-400">
+            Desarrollado por <strong className="text-amber-400 font-semibold">Ing. Jhon Arias</strong>
+          </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-emerald-500 font-semibold">🔒 Regla estricta: Precios y dinero ocultos</span>
+          <span className="text-emerald-500 font-semibold">🔒 Precios y dinero ocultos</span>
         </div>
       </footer>
     </div>

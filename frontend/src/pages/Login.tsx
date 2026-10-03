@@ -302,10 +302,15 @@ export const Login: React.FC = () => {
           </div>
         </div>
 
-        {/* Pie de página con versión */}
-        <p className="text-center text-[11px] text-slate-500 mt-4">
-          PWA Offline Ready • WebSockets Instantáneos • v1.0.0
-        </p>
+        {/* Pie de página con versión y créditos */}
+        <div className="text-center mt-4 space-y-1">
+          <p className="text-[11px] text-slate-500">
+            PWA Offline Ready • WebSockets Instantáneos • v1.0.0
+          </p>
+          <p className="text-xs text-slate-400 font-medium">
+            Desarrollado por <span className="text-amber-400 font-semibold tracking-wide">Ing. Jhon Arias</span>
+          </p>
+        </div>
       </div>
 
       <ServerConfigModal

@@ -36,6 +36,7 @@ import { UsuariosTab } from '../components/admin/UsuariosTab'
 import { ConfiguracionTab } from '../components/admin/ConfiguracionTab'
 import { AsistenciaTab } from '../components/admin/AsistenciaTab'
 import { AdicionesManager } from '../components/admin/AdicionesManager'
+import { FooterCredits } from '../components/common/FooterCredits'
 import {
   Shield,
   TrendingUp,
@@ -2842,6 +2843,9 @@ export const Admin: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Pie de Página con Créditos */}
+        <FooterCredits className="border-t border-slate-800/60 mt-12 mb-4" />
       </main>
     </div>
   )

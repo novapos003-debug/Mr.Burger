@@ -4,6 +4,7 @@ import { MesaSelector } from '../components/mesero/MesaSelector'
 import { CatalogoMesero } from '../components/mesero/CatalogoMesero'
 import { VariacionModal } from '../components/mesero/VariacionModal'
 import { ComandaSidebar } from '../components/mesero/ComandaSidebar'
+import { FooterCredits } from '../components/common/FooterCredits'
 import {
   getMesasApi,
   getCategoriasApi,
@@ -462,6 +463,8 @@ export const Mesero: React.FC = () => {
               onQuickAdd={handleQuickAdd}
             />
           </div>
+
+          <FooterCredits className="py-2.5 text-[11px] border-t border-slate-900 mt-2 shrink-0 pb-16 lg:pb-2.5" />
         </div>
 
         {/* Columna Derecha en Pantallas Grandes (Tablet horizontal / Desktop) */}
