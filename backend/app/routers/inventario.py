@@ -413,3 +413,25 @@ def configurar_componentes_combo(
     )
     safe_commit(db)
     return ver_componentes_combo(producto_id, db=db, _=None)
+
+
+# Alias bajo /inventario para compatibilidad total
+combo_alias_router = APIRouter(prefix="/inventario", tags=["inventario"])
+
+@combo_alias_router.get("/combos/{producto_id}/componentes", response_model=list[ComponenteComboOut])
+def ver_componentes_combo_alias(
+    producto_id: int,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(admin_required),
+):
+    return ver_componentes_combo(producto_id, db=db, _=_)
+
+
+@combo_alias_router.put("/combos/{producto_id}/componentes", response_model=list[ComponenteComboOut])
+def configurar_componentes_combo_alias(
+    producto_id: int,
+    componentes: list[ComponenteComboIn],
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(admin_required),
+):
+    return configurar_componentes_combo(producto_id, componentes=componentes, db=db, usuario=usuario)

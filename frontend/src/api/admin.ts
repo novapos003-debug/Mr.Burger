@@ -221,7 +221,7 @@ export const getComponentesComboApi = async (
   cantidad: number
   precio_unitario: number
 }>> => {
-  const res = await api.get(`/inventario/combos/${productoId}/componentes`)
+  const res = await api.get(`/ingredientes/combos/${productoId}/componentes`)
   return res.data
 }
 
@@ -229,7 +229,7 @@ export const guardarComponentesComboApi = async (
   productoId: number,
   componentes: Array<{ producto_hijo_id: number; cantidad: number }>
 ): Promise<any> => {
-  const res = await api.put(`/inventario/combos/${productoId}/componentes`, componentes)
+  const res = await api.put(`/ingredientes/combos/${productoId}/componentes`, componentes)
   return res.data
 }
 
