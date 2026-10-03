@@ -6,6 +6,7 @@ import {
   abrirTurno,
   getPedidosActivos,
   getVales,
+  getPagosPedido,
 } from '../api/caja'
 import { getParametrosConfiguracion } from '../api/admin'
 import { useCocinaWebSocket } from '../hooks/useCocinaWebSocket'
@@ -30,6 +31,7 @@ import {
   Loader2,
   Lock,
   PlusCircle,
+  Printer,
 } from 'lucide-react'
 
 function extraerVariacionesTexto(variacion?: Record<string, any> | null): string[] {
@@ -285,8 +287,94 @@ export const Caja: React.FC = () => {
     })
   }
 
-  // Filtrado de pedidos
+  const handleVerRecibo = async (pedido: Pedido) => {
+    try {
+      const pagos = await getPagosPedido(pedido.id).catch(() => [])
+      const ivaCalc = Number(pedido.iva) || 0
+      const subtotalCalc = Number(pedido.subtotal) || (Number(pedido.total || 0) - ivaCalc)
+      const itemsMap = new Map<string, { cantidad: number; nombre: string; precio_unitario: number; total: number; variaciones?: string[] }>()
+      for (const l of (pedido.detalles || [])) {
+        const cant = Number(l.cantidad) || 1
+        const precioUnit = Number(l.precio_unitario) || 0
+        const variaciones = extraerVariacionesTexto(l.variacion_snapshot)
+        const varKey = variaciones.slice().sort().join('|')
+        const key = `${l.producto_nombre}__${precioUnit}__${varKey}`
+        const existing = itemsMap.get(key)
+        if (existing) {
+          existing.cantidad += cant
+          existing.total += Math.round(cant * precioUnit)
+        } else {
+          itemsMap.set(key, {
+            cantidad: cant,
+            nombre: l.producto_nombre,
+            precio_unitario: precioUnit,
+            total: Math.round(cant * precioUnit),
+            variaciones: variaciones.length > 0 ? variaciones : undefined,
+          })
+        }
+      }
+      const items = Array.from(itemsMap.values())
+      const ivaPorc = Number(configLocal.iva_porcentaje) || 0
+
+      setTirillaConfig({
+        isOpen: true,
+        tipo: 'RECIBO',
+        datosRecibo: {
+          restaurante: configLocal.nombre_local || 'MR. BURGER',
+          lema: 'Simple por fuera. Inteligente por dentro.',
+          nit: configLocal.nit_local || '[NIT PENDIENTE DUEÑO]',
+          ciudad: configLocal.ciudad_local || 'Cali, Valle del Cauca',
+          telefono: configLocal.telefono_local || '[TEL PENDIENTE DUEÑO]',
+          direccion: configLocal.direccion_local || '[DIRECCIÓN PENDIENTE DUEÑO]',
+          leyenda_tributaria: (ivaCalc > 0 || ivaPorc > 0)
+            ? `Régimen Responsable de IVA (${ivaPorc > 0 ? ivaPorc : 19}%)`
+            : 'Régimen No Responsable de IVA (Art. 512-13 E.T.)',
+          consecutivo: pedido.consecutivo,
+          fecha: pedido.pagado_en ? new Date(pedido.pagado_en).toLocaleString('es-CO') : new Date().toLocaleString('es-CO'),
+          canal: pedido.canal,
+          mesa_numero: pedido.mesa_numero ?? pedido.mesa_id,
+          cliente: pedido.cliente,
+          direccion_entrega: pedido.direccion,
+          items,
+          subtotal: subtotalCalc,
+          iva_porcentaje: ivaCalc > 0 ? (ivaPorc > 0 ? ivaPorc : 19) : 0,
+          iva_valor: ivaCalc,
+          total: Number(pedido.total || 0),
+          pagos: (pagos && pagos.length > 0 ? pagos : [{ id: 0, pedido_id: pedido.id, metodo: 'EFECTIVO' as const, monto: Number(pedido.total || 0), estado: 'VALIDO', pagado_en: '' }]).map((p) => ({
+            metodo: p.metodo,
+            monto: Number(p.monto),
+            recibido: p.recibido ? Number(p.recibido) : undefined,
+            cambio: p.cambio ? Number(p.cambio) : undefined,
+          })),
+        },
+      })
+    } catch (err) {
+      console.error('Error al generar recibo de pedido:', err)
+    }
+  }
+
+  // Separación de pedidos: pendientes por cobrar vs pedidos ya pagados
+  const esPagado = (p: Pedido) =>
+    Boolean(p.pagado_en !== null || p.estado === 'PAGADO' || p.estado === 'CERRADO')
+
+  const pedidosPendientes = pedidos.filter((p) => !esPagado(p))
+  const pedidosFinalizados = pedidos.filter((p) => esPagado(p))
+
+  // Conteo de pedidos pendientes por canal
+  const countMesas = pedidosPendientes.filter((p) => p.canal === 'MESA').length
+  const countMostrador = pedidosPendientes.filter((p) => p.canal === 'MOSTRADOR').length
+  const countDomicilio = pedidosPendientes.filter((p) => p.canal === 'DOMICILIO').length
+  const countDidi = pedidosPendientes.filter((p) => p.canal === 'DIDI').length
+  const countFinalizados = pedidosFinalizados.length
+
+  // Filtrado según pestaña
   const pedidosFiltrados = pedidos.filter((p) => {
+    if (filtroCanal === 'FINALIZADOS') {
+      return esPagado(p)
+    }
+    // En las pestañas de operación activa solo mostramos pendientes para limpiar la caja
+    if (esPagado(p)) return false
+
     if (filtroCanal === 'TODOS') return true
     if (filtroCanal === 'MESA') return p.canal === 'MESA'
     if (filtroCanal === 'MOSTRADOR') return p.canal === 'MOSTRADOR'
@@ -294,12 +382,6 @@ export const Caja: React.FC = () => {
     if (filtroCanal === 'DIDI') return p.canal === 'DIDI'
     return true
   })
-
-  // Conteo por canal
-  const countMesas = pedidos.filter((p) => p.canal === 'MESA').length
-  const countMostrador = pedidos.filter((p) => p.canal === 'MOSTRADOR').length
-  const countDomicilio = pedidos.filter((p) => p.canal === 'DOMICILIO').length
-  const countDidi = pedidos.filter((p) => p.canal === 'DIDI').length
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col select-none">
@@ -347,7 +429,7 @@ export const Caja: React.FC = () => {
                 : 'bg-slate-800/60 text-slate-400 hover:text-white'
             }`}
           >
-            Todas ({pedidos.length})
+            Por Cobrar ({pedidosPendientes.length})
           </button>
           <button
             onClick={() => setFiltroCanal('MESA')}
@@ -393,6 +475,17 @@ export const Caja: React.FC = () => {
             <ShoppingBag className="w-3.5 h-3.5" />
             <span>DiDi Food ({countDidi})</span>
           </button>
+          <button
+            onClick={() => setFiltroCanal('FINALIZADOS')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+              filtroCanal === 'FINALIZADOS'
+                ? 'bg-emerald-700 text-white shadow'
+                : 'bg-slate-800/60 text-slate-400 hover:text-white'
+            }`}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Historial Pagados ({countFinalizados})</span>
+          </button>
         </div>
 
         <button
@@ -416,9 +509,13 @@ export const Caja: React.FC = () => {
             <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400 mb-4 shadow-xl">
               <Receipt className="w-8 h-8 text-emerald-400" />
             </div>
-            <h2 className="text-xl font-bold text-white mb-1">Sin Pedidos Pendientes</h2>
+            <h2 className="text-xl font-bold text-white mb-1">
+              {filtroCanal === 'FINALIZADOS' ? 'Sin Pedidos Pagados' : 'Sin Pedidos Pendientes'}
+            </h2>
             <p className="text-slate-400 text-xs max-w-md mb-5 leading-relaxed">
-              No hay órdenes activas en el filtro seleccionado. Puedes crear un nuevo pedido de mostrador o esperar a que los meseros envíen órdenes desde las mesas.
+              {filtroCanal === 'FINALIZADOS'
+                ? 'Aún no se han registrado cobros ni pedidos pagados en este turno.'
+                : 'No hay órdenes activas por cobrar en el filtro seleccionado. Puedes crear un nuevo pedido de mostrador o esperar a que los meseros envíen órdenes desde las mesas.'}
             </p>
             <button
               onClick={() => requerirTurno(() => setIsNuevoPedidoOpen(true))}
@@ -567,12 +664,12 @@ export const Caja: React.FC = () => {
                       </button>
                     ) : (
                       <button
-                        onClick={() => setPedidoParaCobro(pedido)}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl font-semibold text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition cursor-pointer"
-                        title="Ver detalles de los pagos y reimprimir"
+                        onClick={() => handleVerRecibo(pedido)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 hover:border-emerald-600/50 transition cursor-pointer shadow"
+                        title="Ver y reimprimir recibo de pago"
                       >
-                        <Receipt className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Ver Pago</span>
+                        <Printer className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Ver Recibo</span>
                       </button>
                     )}
                   </div>

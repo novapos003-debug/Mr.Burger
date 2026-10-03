@@ -328,6 +328,48 @@ def turno_abierto(db: Session) -> Cierre | None:
     )
 
 
+def obtener_turno_actual_con_metricas(db: Session) -> Cierre | None:
+    cierre = turno_abierto(db)
+    if not cierre:
+        return None
+
+    # Métricas en vivo del turno en curso (sin cerrar en base de datos)
+    pagos = (
+        db.query(Pago)
+        .filter(
+            or_(Pago.cierre_id == cierre.id, Pago.cierre_id.is_(None)),
+            Pago.pagado_en >= cierre.abierto_en,
+            Pago.estado == "VALIDO",
+        )
+        .all()
+    )
+    movimientos = (
+        db.query(MovimientoCaja)
+        .filter(
+            or_(MovimientoCaja.cierre_id == cierre.id, MovimientoCaja.cierre_id.is_(None)),
+            MovimientoCaja.creado_en >= cierre.abierto_en,
+        )
+        .all()
+    )
+
+    por_metodo: dict[str, Decimal] = {}
+    for p in pagos:
+        por_metodo[p.metodo] = por_metodo.get(p.metodo, Decimal("0")) + _monto(p.monto)
+
+    cierre.total_pedidos = len({p.pedido_id for p in pagos})
+    cierre.total_efectivo = por_metodo.get("EFECTIVO", Decimal("0"))
+    cierre.total_tarjeta = por_metodo.get("TARJETA", Decimal("0"))
+    cierre.total_transferencia = por_metodo.get("TRANSFERENCIA", Decimal("0"))
+    cierre.total_vale = por_metodo.get("VALE", Decimal("0"))
+    cierre.total_didi_tarjeta = por_metodo.get("DIDI_TARJETA", Decimal("0"))
+    cierre.total_didi_efectivo = por_metodo.get("DIDI_EFECTIVO", Decimal("0"))
+    cierre.total_ventas = sum((_monto(p.monto) for p in pagos), Decimal("0"))
+    cierre.total_entradas_caja = sum((_monto(m.valor) for m in movimientos if m.tipo == "ENTRADA"), Decimal("0"))
+    cierre.total_salidas_caja = sum((_monto(m.valor) for m in movimientos if m.tipo == "SALIDA"), Decimal("0"))
+    cierre.total_efectivo_final = cierre.total_entradas_caja + cierre.total_efectivo - cierre.total_salidas_caja
+    return cierre
+
+
 def abrir_turno(db: Session, usuario, monto_inicial: Decimal = Decimal("0")) -> Cierre:
     if turno_abierto(db) is not None:
         raise ValueError("Ya hay un turno de caja abierto")

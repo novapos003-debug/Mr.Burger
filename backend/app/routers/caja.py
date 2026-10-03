@@ -25,6 +25,7 @@ from app.services.caja import (
     devolver_pago,
     registrar_movimiento,
     turno_abierto,
+    obtener_turno_actual_con_metricas,
 )
 from app.services.websocket import ws_manager
 
@@ -191,8 +192,8 @@ def ver_turno(
     db: Session = Depends(get_db),
     _: Usuario = Depends(cashier_required),
 ):
-    """Turno de caja abierto actualmente (o null si no hay ninguno)."""
-    return turno_abierto(db)
+    """Turno de caja abierto actualmente con métricas acumuladas en vivo (o null si no hay ninguno)."""
+    return obtener_turno_actual_con_metricas(db)
 
 
 @router.post("/turno/abrir", response_model=CierreOut, status_code=201)

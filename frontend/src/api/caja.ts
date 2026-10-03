@@ -15,6 +15,11 @@ export const cobrarPedido = async (pedidoId: number, data: CobroIn): Promise<Cob
   return res.data
 }
 
+export const getPagosPedido = async (pedidoId: number): Promise<PagoOut[]> => {
+  const res = await api.get<PagoOut[]>(`/caja/pedidos/${pedidoId}/pagos`)
+  return res.data
+}
+
 export const getTurnoActual = async (): Promise<CierreOut | null> => {
   const res = await api.get<CierreOut | null>('/caja/turno')
   return res.data

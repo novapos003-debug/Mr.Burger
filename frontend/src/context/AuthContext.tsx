@@ -4,7 +4,7 @@ import { loginApi, getMeApi } from '../api/auth'
 
 import type { TurnoLaboral } from '../types/asistencia'
 import { registrarEntradaApi, registrarSalidaApi, obtenerMiTurnoApi } from '../api/asistencia'
-import { getWsBaseUrl } from '../api/client'
+import api, { getWsBaseUrl } from '../api/client'
 
 interface AuthContextType {
   user: Usuario | null
@@ -52,24 +52,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (storedToken) {
         try {
           const me = await getMeApi()
-          setUser(me)
-          localStorage.setItem('pos_user', JSON.stringify(me))
-          
-          if (me.rol !== 'admin') {
-            const miTurno = await obtenerMiTurnoApi()
-            setTurno(miTurno)
+          if (localStorage.getItem('pos_token') === storedToken) {
+            setUser(me)
+            localStorage.setItem('pos_user', JSON.stringify(me))
+            
+            if (me.rol !== 'admin') {
+              const miTurno = await obtenerMiTurnoApi()
+              if (localStorage.getItem('pos_token') === storedToken) {
+                setTurno(miTurno)
+              }
+            }
           }
         } catch (err: any) {
-          if (err.response?.status === 401) {
-            localStorage.removeItem('pos_token')
-            localStorage.removeItem('pos_user')
-            setToken(null)
-            setUser(null)
-            setTurno(null)
-          } else {
-            const savedUser = localStorage.getItem('pos_user')
-            if (savedUser) {
-              try { setUser(JSON.parse(savedUser)) } catch {}
+          // Solo limpiar si el token no fue reemplazado por un nuevo login
+          if (localStorage.getItem('pos_token') === storedToken) {
+            if (err.response?.status === 401) {
+              localStorage.removeItem('pos_token')
+              localStorage.removeItem('pos_user')
+              setToken(null)
+              setUser(null)
+              setTurno(null)
+            } else {
+              const savedUser = localStorage.getItem('pos_user')
+              if (savedUser) {
+                try { setUser(JSON.parse(savedUser)) } catch {}
+              }
             }
           }
         }
@@ -159,6 +166,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const data = await loginApi(usuario, password)
     localStorage.setItem('pos_token', data.access_token)
     setToken(data.access_token)
+    api.defaults.headers.common['Authorization'] = `Bearer ${data.access_token}`
 
     const me = await getMeApi()
     setUser(me)

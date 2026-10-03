@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import type { WebSocketStatus } from '../../types/cocina'
 import {
   ChefHat,
@@ -53,11 +53,67 @@ export const KdsHeader: React.FC<KdsHeaderProps> = ({
   const { logout } = useAuth()
   const [isFullscreen, setIsFullscreen] = useState(false)
 
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {})
-    } else {
-      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {})
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const doc = document as any
+      const isFull = !!(
+        doc.fullscreenElement ||
+        doc.webkitFullscreenElement ||
+        doc.mozFullScreenElement ||
+        doc.msFullscreenElement
+      )
+      setIsFullscreen(isFull)
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange)
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange)
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange)
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange)
+    }
+  }, [])
+
+  const toggleFullscreen = async () => {
+    try {
+      const doc = document as any
+      const docEl = document.documentElement as any
+      const isFull = !!(
+        doc.fullscreenElement ||
+        doc.webkitFullscreenElement ||
+        doc.mozFullScreenElement ||
+        doc.msFullscreenElement
+      )
+
+      if (!isFull) {
+        if (docEl.requestFullscreen) {
+          await docEl.requestFullscreen()
+        } else if (docEl.webkitRequestFullscreen) {
+          await docEl.webkitRequestFullscreen()
+        } else if (docEl.mozRequestFullScreen) {
+          await docEl.mozRequestFullScreen()
+        } else if (docEl.msRequestFullscreen) {
+          await docEl.msRequestFullscreen()
+        }
+        setIsFullscreen(true)
+      } else {
+        if (doc.exitFullscreen) {
+          await doc.exitFullscreen()
+        } else if (doc.webkitExitFullscreen) {
+          await doc.webkitExitFullscreen()
+        } else if (doc.mozCancelFullScreen) {
+          await doc.mozCancelFullScreen()
+        } else if (doc.msExitFullscreen) {
+          await doc.msExitFullscreen()
+        }
+        setIsFullscreen(false)
+      }
+    } catch (err) {
+      console.warn('Aviso pantalla completa:', err)
     }
   }
 

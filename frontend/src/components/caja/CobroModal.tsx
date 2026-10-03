@@ -44,6 +44,9 @@ export const CobroModal: React.FC<Props> = ({ isOpen, pedido, ivaPorcentaje = 0,
   const [error, setError] = useState<string | null>(null)
 
   const total = Number(pedido?.total || 0)
+  const yaPagado = Boolean(
+    pedido && (pedido.pagado_en !== null || pedido.estado === 'PAGADO' || pedido.estado === 'CERRADO')
+  )
 
   useEffect(() => {
     if (pedido) {
@@ -210,14 +213,14 @@ export const CobroModal: React.FC<Props> = ({ isOpen, pedido, ivaPorcentaje = 0,
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="font-black text-white text-lg tracking-wide">
-                  Cobrar Pedido #{pedido.consecutivo}
+                  {yaPagado ? `Detalle de Pedido #${pedido.consecutivo}` : `Cobrar Pedido #${pedido.consecutivo}`}
                 </h2>
                 <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700">
                   {pedido.canal === 'MESA' ? `Mesa ${pedido.mesa_numero}` : pedido.canal}
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Selecciona el medio de pago y registra la transacción
+                {yaPagado ? 'Este pedido ya fue pagado y procesado' : 'Selecciona el medio de pago y registra la transacción'}
               </p>
             </div>
           </div>
@@ -267,11 +270,23 @@ export const CobroModal: React.FC<Props> = ({ isOpen, pedido, ivaPorcentaje = 0,
             </div>
           </div>
 
-          {/* Selector de Métodos de Pago */}
-          <div>
-            <label className="block text-xs font-bold text-slate-300 uppercase tracking-wide mb-2">
-              Método de Pago
-            </label>
+          {yaPagado ? (
+            <div className="p-4 bg-emerald-950/40 border border-emerald-600/60 rounded-2xl flex items-center gap-3.5 text-emerald-200">
+              <CheckCircle2 className="w-7 h-7 text-emerald-400 shrink-0" />
+              <div>
+                <div className="font-bold text-sm text-emerald-300">Este pedido ya fue pagado</div>
+                <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                  El cobro ya se encuentra liquidado y registrado en la base de datos de caja. No requiere ninguna confirmación adicional.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Selector de Métodos de Pago */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wide mb-2">
+                  Método de Pago
+                </label>
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
               <button
                 type="button"
@@ -604,6 +619,8 @@ export const CobroModal: React.FC<Props> = ({ isOpen, pedido, ivaPorcentaje = 0,
               </button>
             </div>
           )}
+            </>
+          )}
         </div>
 
         {/* Pie de Acciones */}
@@ -613,22 +630,24 @@ export const CobroModal: React.FC<Props> = ({ isOpen, pedido, ivaPorcentaje = 0,
             onClick={onClose}
             className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white transition cursor-pointer"
           >
-            Cancelar
+            {yaPagado ? 'Cerrar' : 'Cancelar'}
           </button>
 
-          <button
-            type="button"
-            disabled={loading || (metodo === 'EFECTIVO' && faltaEfectivo > 0) || (metodo === 'MIXTO' && diferenciaMixto !== 0)}
-            onClick={handleCobrar}
-            className="flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-sm bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white shadow-xl shadow-emerald-950/50 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <CheckCircle2 className="w-5 h-5" />
-            )}
-            <span>Confirmar Cobro (${total.toLocaleString('es-CO')})</span>
-          </button>
+          {!yaPagado && (
+            <button
+              type="button"
+              disabled={loading || (metodo === 'EFECTIVO' && faltaEfectivo > 0) || (metodo === 'MIXTO' && diferenciaMixto !== 0)}
+              onClick={handleCobrar}
+              className="flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-sm bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white shadow-xl shadow-emerald-950/50 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="w-5 h-5" />
+              )}
+              <span>Confirmar Cobro (${total.toLocaleString('es-CO')})</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

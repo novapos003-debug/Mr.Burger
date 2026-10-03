@@ -1,15 +1,19 @@
 import React, { useState } from 'react'
-import type { CierreOut, ConteoBilletesMonedas } from '../../types/caja'
+import type { CierreOut } from '../../types/caja'
 import { cerrarTurno } from '../../api/caja'
 import {
   Lock,
   X,
   Calculator,
   Coins,
-  Receipt,
+  Banknote,
+  CreditCard,
   Printer,
   Loader2,
   ShieldCheck,
+  ChevronDown,
+  ChevronUp,
+  CheckCircle2,
 } from 'lucide-react'
 
 import { TirillaModal } from '../common/TirillaModal'
@@ -28,20 +32,27 @@ export const ArqueoCiegoModal: React.FC<Props> = ({
   onTurnoCerrado,
 }) => {
   const [paso, setPaso] = useState<'CONTEO' | 'RESULTADO'>('CONTEO')
-  const [conteo, setConteo] = useState<ConteoBilletesMonedas>({
+  const [totalBilletes, setTotalBilletes] = useState<number>(0)
+  const [totalMonedas, setTotalMonedas] = useState<number>(0)
+  const [totalElectronico, setTotalElectronico] = useState<number>(0)
+  const [mostrarDesglose, setMostrarDesglose] = useState<boolean>(false)
+
+  const [conteoBilletes, setConteoBilletes] = useState({
     b100k: 0,
     b50k: 0,
     b20k: 0,
     b10k: 0,
     b5k: 0,
     b2k: 0,
+  })
+  const [conteoMonedas, setConteoMonedas] = useState({
     m1000: 0,
     m500: 0,
     m200: 0,
     m100: 0,
     m50: 0,
-    totalVouchersRedeban: 0,
   })
+
   const [notas, setNotas] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -50,25 +61,46 @@ export const ArqueoCiegoModal: React.FC<Props> = ({
 
   if (!isOpen || !turno) return null
 
-  // Cálculo del efectivo físico contado
-  const totalEfectivoContado =
-    conteo.b100k * 100000 +
-    conteo.b50k * 50000 +
-    conteo.b20k * 20000 +
-    conteo.b10k * 10000 +
-    conteo.b5k * 5000 +
-    conteo.b2k * 2000 +
-    conteo.m1000 * 1000 +
-    conteo.m500 * 500 +
-    conteo.m200 * 200 +
-    conteo.m100 * 100 +
-    conteo.m50 * 50
+  // Métricas del sistema en tiempo real para datáfono y transferencias
+  const esperadoTarjeta = Number(turno.total_tarjeta || 0)
+  const esperadoTransferencia = Number(turno.total_transferencia || 0)
+  const totalEsperadoElectronico = esperadoTarjeta + esperadoTransferencia
+
+  // Total de efectivo físico contado
+  const totalEfectivoContado = (Number(totalBilletes) || 0) + (Number(totalMonedas) || 0)
+
+  // Recalcular billetes si cambia el desglose individual
+  const handleCambioBilletes = (key: string, val: number) => {
+    const updated = { ...conteoBilletes, [key]: val }
+    setConteoBilletes(updated)
+    const nuevoTotal =
+      updated.b100k * 100000 +
+      updated.b50k * 50000 +
+      updated.b20k * 20000 +
+      updated.b10k * 10000 +
+      updated.b5k * 5000 +
+      updated.b2k * 2000
+    setTotalBilletes(nuevoTotal)
+  }
+
+  // Recalcular monedas si cambia el desglose individual
+  const handleCambioMonedas = (key: string, val: number) => {
+    const updated = { ...conteoMonedas, [key]: val }
+    setConteoMonedas(updated)
+    const nuevoTotal =
+      updated.m1000 * 1000 +
+      updated.m500 * 500 +
+      updated.m200 * 200 +
+      updated.m100 * 100 +
+      updated.m50 * 50
+    setTotalMonedas(nuevoTotal)
+  }
 
   const handleCerrarTurno = async () => {
     try {
       setLoading(true)
       setError(null)
-      const notaCierre = `Arqueo ciego físico: $${totalEfectivoContado.toLocaleString()} COP | Redeban vouchers: $${conteo.totalVouchersRedeban.toLocaleString()} COP. ${notas}`
+      const notaCierre = `Arqueo físico: Billetes: $${totalBilletes.toLocaleString('es-CO')} COP | Monedas: $${totalMonedas.toLocaleString('es-CO')} COP | Total Efectivo: $${totalEfectivoContado.toLocaleString('es-CO')} COP | Datáfono/Transferencias: $${totalElectronico.toLocaleString('es-CO')} COP. ${notas}`
       const resultado = await cerrarTurno(notaCierre)
       setCierreFinal(resultado)
       setPaso('RESULTADO')
@@ -81,12 +113,14 @@ export const ArqueoCiegoModal: React.FC<Props> = ({
     }
   }
 
-  // Cálculos de discrepancia (solo visibles en paso RESULTADO)
+  // Cálculos de discrepancia (visibles en paso RESULTADO)
   const teoricoEfectivo = Number(cierreFinal?.total_efectivo_final || 0)
   const diferenciaEfectivo = totalEfectivoContado - teoricoEfectivo
 
   const teoricoTarjeta = Number(cierreFinal?.total_tarjeta || 0)
-  const diferenciaTarjeta = conteo.totalVouchersRedeban - teoricoTarjeta
+  const teoricoTransferencia = Number(cierreFinal?.total_transferencia || 0)
+  const teoricoElectronico = teoricoTarjeta + teoricoTransferencia
+  const diferenciaElectronico = totalElectronico - teoricoElectronico
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 animate-in fade-in duration-200">
@@ -126,106 +160,202 @@ export const ArqueoCiegoModal: React.FC<Props> = ({
             <>
               <div className="bg-purple-950/30 border border-purple-800/50 rounded-2xl p-4 text-xs text-purple-200 leading-relaxed">
                 <strong className="text-purple-300 flex items-center gap-1.5 mb-1 text-sm font-black">
-                  <ShieldCheck className="w-4 h-4" /> Principio de Arqueo a Ciegas
+                  <ShieldCheck className="w-4 h-4" /> Cuadre de Caja Simplificado
                 </strong>
-                Cuenta físicamente el dinero en efectivo de la caja y los comprobantes del datáfono <strong>sin conocer el total del sistema</strong>. El sistema comparará tu conteo contra las ventas para determinar si hay cuadre exacto, sobrante o faltante.
+                Ingresa el total que tienes en billetes y monedas en la gaveta, y el total de datáfono / transferencias. El sistema contrastará tu conteo contra las ventas para determinar el cuadre exacto.
               </div>
 
-              {/* Conteo de Billetes */}
-              <div className="space-y-3">
-                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <Coins className="w-4 h-4 text-amber-400" /> Billetes en Gaveta
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                  {[
-                    { label: '$100.000', key: 'b100k' },
-                    { label: '$50.000', key: 'b50k' },
-                    { label: '$20.000', key: 'b20k' },
-                    { label: '$10.000', key: 'b10k' },
-                    { label: '$5.000', key: 'b5k' },
-                    { label: '$2.000', key: 'b2k' },
-                  ].map((item) => (
-                    <div key={item.key} className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-300 font-mono">{item.label}</span>
+              {/* SECCIÓN 1: EFECTIVO FÍSICO (Billetes y Monedas Directos) */}
+              <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                    <Banknote className="w-4 h-4 text-emerald-400" />
+                    <span>Conteo de Efectivo en Gaveta</span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setMostrarDesglose(!mostrarDesglose)}
+                    className="text-[11px] font-bold text-slate-400 hover:text-amber-400 flex items-center gap-1 transition cursor-pointer"
+                  >
+                    {mostrarDesglose ? (
+                      <>
+                        <ChevronUp className="w-3.5 h-3.5" />
+                        <span>Ocultar desglose</span>
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-3.5 h-3.5" />
+                        <span>Desglosar denominaciones</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Total Billetes */}
+                  <div className="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3 space-y-1.5">
+                    <label className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                      <Banknote className="w-4 h-4" /> Total en Billetes ($)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">$</span>
                       <input
                         type="number"
                         min="0"
-                        value={(conteo as any)[item.key] || ''}
-                        onChange={(e) =>
-                          setConteo({ ...conteo, [item.key]: Math.max(0, parseInt(e.target.value) || 0) })
-                        }
-                        className="w-16 px-2 py-1 bg-slate-900 border border-slate-700 rounded-lg text-amber-400 font-mono font-bold text-right text-sm focus:outline-none focus:border-amber-500"
+                        step="1000"
+                        value={totalBilletes || ''}
+                        onChange={(e) => setTotalBilletes(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full pl-8 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-amber-400 font-mono font-bold text-lg focus:border-amber-500 focus:outline-none"
                         placeholder="0"
                       />
                     </div>
-                  ))}
-                </div>
-              </div>
+                    <div className="text-[11px] text-slate-400 text-right font-mono">
+                      ${totalBilletes.toLocaleString('es-CO')} COP
+                    </div>
+                  </div>
 
-              {/* Conteo de Monedas */}
-              <div className="space-y-3">
-                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <Coins className="w-4 h-4 text-slate-400" /> Monedas en Gaveta
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                  {[
-                    { label: '$1.000', key: 'm1000' },
-                    { label: '$500', key: 'm500' },
-                    { label: '$200', key: 'm200' },
-                    { label: '$100', key: 'm100' },
-                    { label: '$50', key: 'm50' },
-                  ].map((item) => (
-                    <div key={item.key} className="bg-slate-950 p-2 rounded-xl border border-slate-800 flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-slate-400 font-mono">{item.label}</span>
+                  {/* Total Monedas */}
+                  <div className="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3 space-y-1.5">
+                    <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                      <Coins className="w-4 h-4 text-slate-400" /> Total en Monedas ($)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">$</span>
                       <input
                         type="number"
                         min="0"
-                        value={(conteo as any)[item.key] || ''}
-                        onChange={(e) =>
-                          setConteo({ ...conteo, [item.key]: Math.max(0, parseInt(e.target.value) || 0) })
-                        }
-                        className="w-12 px-1.5 py-1 bg-slate-900 border border-slate-700 rounded-lg text-slate-300 font-mono font-bold text-right text-xs focus:outline-none"
+                        step="50"
+                        value={totalMonedas || ''}
+                        onChange={(e) => setTotalMonedas(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full pl-8 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 font-mono font-bold text-lg focus:border-slate-500 focus:outline-none"
                         placeholder="0"
                       />
                     </div>
-                  ))}
+                    <div className="text-[11px] text-slate-400 text-right font-mono">
+                      ${totalMonedas.toLocaleString('es-CO')} COP
+                    </div>
+                  </div>
+                </div>
+
+                {/* Desglose opcional por denominación */}
+                {mostrarDesglose && (
+                  <div className="pt-3 border-t border-slate-800 space-y-3 animate-in fade-in duration-150">
+                    <div className="space-y-2">
+                      <span className="text-[11px] font-bold text-slate-400 block uppercase">
+                        Billetes por denominación (calcula el total de billetes):
+                      </span>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {[
+                          { label: '$100.000', key: 'b100k' },
+                          { label: '$50.000', key: 'b50k' },
+                          { label: '$20.000', key: 'b20k' },
+                          { label: '$10.000', key: 'b10k' },
+                          { label: '$5.000', key: 'b5k' },
+                          { label: '$2.000', key: 'b2k' },
+                        ].map((item) => (
+                          <div key={item.key} className="bg-slate-900 p-2 rounded-lg border border-slate-800 flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-300 font-mono">{item.label}</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={(conteoBilletes as any)[item.key] || ''}
+                              onChange={(e) =>
+                                handleCambioBilletes(item.key, Math.max(0, parseInt(e.target.value) || 0))
+                              }
+                              className="w-14 px-1.5 py-1 bg-slate-950 border border-slate-700 rounded text-amber-400 font-mono font-bold text-right text-xs focus:outline-none"
+                              placeholder="0"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <span className="text-[11px] font-bold text-slate-400 block uppercase">
+                        Monedas por denominación (calcula el total de monedas):
+                      </span>
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        {[
+                          { label: '$1.000', key: 'm1000' },
+                          { label: '$500', key: 'm500' },
+                          { label: '$200', key: 'm200' },
+                          { label: '$100', key: 'm100' },
+                          { label: '$50', key: 'm50' },
+                        ].map((item) => (
+                          <div key={item.key} className="bg-slate-900 p-1.5 rounded-lg border border-slate-800 flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-slate-400 font-mono">{item.label}</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={(conteoMonedas as any)[item.key] || ''}
+                              onChange={(e) =>
+                                handleCambioMonedas(item.key, Math.max(0, parseInt(e.target.value) || 0))
+                              }
+                              className="w-12 px-1 py-0.5 bg-slate-950 border border-slate-700 rounded text-slate-300 font-mono font-bold text-right text-xs focus:outline-none"
+                              placeholder="0"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Total Efectivo Físico Calculado */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                    Total Efectivo Físico Contado:
+                  </span>
+                  <span className="text-xl font-black text-emerald-400 font-mono">
+                    ${totalEfectivoContado.toLocaleString('es-CO')} COP
+                  </span>
                 </div>
               </div>
 
-              {/* Total Físico Calculado */}
-              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Total Efectivo Físico Contado:
-                </span>
-                <span className="text-2xl font-black text-emerald-400 font-mono">
-                  ${totalEfectivoContado.toLocaleString('es-CO')} COP
-                </span>
-              </div>
-
-              {/* Conciliación Redeban / Datáfono */}
-              <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 space-y-2">
+              {/* SECCIÓN 2: DATÁFONO / TRANSFERENCIAS */}
+              <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 space-y-3">
                 <div className="flex items-center gap-2">
-                  <Receipt className="w-4 h-4 text-sky-400" />
-                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                    Cierre Datáfono Redeban (Suma de Vouchers $)
+                  <CreditCard className="w-4 h-4 text-sky-400" />
+                  <label className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+                    Datáfono / Transferencias (Vouchers y Recibos Bancarios)
                   </label>
                 </div>
-                <p className="text-[11px] text-slate-400">
-                  Ingresa el total acumulado que arrojó el reporte de cierre del datáfono físico.
-                </p>
+
+                {/* Badge informativa con el total esperado por el sistema */}
+                <div className="bg-sky-950/40 border border-sky-800/60 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                  <div className="text-xs text-sky-200">
+                    <span className="font-black text-sky-300 block text-sm">
+                      El sistema espera: ${totalEsperadoElectronico.toLocaleString('es-CO')} COP
+                    </span>
+                    <span className="text-[11px] text-sky-400">
+                      Datáfono / Tarjetas: ${esperadoTarjeta.toLocaleString('es-CO')} COP • Transferencias / QR: ${esperadoTransferencia.toLocaleString('es-CO')} COP
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTotalElectronico(totalEsperadoElectronico)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-600 hover:bg-sky-500 active:scale-95 text-white cursor-pointer transition whitespace-nowrap shadow shrink-0"
+                    title="Copia el monto esperado por el sistema directamente al campo de cierre"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Usar total esperado (${totalEsperadoElectronico.toLocaleString('es-CO')})</span>
+                  </button>
+                </div>
+
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">$</span>
                   <input
                     type="number"
                     min="0"
                     step="1000"
-                    value={conteo.totalVouchersRedeban || ''}
-                    onChange={(e) =>
-                      setConteo({ ...conteo, totalVouchersRedeban: Number(e.target.value) })
-                    }
-                    className="w-full pl-8 pr-4 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sky-400 font-mono font-bold text-lg focus:border-sky-500 focus:outline-none"
+                    value={totalElectronico || ''}
+                    onChange={(e) => setTotalElectronico(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full pl-8 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-sky-400 font-mono font-bold text-lg focus:border-sky-500 focus:outline-none"
                     placeholder="0"
                   />
+                </div>
+                <div className="text-[11px] text-slate-400 text-right font-mono">
+                  ${totalElectronico.toLocaleString('es-CO')} COP
                 </div>
               </div>
 
@@ -246,7 +376,7 @@ export const ArqueoCiegoModal: React.FC<Props> = ({
           ) : (
             /* PASO RESULTADO: REPORTE Z DE CIERRE */
             <div className="space-y-4">
-              {/* Veredicto de Cuadre */}
+              {/* Veredicto de Cuadre Efectivo */}
               <div
                 className={`p-4 rounded-2xl border text-center ${
                   diferenciaEfectivo === 0
@@ -259,7 +389,7 @@ export const ArqueoCiegoModal: React.FC<Props> = ({
                 <span className="text-xs font-bold uppercase tracking-widest block mb-1">
                   Resultado del Arqueo de Efectivo
                 </span>
-                <div className="text-3xl font-black font-mono">
+                <div className="text-2xl sm:text-3xl font-black font-mono">
                   {diferenciaEfectivo === 0
                     ? '✓ CUADRE EXACTO ($0 COP)'
                     : diferenciaEfectivo > 0
@@ -271,20 +401,22 @@ export const ArqueoCiegoModal: React.FC<Props> = ({
                 </p>
               </div>
 
-              {/* Conciliación Redeban */}
+              {/* Conciliación Datáfono / Transferencias */}
               <div
                 className={`p-3.5 rounded-xl border flex items-center justify-between text-xs ${
-                  diferenciaTarjeta === 0
+                  diferenciaElectronico === 0
                     ? 'bg-slate-950 border-slate-800 text-slate-300'
                     : 'bg-amber-950/40 border-amber-700 text-amber-300'
                 }`}
               >
                 <div>
-                  <strong className="block">Conciliación Datáfono Redeban</strong>
-                  <span>Vouchers Contados: ${conteo.totalVouchersRedeban.toLocaleString()} COP • Sistema: ${teoricoTarjeta.toLocaleString()} COP</span>
+                  <strong className="block">Conciliación Datáfono / Transferencias</strong>
+                  <span>Declarado: ${totalElectronico.toLocaleString('es-CO')} COP • Sistema: ${teoricoElectronico.toLocaleString('es-CO')} COP</span>
                 </div>
                 <span className="font-mono font-bold">
-                  {diferenciaTarjeta === 0 ? '✓ Conciliado' : `Dif: $${diferenciaTarjeta.toLocaleString()} COP`}
+                  {diferenciaElectronico === 0
+                    ? '✓ Conciliado'
+                    : `Dif: ${diferenciaElectronico > 0 ? '+' : ''}$${diferenciaElectronico.toLocaleString('es-CO')} COP`}
                 </span>
               </div>
 
@@ -297,47 +429,47 @@ export const ArqueoCiegoModal: React.FC<Props> = ({
                   </div>
                   <div className="flex justify-between text-slate-400">
                     <span>Venta Comida (Alimentos):</span>
-                    <span className="text-white">${Number(cierreFinal.total_venta_comida).toLocaleString()}</span>
+                    <span className="text-white">${Number(cierreFinal.total_venta_comida).toLocaleString('es-CO')}</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
                     <span>Venta Bebida:</span>
-                    <span className="text-white">${Number(cierreFinal.total_venta_bebida).toLocaleString()}</span>
+                    <span className="text-white">${Number(cierreFinal.total_venta_bebida).toLocaleString('es-CO')}</span>
                   </div>
                   <div className="flex justify-between font-bold text-amber-400 pt-1 border-t border-slate-900">
                     <span>TOTAL VENTAS FACTURADAS:</span>
-                    <span>${Number(cierreFinal.total_ventas).toLocaleString()}</span>
+                    <span>${Number(cierreFinal.total_ventas).toLocaleString('es-CO')}</span>
                   </div>
                   <div className="flex justify-between text-slate-400 pt-2 border-t border-slate-900">
                     <span>Total Efectivo Recaudado:</span>
-                    <span className="text-emerald-400">${Number(cierreFinal.total_efectivo).toLocaleString()}</span>
+                    <span className="text-emerald-400">${Number(cierreFinal.total_efectivo).toLocaleString('es-CO')}</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
-                    <span>Total Tarjeta / Redeban:</span>
-                    <span className="text-sky-400">${Number(cierreFinal.total_tarjeta).toLocaleString()}</span>
+                    <span>Total Tarjeta / Datáfono:</span>
+                    <span className="text-sky-400">${Number(cierreFinal.total_tarjeta).toLocaleString('es-CO')}</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
                     <span>Total Transferencias QR:</span>
-                    <span className="text-indigo-400">${Number(cierreFinal.total_transferencia).toLocaleString()}</span>
+                    <span className="text-indigo-400">${Number(cierreFinal.total_transferencia).toLocaleString('es-CO')}</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
                     <span>Total DiDi Food:</span>
-                    <span className="text-orange-400">${(Number(cierreFinal.total_didi_tarjeta) + Number(cierreFinal.total_didi_efectivo)).toLocaleString()}</span>
+                    <span className="text-orange-400">${(Number(cierreFinal.total_didi_tarjeta) + Number(cierreFinal.total_didi_efectivo)).toLocaleString('es-CO')}</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
                     <span>Vales a Crédito ({cierreFinal.cantidad_vales}):</span>
-                    <span className="text-purple-400">${Number(cierreFinal.total_vale).toLocaleString()}</span>
+                    <span className="text-purple-400">${Number(cierreFinal.total_vale).toLocaleString('es-CO')}</span>
                   </div>
                   <div className="flex justify-between text-slate-400 pt-2 border-t border-slate-900">
                     <span>Entradas Caja Menor:</span>
-                    <span className="text-emerald-400">+${Number(cierreFinal.total_entradas_caja).toLocaleString()}</span>
+                    <span className="text-emerald-400">+${Number(cierreFinal.total_entradas_caja).toLocaleString('es-CO')}</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
                     <span>Salidas Caja Menor (Egresos):</span>
-                    <span className="text-rose-400">-${Number(cierreFinal.total_salidas_caja).toLocaleString()}</span>
+                    <span className="text-rose-400">-${Number(cierreFinal.total_salidas_caja).toLocaleString('es-CO')}</span>
                   </div>
                   <div className="flex justify-between font-black text-white text-sm pt-2 border-t border-slate-800">
                     <span>EFECTIVO FINAL ESPERADO EN CAJA:</span>
-                    <span className="text-emerald-400">${Number(cierreFinal.total_efectivo_final).toLocaleString()}</span>
+                    <span className="text-emerald-400">${Number(cierreFinal.total_efectivo_final).toLocaleString('es-CO')}</span>
                   </div>
                 </div>
               )}
@@ -426,7 +558,7 @@ export const ArqueoCiegoModal: React.FC<Props> = ({
             diferencia: totalEfectivoContado - Number(cierreFinal.total_efectivo_final),
             preparados_reutilizados: cierreFinal.preparados_reutilizados || 0,
             preparados_descartados: cierreFinal.preparados_descartados || 0,
-            notas: cierreFinal.notas || undefined
+            notas: cierreFinal.notas || undefined,
           }}
         />
       )}
