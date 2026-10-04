@@ -12,6 +12,7 @@ import {
   DollarSign,
   TrendingDown,
   ShieldAlert,
+  Pencil,
 } from 'lucide-react'
 import {
   getIngredientesApi,
@@ -62,6 +63,14 @@ export const InventarioTab: React.FC = () => {
   const [nuevoStock, setNuevoStock] = useState<number>(0)
   const [motivoAjuste, setMotivoAjuste] = useState('')
   const [guardandoAjuste, setGuardandoAjuste] = useState(false)
+
+  // Modal Editar Insumo
+  const [insumoEditando, setInsumoEditando] = useState<IngredienteItem | null>(null)
+  const [editNombre, setEditNombre] = useState('')
+  const [editCategoriaId, setEditCategoriaId] = useState<number | ''>('')
+  const [editCostoUnitario, setEditCostoUnitario] = useState<number>(0)
+  const [editStockMinimo, setEditStockMinimo] = useState<number>(0)
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false)
 
   // Modal Kardex / Movimientos
   const [insumoKardex, setInsumoKardex] = useState<IngredienteItem | null>(null)
@@ -197,6 +206,37 @@ export const InventarioTab: React.FC = () => {
       alert(err.response?.data?.detail || 'Error al ajustar stock')
     } finally {
       setGuardandoAjuste(false)
+    }
+  }
+
+  // Abrir Modal Editar Insumo
+  const handleAbrirEditar = (ing: IngredienteItem) => {
+    setInsumoEditando(ing)
+    setEditNombre(ing.nombre)
+    setEditCategoriaId(ing.categoria_insumo_id ?? '')
+    setEditCostoUnitario(Number(ing.costo_unitario) || 0)
+    setEditStockMinimo(Number(ing.stock_minimo) || 0)
+  }
+
+  // Guardar Edición de Insumo
+  const handleGuardarEdicion = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!insumoEditando) return
+    setGuardandoEdicion(true)
+    try {
+      await actualizarIngredienteApi(insumoEditando.id, {
+        nombre: editNombre.trim(),
+        categoria_insumo_id: editCategoriaId === '' ? null : Number(editCategoriaId),
+        costo_unitario: Number(editCostoUnitario),
+        stock_minimo: Number(editStockMinimo),
+      })
+      setMensajeExito(`✓ Insumo "${editNombre.trim()}" actualizado correctamente.`)
+      setInsumoEditando(null)
+      cargarDatos()
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error al actualizar insumo')
+    } finally {
+      setGuardandoEdicion(false)
     }
   }
 
@@ -474,6 +514,15 @@ export const InventarioTab: React.FC = () => {
                       <td className="p-3.5 text-center">{estadoBadge}</td>
                       <td className="p-3.5 text-center">
                         <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => handleAbrirEditar(ing)}
+                            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
+                            title="Editar Insumo (Precio, nombre, categoría, stock mínimo)"
+                          >
+                            <Pencil className="w-3 h-3 text-amber-400" />
+                            <span>Editar</span>
+                          </button>
+
                           <button
                             onClick={() => {
                               setInsumoAjustando(ing)
@@ -867,6 +916,127 @@ export const InventarioTab: React.FC = () => {
                 Cerrar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL 5: EDITAR INSUMO (PRECIO / COSTO, NOMBRE, ETC.) */}
+      {/* ======================================================== */}
+      {insumoEditando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+              <h3 className="text-sm font-black text-white flex items-center gap-2">
+                <Pencil className="w-4 h-4 text-amber-400" />
+                Editar Insumo: {insumoEditando.nombre}
+              </h3>
+              <button onClick={() => setInsumoEditando(null)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleGuardarEdicion} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 font-bold mb-1">Nombre del Insumo</label>
+                <input
+                  type="text"
+                  required
+                  value={editNombre}
+                  onChange={(e) => setEditNombre(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-purple-500 font-bold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 font-bold mb-1">Categoría</label>
+                  <select
+                    value={editCategoriaId}
+                    onChange={(e) => setEditCategoriaId(e.target.value ? Number(e.target.value) : '')}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="">(Sin categoría)</option>
+                    {categorias.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 font-bold mb-1">Unidad Base</label>
+                  <input
+                    type="text"
+                    disabled
+                    value={insumoEditando.unidad_base}
+                    className="w-full bg-slate-950/60 border border-slate-800 rounded-xl p-2.5 text-slate-400 font-bold cursor-not-allowed"
+                    title="La unidad base no se modifica para proteger las recetas calculadas"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 font-bold mb-1">
+                    Costo / Precio Unitario ($ COP)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-mono font-bold">$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      required
+                      value={editCostoUnitario}
+                      onChange={(e) => setEditCostoUnitario(parseFloat(e.target.value) || 0)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 pl-7 pr-3 text-emerald-400 font-mono font-bold text-sm focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Costo por cada 1 {insumoEditando.unidad_base}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 font-bold mb-1">Stock Mínimo (Alerta)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    required
+                    value={editStockMinimo}
+                    onChange={(e) => setEditStockMinimo(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono font-bold focus:outline-none focus:border-purple-500"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    En {insumoEditando.unidad_base}
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-purple-950/30 border border-purple-900/50 rounded-xl text-[11px] text-purple-300">
+                💡 <strong>Impacto en Recetas:</strong> Al actualizar el costo unitario de este insumo, se recalculará automáticamente el costo de preparación y margen de rentabilidad de todos los platos que lo contengan.
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setInsumoEditando(null)}
+                  className="px-4 py-2 rounded-xl text-slate-400 hover:text-white cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={guardandoEdicion}
+                  className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 font-bold text-white shadow-lg cursor-pointer"
+                >
+                  {guardandoEdicion ? 'Guardando...' : 'Guardar Cambios'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
