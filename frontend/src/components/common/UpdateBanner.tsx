@@ -14,6 +14,9 @@ export const UpdateBanner: React.FC = () => {
     navigator.serviceWorker.ready.then((reg) => {
       registration = reg
 
+      // Forzar chequeo de actualización inmediato al abrir la aplicación
+      reg.update().catch(() => {})
+
       // Escuchar si ya hay un worker esperando
       if (reg.waiting) {
         setHasUpdate(true)
