@@ -401,6 +401,18 @@ control avanzado de merma (conteo vs teórico), exportaciones a Excel.
    - Se incorporó un botón visible de **"Cerrar"** en el pie del diálogo, se agrandó el área táctil del botón **X** para pantallas móviles y se habilitó el cierre automático al tocar fuera del modal (backdrop click).
 5. **Autenticación y Concurrencia de Base de Datos Blindada:**
    - Sincronización de credenciales internas en el contenedor de PostgreSQL local (`ALTER ROLE`) y blindaje de bloqueos pesimistas (`SELECT ... FOR UPDATE`) para evitar colisiones entre cajeros y meseros.
+6. **Edición Directa y Ajuste de Costos de Insumos (`InventarioTab.tsx`):**
+   - Incorporación del botón de acción y modal **`✏️ Editar`** en la tabla de insumos del panel de administración.
+   - Permite al administrador ajustar directamente el **Costo / Precio Unitario ($ COP)**, **Nombre**, **Categoría** y **Stock Mínimo** de cualquier materia prima sin depender exclusivamente de facturas de compra.
+   - Al modificar el costo de un insumo, el sistema actualiza automáticamente el costo de producción y los márgenes de ganancia de todas las recetas y productos del menú asociados.
+7. **Control Integral de Domicilios DiDi Food:**
+   - Soporte nativo de canal de venta `DIDI` con validación y captura obligatoria del identificador de orden (`didi_orden_id`).
+   - Visualización y alerta dedicada en KDS de Cocina en tono naranja DiDi y separación en pestañas operativas.
+   - Métodos de pago contables en caja `DIDI_TARJETA` (consignación diferida de la plataforma) y `DIDI_EFECTIVO` (pago en mostrador por repartidor) para cuadre perfecto del arqueo diario y auditoría de liquidaciones.
+8. **Políticas de Despliegue PWA y Cache-Busting Inmediato en Firebase:**
+   - Cabeceras HTTP `Cache-Control: no-cache, no-store, must-revalidate` en `firebase.json` para `index.html`, `sw.js` y manifiesto web.
+   - Configuración de Workbox en `vite.config.ts` con `skipWaiting: true`, `clientsClaim: true` y `cleanupOutdatedCaches: true`.
+   - Verificación inmediata de versión en segundo plano desde el montaje de `UpdateBanner.tsx`, asegurando propagación Over-The-Air instantánea a dispositivos Android y navegadores de escritorio.
 
 ---
 
