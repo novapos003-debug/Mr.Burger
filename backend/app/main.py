@@ -90,6 +90,15 @@ async def lifespan(app: FastAPI):
             conn.execute(text("UPDATE ingrediente SET precio_venta = 300.00 WHERE nombre ILIKE '%Bolsa T25%' AND (precio_venta IS NULL OR precio_venta = 0);"))
             conn.execute(text("UPDATE ingrediente SET precio_venta = 400.00 WHERE nombre ILIKE '%Bolsa T30%' AND (precio_venta IS NULL OR precio_venta = 0);"))
             conn.execute(text("UPDATE ingrediente SET precio_venta = 500.00 WHERE nombre ILIKE '%Bolsa T40%' AND (precio_venta IS NULL OR precio_venta = 0);"))
+
+            # Poblar recetas base oficiales para productos que no tengan receta configurada
+            try:
+                from app.services.seed_recetas import sembrar_recetas_base
+                sembrar_recetas_base(conn)
+            except Exception as err_recetas:
+                import logging
+                logging.warning("Aviso al sembrar recetas base: %s", err_recetas)
+
             conn.commit()
     except Exception as e:
         import logging
