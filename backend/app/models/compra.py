@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Numeric, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -12,6 +12,7 @@ class Compra(Base):
     proveedor_id = Column(Integer, ForeignKey("proveedor.id"))
     usuario_id = Column(Integer, ForeignKey("usuario.id"), nullable=False)
     descripcion = Column(Text)
+    es_demo = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
     creado_en = Column(DateTime(timezone=True), server_default=func.now())
 
     proveedor = relationship("Proveedor")

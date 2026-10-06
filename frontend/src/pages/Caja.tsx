@@ -718,6 +718,10 @@ export const Caja: React.FC = () => {
         ivaPorcentaje={Number(configLocal.iva_porcentaje) || 0}
         onClose={() => setPedidoParaCobro(null)}
         onSuccess={handleCobroExitoso}
+        onPedidoActualizado={(updated) => {
+          setPedidoParaCobro(updated)
+          setPedidos((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+        }}
       />
 
       <MovimientosModal

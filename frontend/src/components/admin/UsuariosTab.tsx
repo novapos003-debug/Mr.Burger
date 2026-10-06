@@ -12,12 +12,16 @@ import {
   UserX,
   X,
   RefreshCw,
+  Pin,
+  PinOff,
+  FlaskConical,
 } from 'lucide-react'
 import {
   getUsuariosApi,
   crearUsuarioApi,
   resetPasswordUsuarioApi,
   cambiarEstadoUsuarioApi,
+  cambiarMarcasUsuarioApi,
 } from '../../api/admin'
 import { cambiarMiPasswordApi } from '../../api/auth'
 import type { UsuarioAdminItem, UsuarioCreateInput } from '../../types/admin'
@@ -48,9 +52,12 @@ export const UsuariosTab: React.FC = () => {
     usuario: '',
     password: '',
     rol: 'mesero',
+    fijado: false,
+    es_demo: false,
   })
   const [guardandoNuevo, setGuardandoNuevo] = useState(false)
   const [errorNuevo, setErrorNuevo] = useState('')
+  const [actualizandoMarcaId, setActualizandoMarcaId] = useState<number | null>(null)
 
   const cargarUsuarios = async () => {
     try {
@@ -117,7 +124,7 @@ export const UsuariosTab: React.FC = () => {
       setGuardandoNuevo(true)
       await crearUsuarioApi(nuevoForm)
       setModalCrearAbierto(false)
-      setNuevoForm({ nombre: '', usuario: '', password: '', rol: 'mesero' })
+      setNuevoForm({ nombre: '', usuario: '', password: '', rol: 'mesero', fijado: false, es_demo: false })
       cargarUsuarios()
     } catch (err: any) {
       const msg = err.response?.data?.detail || 'Error al crear el usuario.'
@@ -164,6 +171,38 @@ export const UsuariosTab: React.FC = () => {
       cargarUsuarios()
     } catch (err: any) {
       alert(err.response?.data?.detail || `Error al ${accion} el usuario.`)
+    }
+  }
+
+  // Alternar protección / fijado contra resets
+  const handleToggleFijado = async (u: UsuarioAdminItem) => {
+    try {
+      setActualizandoMarcaId(u.id)
+      const nuevoFijado = !u.fijado
+      await cambiarMarcasUsuarioApi(u.id, { fijado: nuevoFijado })
+      setUsuarios((prev) =>
+        prev.map((item) => (item.id === u.id ? { ...item, fijado: nuevoFijado } : item))
+      )
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error al cambiar la protección del usuario.')
+    } finally {
+      setActualizandoMarcaId(null)
+    }
+  }
+
+  // Alternar marca de cuenta de prueba / demo
+  const handleToggleDemo = async (u: UsuarioAdminItem) => {
+    try {
+      setActualizandoMarcaId(u.id)
+      const nuevoDemo = !u.es_demo
+      await cambiarMarcasUsuarioApi(u.id, { es_demo: nuevoDemo })
+      setUsuarios((prev) =>
+        prev.map((item) => (item.id === u.id ? { ...item, es_demo: nuevoDemo } : item))
+      )
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error al modificar marca demo del usuario.')
+    } finally {
+      setActualizandoMarcaId(null)
     }
   }
 
@@ -388,7 +427,27 @@ export const UsuariosTab: React.FC = () => {
                   usuariosFiltrados.map((u) => (
                     <tr key={u.id} className="hover:bg-slate-800/40 transition-colors">
                       <td className="py-3 px-3">
-                        <div className="font-semibold text-white">{u.nombre}</div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-semibold text-white">{u.nombre}</span>
+                          {u.fijado && (
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-sky-950/80 text-sky-300 border border-sky-700/60"
+                              title="Cuenta fijada: protegida contra restablecimientos del sistema"
+                            >
+                              <Pin className="w-2.5 h-2.5 text-sky-400" />
+                              Protegido
+                            </span>
+                          )}
+                          {u.es_demo && (
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-950/80 text-amber-300 border border-amber-700/60"
+                              title="Cuenta demo: sus operaciones se registran para limpieza selectiva"
+                            >
+                              <FlaskConical className="w-2.5 h-2.5 text-amber-400" />
+                              Demo
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[11px] text-slate-400 font-mono">@{u.usuario}</div>
                       </td>
                       <td className="py-3 px-3">{getRolBadge(u.rol)}</td>
@@ -407,6 +466,38 @@ export const UsuariosTab: React.FC = () => {
                       </td>
                       <td className="py-3 px-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => handleToggleFijado(u)}
+                            disabled={actualizandoMarcaId === u.id}
+                            title={
+                              u.fijado
+                                ? 'Cuenta protegida contra borrado (Clic para desproteger)'
+                                : 'Fijar/proteger esta cuenta contra restablecimientos de fábrica'
+                            }
+                            className={`p-1.5 rounded-md border transition-colors ${
+                              u.fijado
+                                ? 'bg-sky-950/70 hover:bg-sky-900/70 text-sky-300 border-sky-700/60'
+                                : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-sky-300 border-slate-700/60'
+                            }`}
+                          >
+                            {u.fijado ? <Pin className="w-3.5 h-3.5 text-sky-400" /> : <PinOff className="w-3.5 h-3.5" />}
+                          </button>
+                          <button
+                            onClick={() => handleToggleDemo(u)}
+                            disabled={actualizandoMarcaId === u.id}
+                            title={
+                              u.es_demo
+                                ? 'Cuenta de prueba / demo (Clic para quitar marca)'
+                                : 'Marcar como cuenta de prueba / demo'
+                            }
+                            className={`p-1.5 rounded-md border transition-colors ${
+                              u.es_demo
+                                ? 'bg-amber-950/70 hover:bg-amber-900/70 text-amber-300 border-amber-700/60'
+                                : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-300 border-slate-700/60'
+                            }`}
+                          >
+                            <FlaskConical className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             onClick={() => {
                               setUsuarioSeleccionado(u)
@@ -514,6 +605,43 @@ export const UsuariosTab: React.FC = () => {
                   onChange={(e) => setNuevoForm({ ...nuevoForm, password: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
                 />
+              </div>
+
+              {/* Opciones de Protección y Demo */}
+              <div className="space-y-2 pt-2 border-t border-slate-800/80">
+                <label className="flex items-start gap-2.5 cursor-pointer bg-slate-950/60 p-2.5 rounded-lg border border-slate-800 hover:border-slate-700 transition">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(nuevoForm.fijado)}
+                    onChange={(e) => setNuevoForm({ ...nuevoForm, fijado: e.target.checked })}
+                    className="mt-0.5 rounded border-slate-700 text-amber-500 focus:ring-0 bg-slate-900"
+                  />
+                  <div className="text-xs">
+                    <span className="font-bold text-white flex items-center gap-1">
+                      <Pin className="w-3 h-3 text-sky-400" /> Proteger y fijar esta cuenta
+                    </span>
+                    <p className="text-[11px] text-slate-400 leading-tight mt-0.5">
+                      Recomendado para dueños y administradores. Esta cuenta nunca se borrará al restablecer el sistema.
+                    </p>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer bg-slate-950/60 p-2.5 rounded-lg border border-slate-800 hover:border-slate-700 transition">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(nuevoForm.es_demo)}
+                    onChange={(e) => setNuevoForm({ ...nuevoForm, es_demo: e.target.checked })}
+                    className="mt-0.5 rounded border-slate-700 text-amber-500 focus:ring-0 bg-slate-900"
+                  />
+                  <div className="text-xs">
+                    <span className="font-bold text-white flex items-center gap-1">
+                      <FlaskConical className="w-3 h-3 text-amber-400" /> Cuenta de pruebas / Demo
+                    </span>
+                    <p className="text-[11px] text-slate-400 leading-tight mt-0.5">
+                      Marca que los pedidos, cobros y turnos de este usuario son de prueba y podrán limpiarse con un clic.
+                    </p>
+                  </div>
+                </label>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">

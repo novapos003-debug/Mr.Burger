@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import type { Pedido } from '../../types/mesero'
 import type { MetodoPago, CobroIn, CobroOut, PagoIn } from '../../types/caja'
-import { cobrarPedido } from '../../api/caja'
+import { cobrarPedido, cambiarTipoConsumoApi } from '../../api/caja'
 import {
   X,
   DollarSign,
@@ -21,9 +21,17 @@ interface Props {
   ivaPorcentaje?: number
   onClose: () => void
   onSuccess: (resultado: CobroOut) => void
+  onPedidoActualizado?: (pedido: Pedido) => void
 }
 
-export const CobroModal: React.FC<Props> = ({ isOpen, pedido, ivaPorcentaje = 0, onClose, onSuccess }) => {
+export const CobroModal: React.FC<Props> = ({
+  isOpen,
+  pedido,
+  ivaPorcentaje = 0,
+  onClose,
+  onSuccess,
+  onPedidoActualizado,
+}) => {
   const [metodo, setMetodo] = useState<MetodoPago | 'MIXTO'>('EFECTIVO')
   const [recibidoEfectivo, setRecibidoEfectivo] = useState<number>(0)
   const [refTarjeta, setRefTarjeta] = useState<string>('')
@@ -42,15 +50,19 @@ export const CobroModal: React.FC<Props> = ({ isOpen, pedido, ivaPorcentaje = 0,
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pedidoActual, setPedidoActual] = useState<Pedido | null>(pedido)
+  const [cambiandoTipo, setCambiandoTipo] = useState(false)
 
-  const total = Number(pedido?.total || 0)
+  const total = Number(pedidoActual?.total || 0)
   const yaPagado = Boolean(
-    pedido && (pedido.pagado_en !== null || pedido.estado === 'PAGADO' || pedido.estado === 'CERRADO')
+    pedidoActual && (pedidoActual.pagado_en !== null || pedidoActual.estado === 'PAGADO' || pedidoActual.estado === 'CERRADO')
   )
 
   useEffect(() => {
     if (pedido) {
-      setRecibidoEfectivo(total)
+      setPedidoActual(pedido)
+      const t = Number(pedido.total || 0)
+      setRecibidoEfectivo(t)
       if (pedido.canal === 'DIDI') {
         setMetodo('DIDI_TARJETA')
       } else {
@@ -64,15 +76,38 @@ export const CobroModal: React.FC<Props> = ({ isOpen, pedido, ivaPorcentaje = 0,
       setError(null)
 
       // Configurar líneas mixtas por defecto
-      const mitad = Math.floor(total / 2)
+      const mitad = Math.floor(t / 2)
       setLineasMixtas([
         { metodo: 'EFECTIVO', monto: mitad, recibido: mitad },
-        { metodo: 'TARJETA', monto: total - mitad },
+        { metodo: 'TARJETA', monto: t - mitad },
       ])
     }
-  }, [pedido, total])
+  }, [pedido])
 
-  if (!isOpen || !pedido) return null
+  const handleCambiarTipoConsumo = async (nuevoTipo: 'LOCAL' | 'LLEVAR') => {
+    if (!pedidoActual || yaPagado || pedidoActual.tipo_consumo === nuevoTipo) return
+    try {
+      setCambiandoTipo(true)
+      const actualizado = await cambiarTipoConsumoApi(pedidoActual.id, nuevoTipo)
+      setPedidoActual(actualizado)
+      const nuevoTotal = Number(actualizado.total || 0)
+      setRecibidoEfectivo(nuevoTotal)
+      const mitad = Math.floor(nuevoTotal / 2)
+      setLineasMixtas([
+        { metodo: 'EFECTIVO', monto: mitad, recibido: mitad },
+        { metodo: 'TARJETA', monto: nuevoTotal - mitad },
+      ])
+      if (onPedidoActualizado) {
+        onPedidoActualizado(actualizado)
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Error al cambiar tipo de consumo')
+    } finally {
+      setCambiandoTipo(false)
+    }
+  }
+
+  if (!isOpen || !pedidoActual) return null
 
   // Cálculo del cambio en efectivo
   const cambioEfectivo = Math.max(0, recibidoEfectivo - total)
@@ -100,7 +135,7 @@ export const CobroModal: React.FC<Props> = ({ isOpen, pedido, ivaPorcentaje = 0,
           metodo: l.metodo,
           monto: Number(l.monto),
           recibido: l.metodo === 'EFECTIVO' ? Number(l.recibido || l.monto) : null,
-          didi_orden_id: pedido.didi_orden_id,
+          didi_orden_id: pedidoActual.didi_orden_id,
         }))
 
         payload = { pagos }
@@ -146,7 +181,7 @@ export const CobroModal: React.FC<Props> = ({ isOpen, pedido, ivaPorcentaje = 0,
             {
               metodo,
               monto: total,
-              didi_orden_id: pedido.didi_orden_id || `DIDI-${pedido.consecutivo}`,
+              didi_orden_id: pedidoActual.didi_orden_id || `DIDI-${pedidoActual.consecutivo}`,
               recibido: metodo === 'DIDI_EFECTIVO' ? total : null,
             },
           ],
@@ -173,7 +208,7 @@ export const CobroModal: React.FC<Props> = ({ isOpen, pedido, ivaPorcentaje = 0,
         throw new Error('Método de pago no reconocido')
       }
 
-      const resultado = await cobrarPedido(pedido.id, payload)
+      const resultado = await cobrarPedido(pedidoActual.id, payload)
       
       // Abrir cajón monedero si hubo pago en efectivo
       const tieneEfectivo = payload.pagos.some(p => p.metodo === 'EFECTIVO' || p.metodo === 'DIDI_EFECTIVO')
@@ -213,11 +248,16 @@ export const CobroModal: React.FC<Props> = ({ isOpen, pedido, ivaPorcentaje = 0,
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="font-black text-white text-lg tracking-wide">
-                  {yaPagado ? `Detalle de Pedido #${pedido.consecutivo}` : `Cobrar Pedido #${pedido.consecutivo}`}
+                  {yaPagado ? `Detalle de Pedido #${pedidoActual.consecutivo}` : `Cobrar Pedido #${pedidoActual.consecutivo}`}
                 </h2>
                 <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700">
-                  {pedido.canal === 'MESA' ? `Mesa ${pedido.mesa_numero}` : pedido.canal}
+                  {pedidoActual.canal === 'MESA' ? `Mesa ${pedidoActual.mesa_numero}` : pedidoActual.canal}
                 </span>
+                {pedidoActual.tipo_consumo === 'LLEVAR' && (
+                  <span className="px-2 py-0.5 rounded text-xs font-bold bg-orange-950 text-orange-300 border border-orange-800">
+                    🥡 Para Llevar
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-400">
                 {yaPagado ? 'Este pedido ya fue pagado y procesado' : 'Selecciona el medio de pago y registra la transacción'}
@@ -233,11 +273,47 @@ export const CobroModal: React.FC<Props> = ({ isOpen, pedido, ivaPorcentaje = 0,
         </div>
 
         {/* Cuerpo */}
-        <div className="p-5 overflow-y-auto space-y-5 flex-1">
+        <div className="p-5 overflow-y-auto space-y-4 flex-1">
           {error && (
             <div className="p-3 bg-rose-950/80 border border-rose-800 text-rose-300 rounded-xl text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
               <span>{error}</span>
+            </div>
+          )}
+
+          {/* Selector interactivo de Consumo (Comer Aquí / Para Llevar) */}
+          {!yaPagado && (
+            <div className="bg-slate-950/80 p-2 rounded-2xl border border-slate-800 flex items-center justify-between gap-2">
+              <span className="text-xs font-bold text-slate-300 ml-2 flex items-center gap-2">
+                <span>Destino del pedido:</span>
+                {cambiandoTipo && <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />}
+              </span>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  disabled={cambiandoTipo}
+                  onClick={() => handleCambiarTipoConsumo('LOCAL')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    (pedidoActual.tipo_consumo || 'LOCAL') === 'LOCAL'
+                      ? 'bg-sky-600 text-white shadow-md'
+                      : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  <span>🍽️ Comer Aquí</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={cambiandoTipo}
+                  onClick={() => handleCambiarTipoConsumo('LLEVAR')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    pedidoActual.tipo_consumo === 'LLEVAR'
+                      ? 'bg-orange-600 text-white shadow-md'
+                      : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  <span>🥡 Para Llevar</span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -253,25 +329,25 @@ export const CobroModal: React.FC<Props> = ({ isOpen, pedido, ivaPorcentaje = 0,
             </div>
 
             <div className="text-xs text-slate-400 space-y-1 sm:text-right border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-800">
-              {pedido.subtotal && (
-                <div>Subtotal base: <strong className="text-slate-200 font-mono">${Number(pedido.subtotal).toLocaleString('es-CO')}</strong></div>
+              {pedidoActual.subtotal && (
+                <div>Subtotal base: <strong className="text-slate-200 font-mono">${Number(pedidoActual.subtotal).toLocaleString('es-CO')}</strong></div>
               )}
-              {pedido.recargo_empaque && Number(pedido.recargo_empaque) > 0 && (
+              {pedidoActual.recargo_empaque && Number(pedidoActual.recargo_empaque) > 0 ? (
                 <div className="text-orange-400 font-semibold">
-                  🥡 Recargo empaque llevar: <strong className="font-mono text-amber-300">+${Number(pedido.recargo_empaque).toLocaleString('es-CO')}</strong>
+                  🥡 Recargo empaque llevar: <strong className="font-mono text-amber-300">+${Number(pedidoActual.recargo_empaque).toLocaleString('es-CO')}</strong>
                 </div>
-              )}
-              {pedido.iva && Number(pedido.iva) > 0 ? (
+              ) : null}
+              {pedidoActual.iva && Number(pedidoActual.iva) > 0 ? (
                 <div>
                   IVA ({ivaPorcentaje && ivaPorcentaje > 0 ? ivaPorcentaje : 19}% inc.):{' '}
-                  <strong className="text-slate-200 font-mono">${Number(pedido.iva).toLocaleString('es-CO')}</strong>
+                  <strong className="text-slate-200 font-mono">${Number(pedidoActual.iva).toLocaleString('es-CO')}</strong>
                 </div>
               ) : (
                 <div>
                   IVA: <strong className="text-emerald-400 font-semibold">Exento (0%)</strong>
                 </div>
               )}
-              <div>Productos: <strong className="text-slate-200">{pedido.detalles?.length || 0} ítems</strong></div>
+              <div>Productos: <strong className="text-slate-200">{pedidoActual.detalles?.length || 0} ítems</strong></div>
             </div>
           </div>
 
@@ -332,7 +408,7 @@ export const CobroModal: React.FC<Props> = ({ isOpen, pedido, ivaPorcentaje = 0,
                 <span className="text-xs">Nequi/QR</span>
               </button>
 
-              {pedido.canal === 'DIDI' && (
+              {pedidoActual.canal === 'DIDI' && (
                 <button
                   type="button"
                   onClick={() => setMetodo('DIDI_TARJETA')}
@@ -504,7 +580,7 @@ export const CobroModal: React.FC<Props> = ({ isOpen, pedido, ivaPorcentaje = 0,
                 </button>
               </div>
               <p className="text-xs text-slate-400">
-                Orden DiDi: <strong>{pedido.didi_orden_id || 'ID Automático'}</strong>
+                Orden DiDi: <strong>{pedidoActual.didi_orden_id || 'ID Automático'}</strong>
               </p>
             </div>
           )}

@@ -189,6 +189,8 @@ export interface UsuarioAdminItem {
   rol_id: number
   rol: 'admin' | 'cajero' | 'mesero' | 'cocina' | string
   activo: boolean
+  fijado?: boolean
+  es_demo?: boolean
   creado_en: string
 }
 
@@ -197,4 +199,30 @@ export interface UsuarioCreateInput {
   usuario: string
   password: string
   rol: 'admin' | 'cajero' | 'mesero' | 'cocina'
+  fijado?: boolean
+  es_demo?: boolean
+}
+
+export interface ResetSistemaInput {
+  password_admin: string
+  solo_demo?: boolean
+  transacciones?: boolean
+  inventario?: boolean
+  insumos?: boolean
+  menu?: boolean
+  usuarios?: boolean
+}
+
+export interface ResetResumenOut {
+  pedidos_demo: number
+  pedidos_total: number
+  movimientos_caja_demo: number
+  turnos_caja_demo: number
+  usuarios_demo: number
+  usuarios_fijados: number
+  usuarios_borrables: number
+  ingredientes: number
+  productos: number
+  categorias: number
+  compras: number
 }

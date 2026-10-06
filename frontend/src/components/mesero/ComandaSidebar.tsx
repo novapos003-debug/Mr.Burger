@@ -177,7 +177,9 @@ export const ComandaSidebar: React.FC<Props> = ({
           </div>
         ) : (
           items.map((item) => {
-            const lineaTotal = item.precio_unitario * item.cantidad
+            const recargoUnitario = tipoConsumo === 'LLEVAR' ? Number(item.producto.recargo_llevar || 0) : 0
+            const precioUnitarioEfectivo = item.precio_unitario + recargoUnitario
+            const lineaTotal = precioUnitarioEfectivo * item.cantidad
             return (
               <div
                 key={item.uid}
@@ -189,7 +191,9 @@ export const ComandaSidebar: React.FC<Props> = ({
                       <h5 className="text-xs font-bold text-white truncate mr-1">
                         {item.producto.nombre}
                       </h5>
-                      <span className="text-xs font-black font-mono text-emerald-400 shrink-0">
+                      <span className={`text-xs font-black font-mono shrink-0 ${
+                        tipoConsumo === 'LLEVAR' && recargoUnitario > 0 ? 'text-amber-300' : 'text-emerald-400'
+                      }`}>
                         ${lineaTotal.toLocaleString('es-CO')}
                       </span>
                     </div>
@@ -256,8 +260,15 @@ export const ComandaSidebar: React.FC<Props> = ({
 
                 {/* Stepper de Cantidad */}
                 <div className="flex items-center justify-between pt-1 border-t border-slate-900 text-[10px]">
-                  <span className="text-slate-500 font-mono">
-                    ${item.precio_unitario.toLocaleString('es-CO')} c/u
+                  <span className={`font-mono ${
+                    tipoConsumo === 'LLEVAR' && recargoUnitario > 0 ? 'text-amber-300 font-semibold' : 'text-slate-500'
+                  }`}>
+                    ${precioUnitarioEfectivo.toLocaleString('es-CO')} c/u
+                    {tipoConsumo === 'LLEVAR' && recargoUnitario > 0 && (
+                      <span className="text-[9px] text-orange-400 ml-1">
+                        (base ${item.precio_unitario.toLocaleString('es-CO')} + emp. ${recargoUnitario.toLocaleString('es-CO')})
+                      </span>
+                    )}
                   </span>
 
                   <div className="flex items-center gap-2 bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-800">

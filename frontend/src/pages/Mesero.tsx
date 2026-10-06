@@ -448,6 +448,7 @@ export const Mesero: React.FC = () => {
             <CatalogoMesero
               categorias={categorias}
               productos={productos}
+              tipoConsumo={tipoConsumo}
               onSelectProducto={(p) => setModalProducto(p)}
               onQuickAdd={handleQuickAdd}
             />

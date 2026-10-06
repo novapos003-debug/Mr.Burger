@@ -92,3 +92,11 @@ export const getAdicionesApi = async (): Promise<AdicionExtra[]> => {
   return res.data
 }
 
+export const cambiarTipoConsumoApi = async (
+  pedidoId: number,
+  tipoConsumo: 'LOCAL' | 'LLEVAR'
+): Promise<Pedido> => {
+  const res = await api.patch<Pedido>(`/pedidos/${pedidoId}/tipo-consumo`, { tipo_consumo: tipoConsumo })
+  return res.data
+}
+

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -19,6 +19,7 @@ class HistorialAccion(Base):
     entidad = Column(String(50))
     entidad_id = Column(Integer)
     detalle = Column(Text)
+    es_demo = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
     creado_en = Column(DateTime(timezone=True), server_default=func.now())
 
     usuario = relationship("Usuario")

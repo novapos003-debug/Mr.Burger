@@ -1,5 +1,6 @@
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -403,6 +404,62 @@ async def enviar_a_cocina(
             "canal": pedido.canal,
             "mesa": pedido.mesa.numero if pedido.mesa else None,
         },
+    )
+    return pedido_out(db, pedido, usuario)
+
+
+class TipoConsumoIn(BaseModel):
+    tipo_consumo: str = Field(pattern="^(LOCAL|LLEVAR)$")
+
+
+@router.patch("/{pedido_id}/tipo-consumo", response_model=PedidoOut)
+async def cambiar_tipo_consumo(
+    pedido_id: int,
+    data: TipoConsumoIn,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(staff_required),
+):
+    """Conmuta un pedido abierto entre 'Comer aquí' y 'Para llevar' y recalcula el total
+    (suma o quita los empaques marcados 'solo llevar' de las recetas). Solo antes de cobrar."""
+    if usuario.rol.nombre not in CREAN_PEDIDO:
+        raise HTTPException(status_code=403, detail="Solo mesero, caja o admin")
+
+    pedido = (
+        db.query(Pedido)
+        .options(joinedload(Pedido.detalles).joinedload(DetallePedido.producto), joinedload(Pedido.mesa))
+        .filter(Pedido.id == pedido_id)
+        .first()
+    )
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if pedido.estado in ("CERRADO", "CANCELADO", "PAGADO") or pedido.pagado_en is not None:
+        raise HTTPException(status_code=409, detail="El pedido ya fue cobrado, cerrado o cancelado")
+
+    activos = [d for d in pedido.detalles if d.estado != "CANCELADO"]
+    totales = calcular_totales(db, activos)
+
+    recargo_empaque = Decimal("0")
+    if data.tipo_consumo == "LLEVAR":
+        from app.services.inventario import calcular_recargo_empaque
+        recargo_empaque, _ = calcular_recargo_empaque(db, activos)
+
+    anterior = pedido.tipo_consumo
+    pedido.tipo_consumo = data.tipo_consumo
+    pedido.recargo_empaque = recargo_empaque
+    pedido.subtotal = totales["subtotal"]
+    pedido.iva = totales["iva"]
+    pedido.total = totales["total"] + recargo_empaque
+
+    registrar(
+        db, usuario, "CAMBIAR_TIPO_CONSUMO", "pedido", pedido.id,
+        f"{anterior}->{data.tipo_consumo} recargo={recargo_empaque} total={pedido.total}",
+    )
+    safe_commit(db)
+    db.refresh(pedido)
+
+    await await_broadcast(
+        "pedido_actualizado",
+        {"pedido_id": pedido.id, "consecutivo": pedido.consecutivo, "tipo_consumo": pedido.tipo_consumo},
     )
     return pedido_out(db, pedido, usuario)
 

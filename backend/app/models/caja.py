@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Column,
     DateTime,
@@ -54,6 +55,7 @@ class Cierre(Base):
     total_efectivo_final = Column(Numeric(12, 2), nullable=False, default=0)
     total_por_cobrar = Column(Numeric(12, 2), nullable=False, default=0)
     notas = Column(Text)
+    es_demo = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
 
 
 class Pago(Base):
@@ -76,6 +78,7 @@ class Pago(Base):
     devuelto_en = Column(DateTime(timezone=True))
     motivo_devolucion = Column(Text)
     pagado_en = Column(DateTime(timezone=True), server_default=func.now())
+    es_demo = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
 
     pedido = relationship("Pedido", back_populates="pagos")
     usuario = relationship("Usuario", foreign_keys=[usuario_id])
@@ -104,6 +107,7 @@ class Vale(Base):
     estado = Column(String(15), nullable=False, default="PENDIENTE")
     cobrado_por = Column(Integer, ForeignKey("usuario.id"))
     cobrado_en = Column(DateTime(timezone=True))
+    es_demo = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
     creado_en = Column(DateTime(timezone=True), server_default=func.now())
 
     pedido = relationship("Pedido")
@@ -129,6 +133,7 @@ class MovimientoCaja(Base):
     pedido_id = Column(Integer, ForeignKey("pedido.id"))
     vale_id = Column(Integer, ForeignKey("vale.id"))
     cierre_id = Column(Integer, ForeignKey("cierre.id"), index=True)
+    es_demo = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
     creado_en = Column(DateTime(timezone=True), server_default=func.now())
 
     usuario = relationship("Usuario")

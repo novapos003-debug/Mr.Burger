@@ -19,6 +19,8 @@ from app.models.sync import RegistroSync
 from app.models.usuario import Rol, Usuario
 from app.models.asistencia import TurnoLaboral
 
+import app.core.demo  # noqa: E402,F401  (registra los listeners de trazabilidad demo)
+
 __all__ = [
     "Categoria",
     "CategoriaInsumo",

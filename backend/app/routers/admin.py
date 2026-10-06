@@ -158,13 +158,29 @@ def actualizar_configuracion(
 # GESTIÓN DE USUARIOS Y ROLES (ADMINISTRACIÓN)
 # ============================================================
 from app.models import Rol
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 from app.schemas.admin import (
+    ResetSistemaIn,
     UsuarioAdminOut,
     UsuarioCreateIn,
-    UsuarioPasswordUpdateIn,
     UsuarioEstadoUpdateIn,
+    UsuarioMarcasUpdateIn,
+    UsuarioPasswordUpdateIn,
 )
+
+
+def _usuario_out(u: Usuario) -> UsuarioAdminOut:
+    return UsuarioAdminOut(
+        id=u.id,
+        nombre=u.nombre,
+        usuario=u.usuario,
+        rol_id=u.rol_id,
+        rol=u.rol.nombre if u.rol else "sin_rol",
+        activo=u.activo,
+        fijado=bool(u.fijado),
+        es_demo=bool(u.es_demo),
+        creado_en=u.creado_en,
+    )
 
 
 @router.get("/usuarios", response_model=list[UsuarioAdminOut])
@@ -174,18 +190,7 @@ def listar_usuarios(
 ):
     """Lista todos los usuarios del sistema ordenados por id."""
     usuarios = db.query(Usuario).order_by(Usuario.id.asc()).all()
-    return [
-        UsuarioAdminOut(
-            id=u.id,
-            nombre=u.nombre,
-            usuario=u.usuario,
-            rol_id=u.rol_id,
-            rol=u.rol.nombre if u.rol else "sin_rol",
-            activo=u.activo,
-            creado_en=u.creado_en,
-        )
-        for u in usuarios
-    ]
+    return [_usuario_out(u) for u in usuarios]
 
 
 @router.post("/usuarios", response_model=UsuarioAdminOut, status_code=status.HTTP_201_CREATED)
@@ -216,23 +221,19 @@ def crear_usuario(
         rol_id=rol.id,
         password_hash=hash_password(data.password),
         activo=True,
+        fijado=data.fijado,
+        es_demo=data.es_demo,
     )
     db.add(nuevo_u)
     db.flush()
 
-    registrar(db, admin, "CREAR_USUARIO", "usuario", nuevo_u.id, f"usuario={nuevo_u.usuario} rol={rol.nombre}")
+    registrar(
+        db, admin, "CREAR_USUARIO", "usuario", nuevo_u.id,
+        f"usuario={nuevo_u.usuario} rol={rol.nombre} fijado={nuevo_u.fijado} demo={nuevo_u.es_demo}",
+    )
     safe_commit(db)
     db.refresh(nuevo_u)
-
-    return UsuarioAdminOut(
-        id=nuevo_u.id,
-        nombre=nuevo_u.nombre,
-        usuario=nuevo_u.usuario,
-        rol_id=nuevo_u.rol_id,
-        rol=rol.nombre,
-        activo=nuevo_u.activo,
-        creado_en=nuevo_u.creado_en,
-    )
+    return _usuario_out(nuevo_u)
 
 
 @router.put("/usuarios/{usuario_id}/password")
@@ -273,22 +274,56 @@ def cambiar_estado_usuario(
     registrar(db, admin, accion, "usuario", u.id, f"estado={data.activo}")
     safe_commit(db)
     db.refresh(u)
+    return _usuario_out(u)
 
-    return UsuarioAdminOut(
-        id=u.id,
-        nombre=u.nombre,
-        usuario=u.usuario,
-        rol_id=u.rol_id,
-        rol=u.rol.nombre if u.rol else "sin_rol",
-        activo=u.activo,
-        creado_en=u.creado_en,
-    )
 
+@router.put("/usuarios/{usuario_id}/marcas", response_model=UsuarioAdminOut)
+def cambiar_marcas_usuario(
+    usuario_id: int,
+    data: UsuarioMarcasUpdateIn,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(admin_required),
+):
+    """Fija/desfija una cuenta (protegida contra resets) y/o la marca como cuenta demo."""
+    u = db.get(Usuario, usuario_id)
+    if not u:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+
+    if data.es_demo and u.id == admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tu propia cuenta administradora no puede marcarse como demo.",
+        )
+
+    cambios = []
+    if data.fijado is not None:
+        u.fijado = data.fijado
+        cambios.append(f"fijado={data.fijado}")
+    if data.es_demo is not None:
+        u.es_demo = data.es_demo
+        cambios.append(f"demo={data.es_demo}")
+
+    registrar(db, admin, "MARCAR_USUARIO", "usuario", u.id, f"usuario={u.usuario} " + " ".join(cambios))
+    safe_commit(db)
+    db.refresh(u)
+    return _usuario_out(u)
+
+
+# ============================================================
+# PUESTA EN BLANCO GRANULAR (CON CLAVE DEL ADMIN)
+# ============================================================
+from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 
 from decimal import Decimal
 from app.models import (
+    Categoria,
     Cierre,
+    ComponenteCombo,
+    Compra,
+    DetalleCompra,
     DetallePedido,
+    DetalleReceta,
     HistorialAccion,
     Ingrediente,
     Mesa,
@@ -297,84 +332,249 @@ from app.models import (
     Pago,
     Pedido,
     Preparado,
+    Producto,
     RegistroSync,
+    TurnoLaboral,
     Vale,
 )
 
 
-@router.post("/sistema/limpiar-pruebas")
-def limpiar_datos_prueba(
+@router.get("/sistema/reset/resumen")
+def resumen_reset(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(admin_required),
 ):
-    """Pone el sistema completamente en blanco para iniciar producción:
-    - Elimina todos los pedidos, detalles y rondas de prueba.
-    - Elimina pagos, vales y movimientos de caja.
-    - Elimina cierres de turno previos.
-    - Elimina preparados.
-    - Elimina movimientos de inventario de prueba.
-    - Elimina registros de la cola de sincronización.
-    - Libera todas las mesas a 'DISPONIBLE'.
-    - Restablece el stock de insumos a un nivel operativo seguro.
-    - MANTIENE intactos: usuarios, catálogo, productos, categorías y recetas."""
-    try:
-        from app.models.asistencia import TurnoLaboral
-        from app.models.compra import Compra, DetalleCompra
-        from app.models.auditoria import HistorialAccion
-        from app.models.usuario import Usuario
-        
-        # 1. Eliminar auditoria y movimientos de inventario
-        db.query(HistorialAccion).delete(synchronize_session=False)
-        db.query(MovimientoInventario).delete(synchronize_session=False)
+    """Conteos para que el asistente de reset muestre cuánto se borraría en cada opción."""
+    def _n(modelo, *crit):
+        return db.query(func.count(modelo.id)).filter(*crit).scalar() or 0
 
-        # 2. Eliminar movimientos de caja (tienen FK a pedido, vale, cierre)
-        db.query(MovimientoCaja).delete(synchronize_session=False)
+    return {
+        "pedidos_demo": _n(Pedido, Pedido.es_demo.is_(True)),
+        "pedidos_total": _n(Pedido),
+        "movimientos_caja_demo": _n(MovimientoCaja, MovimientoCaja.es_demo.is_(True)),
+        "turnos_caja_demo": _n(Cierre, Cierre.es_demo.is_(True)),
+        "usuarios_demo": _n(Usuario, Usuario.es_demo.is_(True)),
+        "usuarios_fijados": _n(Usuario, Usuario.fijado.is_(True)),
+        "usuarios_borrables": _n(Usuario, Usuario.fijado.is_(False), Usuario.id != admin.id),
+        "ingredientes": _n(Ingrediente),
+        "productos": _n(Producto),
+        "categorias": _n(Categoria),
+        "compras": _n(Compra),
+    }
 
-        # 3. Eliminar compras a proveedores
-        db.query(DetalleCompra).delete(synchronize_session=False)
-        db.query(Compra).delete(synchronize_session=False)
 
-        # 4. Eliminar preparados y detalles de pedidos
-        db.query(Preparado).delete(synchronize_session=False)
-        db.query(DetallePedido).delete(synchronize_session=False)
+def _borrar_transacciones(db: Session, solo_demo: bool, r: dict) -> None:
+    """Elimina transacciones. solo_demo=True => únicamente lo marcado es_demo."""
+    ped_ids = select(Pedido.id).where(Pedido.es_demo.is_(True)) if solo_demo else select(Pedido.id)
 
-        # 5. Eliminar pagos y vales
-        db.query(Pago).delete(synchronize_session=False)
-        db.query(Vale).delete(synchronize_session=False)
-        
-        # 6. Eliminar cierres, turnos y pedidos
-        db.query(Cierre).delete(synchronize_session=False)
-        db.query(Pedido).delete(synchronize_session=False)
-        db.query(TurnoLaboral).delete(synchronize_session=False)
-        
-        # 7. Eliminar usuarios de prueba (mantener roles base)
-        db.query(Usuario).filter(Usuario.usuario.not_in(['admin', 'caja', 'mesero', 'cocina'])).delete(synchronize_session=False)
+    # 1) Inventario: revertir el efecto sobre el stock y borrar movimientos
+    if solo_demo:
+        filtro_mov = or_(MovimientoInventario.es_demo.is_(True), MovimientoInventario.pedido_id.in_(ped_ids))
+    else:
+        filtro_mov = MovimientoInventario.pedido_id.in_(ped_ids)
 
-        # 7. Limpiar cola outbox de sincronización
+    for ing_id, total in (
+        db.query(MovimientoInventario.ingrediente_id, func.sum(MovimientoInventario.cantidad))
+        .filter(filtro_mov)
+        .group_by(MovimientoInventario.ingrediente_id)
+        .all()
+    ):
+        if total:
+            db.query(Ingrediente).filter(Ingrediente.id == ing_id).update(
+                {Ingrediente.stock_actual: func.greatest(Ingrediente.stock_actual - total, 0)},
+                synchronize_session=False,
+            )
+    r["movimientos_inventario"] = db.query(MovimientoInventario).filter(filtro_mov).delete(synchronize_session=False)
+
+    # 2) Caja
+    if solo_demo:
+        vale_ids = select(Vale.id).where(or_(Vale.es_demo.is_(True), Vale.pedido_id.in_(ped_ids)))
+        r["movimientos_caja"] = db.query(MovimientoCaja).filter(
+            or_(
+                MovimientoCaja.es_demo.is_(True),
+                MovimientoCaja.pedido_id.in_(ped_ids),
+                MovimientoCaja.vale_id.in_(vale_ids),
+            )
+        ).delete(synchronize_session=False)
+        r["vales"] = db.query(Vale).filter(
+            or_(Vale.es_demo.is_(True), Vale.pedido_id.in_(ped_ids))
+        ).delete(synchronize_session=False)
+        r["pagos"] = db.query(Pago).filter(
+            or_(Pago.es_demo.is_(True), Pago.pedido_id.in_(ped_ids))
+        ).delete(synchronize_session=False)
+    else:
+        r["movimientos_caja"] = db.query(MovimientoCaja).delete(synchronize_session=False)
+        r["vales"] = db.query(Vale).delete(synchronize_session=False)
+        r["pagos"] = db.query(Pago).delete(synchronize_session=False)
+
+    # 3) Preparados (referencian detalle_pedido y pedido)
+    if solo_demo:
+        # Un preparado real asignado a un pedido demo vuelve a quedar disponible
+        db.query(Preparado).filter(
+            Preparado.pedido_nuevo_id.in_(ped_ids),
+            Preparado.pedido_origen_id.notin_(ped_ids),
+            Preparado.es_demo.is_(False),
+        ).update(
+            {Preparado.pedido_nuevo_id: None, Preparado.estado: "DISPONIBLE", Preparado.asignado_en: None},
+            synchronize_session=False,
+        )
+        r["preparados"] = db.query(Preparado).filter(
+            or_(
+                Preparado.es_demo.is_(True),
+                Preparado.pedido_origen_id.in_(ped_ids),
+                Preparado.pedido_nuevo_id.in_(ped_ids),
+            )
+        ).delete(synchronize_session=False)
+    else:
+        r["preparados"] = db.query(Preparado).delete(synchronize_session=False)
+
+    # 4) Pedidos y detalles
+    r["detalles_pedido"] = db.query(DetallePedido).filter(DetallePedido.pedido_id.in_(ped_ids)).delete(
+        synchronize_session=False
+    )
+
+    # 5) Turnos de caja (desvincular referencias de registros que se conservan)
+    if solo_demo:
+        cierres_demo = select(Cierre.id).where(Cierre.es_demo.is_(True))
+        db.query(Pago).filter(Pago.cierre_id.in_(cierres_demo)).update({Pago.cierre_id: None}, synchronize_session=False)
+        db.query(MovimientoCaja).filter(MovimientoCaja.cierre_id.in_(cierres_demo)).update(
+            {MovimientoCaja.cierre_id: None}, synchronize_session=False
+        )
+        r["pedidos"] = db.query(Pedido).filter(Pedido.es_demo.is_(True)).delete(synchronize_session=False)
+        r["turnos_caja"] = db.query(Cierre).filter(Cierre.es_demo.is_(True)).delete(synchronize_session=False)
+        r["turnos_laborales"] = db.query(TurnoLaboral).filter(TurnoLaboral.es_demo.is_(True)).delete(
+            synchronize_session=False
+        )
+        r["auditoria"] = db.query(HistorialAccion).filter(HistorialAccion.es_demo.is_(True)).delete(
+            synchronize_session=False
+        )
+        # Compras hechas con cuentas demo (su efecto en stock ya se revirtió vía movimientos)
+        compras_demo = select(Compra.id).where(Compra.es_demo.is_(True))
+        db.query(DetalleCompra).filter(DetalleCompra.compra_id.in_(compras_demo)).delete(synchronize_session=False)
+        r["compras"] = db.query(Compra).filter(Compra.es_demo.is_(True)).delete(synchronize_session=False)
+    else:
+        r["pedidos"] = db.query(Pedido).delete(synchronize_session=False)
+        r["turnos_caja"] = db.query(Cierre).delete(synchronize_session=False)
+        r["turnos_laborales"] = db.query(TurnoLaboral).delete(synchronize_session=False)
+        r["auditoria"] = db.query(HistorialAccion).delete(synchronize_session=False)
         try:
             db.query(RegistroSync).delete(synchronize_session=False)
         except Exception:
             pass
 
-        # 8. Liberar todas las mesas a DISPONIBLE
-        db.query(Mesa).update({"estado": "DISPONIBLE"}, synchronize_session=False)
+    # 6) Liberar mesas que ya no tienen pedido abierto
+    abiertas = select(Pedido.mesa_id).where(
+        Pedido.mesa_id.is_not(None), Pedido.estado.notin_(("PAGADO", "CERRADO", "CANCELADO"))
+    )
+    db.query(Mesa).filter(Mesa.id.notin_(abiertas)).update({"estado": "DISPONIBLE"}, synchronize_session=False)
 
-        # 9. Restablecer stock_actual a 0 (el dueño los cargará después)
-        db.query(Ingrediente).update({"stock_actual": Decimal("0")}, synchronize_session=False)
 
+def _borrar_inventario(db: Session, r: dict) -> None:
+    r["movimientos_inventario"] = r.get("movimientos_inventario", 0) + db.query(MovimientoInventario).delete(
+        synchronize_session=False
+    )
+    db.query(DetalleCompra).delete(synchronize_session=False)
+    r["compras"] = r.get("compras", 0) + db.query(Compra).delete(synchronize_session=False)
+    db.query(Ingrediente).update({"stock_actual": Decimal("0")}, synchronize_session=False)
+    r["stock_en_cero"] = True
+
+
+def _borrar_insumos(db: Session, r: dict) -> None:
+    r["recetas"] = db.query(DetalleReceta).delete(synchronize_session=False)
+    r["insumos"] = db.query(Ingrediente).delete(synchronize_session=False)
+
+
+def _borrar_menu(db: Session, r: dict) -> None:
+    db.query(ComponenteCombo).delete(synchronize_session=False)
+    r["recetas"] = r.get("recetas", 0) + db.query(DetalleReceta).delete(synchronize_session=False)
+    db.query(Producto).update({Producto.empaque_llevar_id: None}, synchronize_session=False)
+    r["productos"] = db.query(Producto).delete(synchronize_session=False)
+    r["categorias"] = db.query(Categoria).delete(synchronize_session=False)
+
+
+def _borrar_usuarios(db: Session, admin: Usuario, r: dict) -> None:
+    """Elimina cuentas NO fijadas (jamás la del admin actual). Si una cuenta tiene historial que
+    no se pudo borrar, se DESACTIVA en lugar de eliminarse (integridad referencial)."""
+    candidatos = [
+        (u.id, u.usuario)
+        for u in db.query(Usuario).filter(Usuario.fijado.is_(False), Usuario.id != admin.id).all()
+    ]
+    eliminados, desactivados = [], []
+    for uid, uname in candidatos:
+        sp = db.begin_nested()
+        try:
+            db.query(TurnoLaboral).filter(TurnoLaboral.usuario_id == uid).delete(synchronize_session=False)
+            db.query(HistorialAccion).filter(HistorialAccion.usuario_id == uid).delete(synchronize_session=False)
+            db.query(Usuario).filter(Usuario.id == uid).delete(synchronize_session=False)
+            db.flush()
+            sp.commit()
+            eliminados.append(uname)
+        except IntegrityError:
+            sp.rollback()
+            db.query(Usuario).filter(Usuario.id == uid).update({"activo": False}, synchronize_session=False)
+            desactivados.append(uname)
+    r["usuarios_eliminados"] = eliminados
+    r["usuarios_desactivados_por_historial"] = desactivados
+
+
+@router.post("/sistema/reset")
+def reset_sistema(
+    data: ResetSistemaIn,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(admin_required),
+):
+    """Asistente de puesta en blanco granular.
+
+    - Exige la contraseña del administrador con la sesión activa.
+    - Nunca elimina cuentas fijadas ni la cuenta del administrador que ejecuta el reset.
+    - `solo_demo` borra única y exclusivamente lo generado por cuentas demo.
+    """
+    if not verify_password(data.password_admin, admin.password_hash):
+        # 403 (no 401): el cliente HTTP cierra sesión ante un 401.
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Contraseña de administrador incorrecta")
+
+    if not any((data.solo_demo, data.transacciones, data.inventario, data.insumos, data.menu, data.usuarios)):
+        raise HTTPException(status_code=422, detail="Selecciona al menos una opción para restablecer")
+
+    todo_tx = data.transacciones or data.menu          # menu exige borrar todas las transacciones
+    inv = data.inventario or data.insumos              # insumos exige limpiar inventario
+    solo_demo = data.solo_demo and not todo_tx
+
+    resumen: dict = {}
+    try:
+        if todo_tx:
+            _borrar_transacciones(db, solo_demo=False, r=resumen)
+        elif solo_demo:
+            _borrar_transacciones(db, solo_demo=True, r=resumen)
+        if inv:
+            _borrar_inventario(db, resumen)
+        if data.insumos:
+            _borrar_insumos(db, resumen)
+        if data.menu:
+            _borrar_menu(db, resumen)
+        if data.usuarios:
+            _borrar_usuarios(db, admin, resumen)
+
+        alcance = [
+            n for n, activo in (
+                ("solo_demo", solo_demo), ("transacciones", todo_tx), ("inventario", inv),
+                ("insumos", data.insumos), ("menu", data.menu), ("usuarios", data.usuarios),
+            ) if activo
+        ]
         registrar(
-            db, admin, "LIMPIAR_DATOS_PRUEBA", "sistema", None,
-            "El administrador restableció todas las transacciones de prueba a Cero para producción."
+            db, admin, "RESET_SISTEMA", "sistema", None,
+            f"alcance={','.join(alcance)} resumen={resumen}",
         )
         safe_commit(db)
-        return {
-            "status": "ok",
-            "mensaje": "Sistema restablecido exitosamente. Todas las mesas, pedidos y caja están limpios para empezar de cero."
-        }
-    except Exception as e:
+    except HTTPException:
         db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error al limpiar datos: {str(e)}"
-        )
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al restablecer el sistema: {exc}")
 
+    return {
+        "status": "ok",
+        "mensaje": "Restablecimiento completado. Las cuentas fijadas y tu sesión se conservaron.",
+        "detalle": resumen,
+    }

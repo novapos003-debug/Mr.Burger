@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Column,
     DateTime,
@@ -31,6 +32,7 @@ class Preparado(Base):
     asignado_en = Column(DateTime(timezone=True))
     descartado_en = Column(DateTime(timezone=True))
     motivo_descarte = Column(Text)
+    es_demo = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
 
     producto = relationship("Producto")
     pedido_origen = relationship("Pedido", foreign_keys=[pedido_origen_id])

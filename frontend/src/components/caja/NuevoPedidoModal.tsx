@@ -39,6 +39,7 @@ interface ItemCarritoCaja {
 
 export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCreado }) => {
   const [canal, setCanal] = useState<CanalVenta>('MOSTRADOR')
+  const [tipoConsumo, setTipoConsumo] = useState<'LOCAL' | 'LLEVAR'>('LOCAL')
   const [cliente, setCliente] = useState<string>('')
   const [telefono, setTelefono] = useState<string>('')
   const [direccion, setDireccion] = useState<string>('')
@@ -70,6 +71,7 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
         .finally(() => setLoading(false))
 
       setCanal('MOSTRADOR')
+      setTipoConsumo('LOCAL')
       setCliente('')
       setTelefono('')
       setDireccion('')
@@ -143,10 +145,14 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
     setCarrito((prev) => prev.filter((item) => item.uid !== uid))
   }
 
-  const totalCalculado = carrito.reduce(
+  const totalBase = carrito.reduce(
     (sum, item) => sum + item.precio_unitario * item.cantidad,
     0
   )
+  const totalEmpaques = tipoConsumo === 'LLEVAR'
+    ? carrito.reduce((sum, item) => sum + (Number(item.producto.recargo_llevar || 0) * item.cantidad), 0)
+    : 0
+  const totalCalculado = totalBase + totalEmpaques
 
   const productosFiltrados = productos.filter((p) => {
     const matchCat = categoriaSel ? p.categoria_id === categoriaSel : true
@@ -183,6 +189,7 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
 
       const payload: any = {
         canal,
+        tipo_consumo: tipoConsumo,
         lineas,
         nota_interna: notaInterna.trim() || null,
         cliente: cliente.trim() || null,
@@ -249,7 +256,10 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
 
             <button
               type="button"
-              onClick={() => setCanal('DOMICILIO')}
+              onClick={() => {
+                setCanal('DOMICILIO')
+                setTipoConsumo('LLEVAR')
+              }}
               className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl font-bold text-xs border transition cursor-pointer ${
                 canal === 'DOMICILIO'
                   ? 'bg-purple-600 border-purple-500 text-white shadow'
@@ -262,7 +272,10 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
 
             <button
               type="button"
-              onClick={() => setCanal('DIDI')}
+              onClick={() => {
+                setCanal('DIDI')
+                setTipoConsumo('LLEVAR')
+              }}
               className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl font-bold text-xs border transition cursor-pointer ${
                 canal === 'DIDI'
                   ? 'bg-orange-600 border-orange-500 text-white shadow'
@@ -273,6 +286,30 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
               <span>DiDi Food</span>
             </button>
           </div>
+
+          {/* Selector de Tipo de Consumo para Mostrador */}
+          {canal === 'MOSTRADOR' && (
+            <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 gap-1">
+              <button
+                type="button"
+                onClick={() => setTipoConsumo('LOCAL')}
+                className={`flex-1 text-xs font-bold py-1.5 rounded-lg transition cursor-pointer ${
+                  tipoConsumo === 'LOCAL' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                🍽️ Comer Aquí (Sin empaque)
+              </button>
+              <button
+                type="button"
+                onClick={() => setTipoConsumo('LLEVAR')}
+                className={`flex-1 text-xs font-bold py-1.5 rounded-lg transition cursor-pointer ${
+                  tipoConsumo === 'LLEVAR' ? 'bg-orange-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                🥡 Para Llevar (Liquida empaque térmico)
+              </button>
+            </div>
+          )}
 
           {/* Campos específicos según canal */}
           {canal === 'DOMICILIO' && (
@@ -430,85 +467,100 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
                 </div>
               ) : (
                 <div className="space-y-2 max-h-[260px] overflow-y-auto">
-                  {carrito.map((item) => (
-                    <div
-                      key={item.uid}
-                      className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex flex-col gap-1.5"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-white text-xs truncate">
-                            {item.producto.nombre}
-                          </p>
-                          <span className="text-[11px] text-emerald-400 font-mono">
-                            ${(item.precio_unitario * item.cantidad).toLocaleString('es-CO')}
-                            {item.cantidad > 1 && (
-                              <span className="text-slate-500 text-[10px] ml-1 font-sans">
-                                (${item.precio_unitario.toLocaleString('es-CO')} c/u)
+                  {carrito.map((item) => {
+                    const recargoUnitario = tipoConsumo === 'LLEVAR' ? Number(item.producto.recargo_llevar || 0) : 0
+                    const precioUnitarioEfectivo = item.precio_unitario + recargoUnitario
+                    const lineaTotal = precioUnitarioEfectivo * item.cantidad
+
+                    return (
+                      <div
+                        key={item.uid}
+                        className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex flex-col gap-1.5"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-white text-xs truncate">
+                              {item.producto.nombre}
+                            </p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`text-[11px] font-mono font-bold ${
+                                tipoConsumo === 'LLEVAR' && recargoUnitario > 0 ? 'text-amber-300' : 'text-emerald-400'
+                              }`}>
+                                ${lineaTotal.toLocaleString('es-CO')}
+                              </span>
+                              {tipoConsumo === 'LLEVAR' && recargoUnitario > 0 && (
+                                <span className="text-[10px] text-orange-400 font-medium">
+                                  (+$${(recargoUnitario * item.cantidad).toLocaleString('es-CO')} emp.)
+                                </span>
+                              )}
+                              {item.cantidad > 1 && (
+                                <span className="text-slate-500 text-[10px] font-sans">
+                                  (${precioUnitarioEfectivo.toLocaleString('es-CO')} c/u)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => modificarCantidad(item.uid, -1)}
+                              className="w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <span className="font-black text-xs text-white w-4 text-center">
+                              {item.cantidad}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => modificarCantidad(item.uid, 1)}
+                              className="w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => eliminarItem(item.uid)}
+                              className="w-6 h-6 rounded-md bg-rose-950/80 hover:bg-rose-900 text-rose-300 flex items-center justify-center cursor-pointer ml-0.5"
+                              title="Eliminar ítem"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Variaciones detalladas (Adiciones, Quitar / Modificaciones y Notas) */}
+                        {((item.variacion.adiciones && item.variacion.adiciones.length > 0) ||
+                          (item.variacion.modificaciones && item.variacion.modificaciones.length > 0) ||
+                          item.variacion.notas) && (
+                          <div className="flex flex-wrap gap-1 pt-1 border-t border-slate-800/60">
+                            {item.variacion.adiciones?.map((ad) => (
+                              <span
+                                key={ad.id}
+                                className="text-[9px] bg-emerald-950/80 text-emerald-300 border border-emerald-800/80 px-1.5 py-0.5 rounded font-mono font-bold"
+                              >
+                                +{ad.nombre} (${ad.precio.toLocaleString('es-CO')})
+                              </span>
+                            ))}
+                            {item.variacion.modificaciones?.map((mod, idx) => (
+                              <span
+                                key={idx}
+                                className="text-[9px] bg-orange-950/80 text-orange-300 border border-orange-800/80 px-1.5 py-0.5 rounded font-medium"
+                              >
+                                {mod}
+                              </span>
+                            ))}
+                            {item.variacion.notas && (
+                              <span className="text-[10px] text-slate-400 italic block w-full">
+                                "{item.variacion.notas}"
                               </span>
                             )}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => modificarCantidad(item.uid, -1)}
-                            className="w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer"
-                          >
-                            <Minus className="w-3 h-3" />
-                          </button>
-                          <span className="font-black text-xs text-white w-4 text-center">
-                            {item.cantidad}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => modificarCantidad(item.uid, 1)}
-                            className="w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer"
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => eliminarItem(item.uid)}
-                            className="w-6 h-6 rounded-md bg-rose-950/80 hover:bg-rose-900 text-rose-300 flex items-center justify-center cursor-pointer ml-0.5"
-                            title="Eliminar ítem"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
+                          </div>
+                        )}
                       </div>
-
-                      {/* Variaciones detalladas (Adiciones, Quitar / Modificaciones y Notas) */}
-                      {((item.variacion.adiciones && item.variacion.adiciones.length > 0) ||
-                        (item.variacion.modificaciones && item.variacion.modificaciones.length > 0) ||
-                        item.variacion.notas) && (
-                        <div className="flex flex-wrap gap-1 pt-1 border-t border-slate-800/60">
-                          {item.variacion.adiciones?.map((ad) => (
-                            <span
-                              key={ad.id}
-                              className="text-[9px] bg-emerald-950/80 text-emerald-300 border border-emerald-800/80 px-1.5 py-0.5 rounded font-mono font-bold"
-                            >
-                              +{ad.nombre} (${ad.precio.toLocaleString('es-CO')})
-                            </span>
-                          ))}
-                          {item.variacion.modificaciones?.map((mod, idx) => (
-                            <span
-                              key={idx}
-                              className="text-[9px] bg-orange-950/80 text-orange-300 border border-orange-800/80 px-1.5 py-0.5 rounded font-medium"
-                            >
-                              {mod}
-                            </span>
-                          ))}
-                          {item.variacion.notas && (
-                            <span className="text-[10px] text-slate-400 italic block w-full">
-                              "{item.variacion.notas}"
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
 
@@ -527,7 +579,14 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
             {/* Total y Botones */}
             <div className="pt-3 border-t border-slate-800 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-400">Total Orden:</span>
+                <div>
+                  <span className="text-xs font-bold text-slate-400 block">Total Orden:</span>
+                  {tipoConsumo === 'LLEVAR' && totalEmpaques > 0 && (
+                    <span className="text-[11px] text-orange-400 font-bold block">
+                      (Incluye +${totalEmpaques.toLocaleString('es-CO')} en empaques)
+                    </span>
+                  )}
+                </div>
                 <span className="text-2xl font-black text-emerald-400 font-mono">
                   ${totalCalculado.toLocaleString('es-CO')} COP
                 </span>

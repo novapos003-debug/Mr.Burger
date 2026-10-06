@@ -91,3 +91,11 @@ export const enviarPedidoACocina = async (pedidoId: number): Promise<Pedido> => 
   const res = await api.post<Pedido>(`/pedidos/${pedidoId}/enviar-a-cocina`)
   return res.data
 }
+
+export const cambiarTipoConsumoApi = async (
+  pedidoId: number,
+  tipoConsumo: 'LOCAL' | 'LLEVAR'
+): Promise<Pedido> => {
+  const res = await api.patch<Pedido>(`/pedidos/${pedidoId}/tipo-consumo`, { tipo_consumo: tipoConsumo })
+  return res.data
+}

@@ -104,6 +104,18 @@ async def lifespan(app: FastAPI):
         import logging
         logging.error("Aviso al verificar esquema inicial en lifespan: %s", e)
 
+    # Migraciones de cuentas demo/fijadas y empaques (transacción propia: no dependen del bloque anterior)
+    try:
+        from app.services.migraciones import completar_empaques_llevar, migrar_demo_y_fijados
+
+        with engine.begin() as conn_mig:
+            migrar_demo_y_fijados(conn_mig)
+        with engine.begin() as conn_emp:
+            completar_empaques_llevar(conn_emp)
+    except Exception as e_mig:
+        import logging
+        logging.error("Error aplicando migraciones demo/empaques: %s", e_mig)
+
     worker_task = None
     if settings.MODO_CEREBRO != "NUBE":
         worker_task = asyncio.create_task(sync_background_loop())

@@ -122,6 +122,8 @@ class UsuarioAdminOut(BaseModel):
     rol_id: int
     rol: str
     activo: bool
+    fijado: bool = False
+    es_demo: bool = False
     creado_en: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -132,6 +134,13 @@ class UsuarioCreateIn(BaseModel):
     usuario: str = Field(min_length=3, max_length=50)
     password: str = Field(min_length=4, max_length=100)
     rol: str = Field(pattern="^(admin|cajero|mesero|cocina)$")
+    fijado: bool = False
+    es_demo: bool = False
+
+
+class UsuarioMarcasUpdateIn(BaseModel):
+    fijado: bool | None = None
+    es_demo: bool | None = None
 
 
 class UsuarioPasswordUpdateIn(BaseModel):
@@ -145,3 +154,16 @@ class CambiarMiPasswordIn(BaseModel):
 
 class UsuarioEstadoUpdateIn(BaseModel):
     activo: bool
+
+
+class ResetSistemaIn(BaseModel):
+    """Opciones del asistente de puesta en blanco. Exige la clave del admin con sesión activa."""
+
+    password_admin: str = Field(min_length=1)
+    solo_demo: bool = False           # Borra únicamente lo generado por cuentas demo
+    transacciones: bool = False       # Pedidos, pagos, vales, caja, turnos, auditoría (TODO, demo o real)
+    inventario: bool = False          # Stock a cero + kardex + compras
+    insumos: bool = False             # Catálogo de insumos y recetas (incluye inventario)
+    menu: bool = False                # Productos, categorías, combos (incluye transacciones)
+    usuarios: bool = False            # Cuentas NO fijadas (nunca la del admin actual)
+

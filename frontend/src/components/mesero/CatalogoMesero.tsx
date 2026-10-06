@@ -7,6 +7,7 @@ interface Props {
   productos: Producto[]
   onSelectProducto: (producto: Producto) => void
   onQuickAdd: (producto: Producto) => void
+  tipoConsumo?: 'LOCAL' | 'LLEVAR'
 }
 
 export const CatalogoMesero: React.FC<Props> = ({
@@ -14,6 +15,7 @@ export const CatalogoMesero: React.FC<Props> = ({
   productos,
   onSelectProducto,
   onQuickAdd,
+  tipoConsumo = 'LOCAL',
 }) => {
   const [catSeleccionada, setCatSeleccionada] = useState<number | null>(null)
   const [busqueda, setBusqueda] = useState('')
@@ -113,7 +115,9 @@ export const CatalogoMesero: React.FC<Props> = ({
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 overflow-y-auto pr-1 flex-1 min-h-0 pb-12 lg:pb-2">
         {productosFiltrados.map((prod) => {
           const disponible = prod.disponible
-          const precioNumerico = Number(prod.precio || 0)
+          const precioBase = Number(prod.precio || 0)
+          const recargoLlevar = tipoConsumo === 'LLEVAR' ? Number(prod.recargo_llevar || 0) : 0
+          const precioEfectivo = precioBase + recargoLlevar
 
           return (
             <div
@@ -137,9 +141,22 @@ export const CatalogoMesero: React.FC<Props> = ({
                 )}
 
                 {/* Precio del producto visible para el mesero */}
-                <span className="text-xs font-black text-emerald-400 font-mono bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded-lg">
-                  ${precioNumerico.toLocaleString('es-CO')}
-                </span>
+                <div className="flex flex-col items-end">
+                  <span
+                    className={`text-xs font-black font-mono px-2 py-0.5 rounded-lg border ${
+                      tipoConsumo === 'LLEVAR' && recargoLlevar > 0
+                        ? 'text-amber-300 bg-amber-950/70 border-amber-600/70'
+                        : 'text-emerald-400 bg-emerald-950/60 border-emerald-800/60'
+                    }`}
+                  >
+                    ${precioEfectivo.toLocaleString('es-CO')}
+                  </span>
+                  {tipoConsumo === 'LLEVAR' && recargoLlevar > 0 && (
+                    <span className="text-[9px] text-orange-300 font-semibold mt-0.5">
+                      🥡 +${recargoLlevar.toLocaleString('es-CO')} emp.
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Info del Producto */}

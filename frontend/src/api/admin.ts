@@ -16,6 +16,8 @@ import type {
   DetalleRecetaInput,
   UsuarioAdminItem,
   UsuarioCreateInput,
+  ResetSistemaInput,
+  ResetResumenOut,
 } from '../types/admin'
 
 export const getDashboardApi = async (fecha?: string): Promise<DashboardOut> => {
@@ -270,6 +272,29 @@ export const getAdicionesConfigApi = async (): Promise<AdicionExtra[]> => {
 
 export const guardarAdicionesConfigApi = async (adiciones: AdicionExtra[]): Promise<AdicionExtra[]> => {
   const res = await api.put<AdicionExtra[]>('/productos/adiciones/configuracion', adiciones)
+  return res.data
+}
+
+export const cambiarMarcasUsuarioApi = async (
+  usuarioId: number,
+  data: { fijado?: boolean; es_demo?: boolean }
+): Promise<UsuarioAdminItem> => {
+  const res = await api.put<UsuarioAdminItem>(`/admin/usuarios/${usuarioId}/marcas`, data)
+  return res.data
+}
+
+export const getResetResumenApi = async (): Promise<ResetResumenOut> => {
+  const res = await api.get<ResetResumenOut>('/admin/sistema/reset/resumen')
+  return res.data
+}
+
+export const resetSistemaApi = async (
+  data: ResetSistemaInput
+): Promise<{ status: string; mensaje: string; detalle: Record<string, any> }> => {
+  const res = await api.post<{ status: string; mensaje: string; detalle: Record<string, any> }>(
+    '/admin/sistema/reset',
+    data
+  )
   return res.data
 }
 

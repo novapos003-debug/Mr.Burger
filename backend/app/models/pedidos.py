@@ -58,6 +58,7 @@ class Pedido(Base):
     total = Column(Numeric(12, 2), nullable=False, default=0)
     motivo_cancelacion = Column(Text)
     idempotency_key = Column(String(100), unique=True, index=True)
+    es_demo = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
     creado_en = Column(DateTime(timezone=True), server_default=func.now())
     enviado_en = Column(DateTime(timezone=True))
     finalizado_en = Column(DateTime(timezone=True))
