@@ -23,10 +23,12 @@ Si una decisión no está aquí, se discute antes de codificar. Nada se borra: s
 10. [Plan de desarrollo — 18 fases](#10-plan-de-desarrollo--18-fases)
 11. [MVP vs Futuro](#11-mvp-vs-futuro)
 12. [Estado actual de implementación](#12-estado-actual-de-implementación)
-13. [Matriz Comparativa — Lo Planeado vs. Lo Implementado](#13-matriz-comparativa--lo-planeado-vs-lo-implementado)
-15. [Anexo A — Prompts para presentación al cliente](#15-anexo-a--prompts-para-presentación-al-cliente)
-16. [Lista de Pendientes para Lanzamiento y Entrega al Cliente](#16-lista-de-pendientes-para-lanzamiento-y-entrega-al-cliente)
-17. [Módulo de Asistencia, Control de Turnos y Seguridad en Tiempo Real](#17-módulo-de-asistencia-control-de-turnos-y-seguridad-en-tiempo-real)
+13. [Arquitectura Operativa en el Local: Dos Modalidades](#13-arquitectura-operativa-en-el-local-dos-modalidades)
+14. [Documentos de Soporte y Despliegue Físico](#14-documentos-de-soporte-y-despliegue-físico)
+15. [Módulo de Asistencia y Seguridad de Turnos en Tiempo Real](#15-módulo-de-asistencia-y-seguridad-de-turnos-en-tiempo-real)
+16. [Módulo de Empaques Para Llevar y Recargo Dinámico por Receta](#16-módulo-de-empaques-para-llevar-y-recargo-dinámico-por-receta)
+17. [Módulo de Gastos Operativos y Salidas de Caja Menor](#17-módulo-de-gastos-operativos-y-salidas-de-caja-menor)
+18. [Trazabilidad Demo, Cuentas Fijadas y Asistente de Puesta en Blanco](#18-trazabilidad-demo-cuentas-fijadas-y-asistente-de-puesta-en-blanco)
 
 ---
 
@@ -515,3 +517,36 @@ Permite registrar compras operativas que no corresponden a ingredientes de recet
    - 🧾 Rollos de papel térmico para comanda y factura
 3. **Acceso Dual:** Accesible de forma destacada tanto en la barra superior de **Caja Registradora** (`💸 Gastos / Salidas`) como en el **Panel Gerencial (Admin)** para que el dueño o supervisor registre salidas de gaveta sin interrumpir la operación.
 4. **Impacto en Arqueo y Planilla:** Todo gasto operativo se descuenta automáticamente del efectivo en gaveta esperado para el cuadre ciego final.
+
+---
+
+## 18. Trazabilidad Demo, Cuentas Fijadas y Asistente de Puesta en Blanco
+
+Permite realizar pruebas, capacitaciones y simulaciones con total libertad operativa sin riesgo de alterar la contabilidad real ni eliminar por error los usuarios del negocio o del dueño:
+
+1. **Aislamiento y Marcado Automático de Usuarios Demo (`es_demo = True`):**
+   - Todas las cuentas designadas como de prueba (`caja`, `mesero`, `cocina` o cualquier cuenta marcada con **🧪 Demo**) operan bajo un entorno completamente rastreable.
+   - Un listener global a nivel de base de datos (`before_insert` en SQLAlchemy en `backend/app/core/demo.py`) estampa automáticamente `es_demo = True` en cualquier pedido, comanda de cocina, cobro, vale, movimiento de caja, cierre de turno o turno laboral generado por estas cuentas.
+   - Esto permite que las prácticas y capacitaciones coexistan con la operación real sin contaminar las cifras financieras ni los kardex definitivos.
+
+2. **Cuentas Fijadas y Protegidas (`fijado = True`):**
+   - Resuelve de raíz el problema de cuentas borradas accidentalmente al reiniciar o restablecer el sistema.
+   - La cuenta del dueño (`omarvelandia`) y las cuentas administrativas quedan blindadas con `fijado = True`.
+   - Ninguna rutina de restablecimiento, limpieza o puesta en blanco puede borrar cuentas fijadas ni la cuenta del administrador que ejecuta la operación.
+   - En **Administración > Equipo y Seguridad (`UsuariosTab.tsx`)**, el administrador cuenta con distintivos visuales (**📌 Protegido** / **🧪 Demo**) y botones de acción rápida para fijar, proteger o marcar como demo cualquier usuario con un solo clic.
+
+3. **Asistente de Puesta en Blanco Granular (`ConfiguracionTab.tsx`):**
+   - Sustituye los botones de borrado ciego por un asistente interactivo modular con confirmación de seguridad y conteos en tiempo real:
+     - `[x] Solo operaciones de prueba / Demo (Recomendado)`: Purga única y exclusivamente lo generado por usuarios demo. Conserva ventas reales, catálogo, inventario y cuentas de usuario.
+     - `[ ] Todas las transacciones`: Limpia pedidos, cobros, vales y turnos de caja (demo y reales). Libera las mesas a `DISPONIBLE`.
+     - `[ ] Inventario y stock a cero`: Pone el stock actual en 0 y borra movimientos de kardex y compras registradas.
+     - `[ ] Catálogo de insumos y recetas`: Elimina ingredientes y fórmulas de recetas gastronómicas (incluye inventario a cero).
+     - `[ ] Menú de platos y categorías`: Elimina productos de venta, combos y categorías (requiere limpiar transacciones).
+     - `[ ] Usuarios NO protegidos`: Elimina empleados creados no protegidos. Las cuentas fijadas y la sesión activa se conservan intactas.
+   - **Validación Estricta de Credenciales:** Exige la contraseña del administrador activo (`password_admin`). Si se ingresa una contraseña errónea, el sistema rechaza la solicitud (`403 Forbidden`) sin cerrar la sesión del usuario.
+
+4. **Recálculo Reactivo de Precios Para Llevar vs Comer Aquí:**
+   - **En Mesero:** Al alternar entre *“🍽️ Comer Aquí”* y *“🥡 Para Llevar”*, el catálogo de productos y la comanda recalculan en vivo el precio unitario y subtotal de cada plato sumando el valor del empaque térmico (C1/P1), mostrando el desglose transparente de empaques. Al volver a tocar *“🍽️ Comer Aquí”*, los precios caen inmediatamente a su base.
+   - **En Caja (Nueva Orden):** Selector visible de destino para pedidos en mostrador y selección automática de empaque para Domicilios y DiDi Food.
+   - **En Caja (Cobro de Pedidos Abiertos):** Endpoint `PATCH /pedidos/{id}/tipo-consumo` integrado en el modal de cobro para permitir cambiar entre local y llevar en el último segundo antes de timbrar, recalculando inmediatamente el total y los billetes recibidos.
+
