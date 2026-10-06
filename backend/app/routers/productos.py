@@ -118,6 +118,9 @@ def listar_productos(
     )
     if categoria_id is not None:
         q = q.filter(Producto.categoria_id == categoria_id)
+    elif usuario.rol.nombre in ("mesero", "cocina"):
+        # Ocultar empaques desechables o servicios internos de la carta de comida del mesero
+        q = q.filter(Producto.categoria_id != 99)
     if not incluir_inactivos:
         q = q.filter(Producto.activo.is_(True))
     productos = q.order_by(Producto.nombre).all()

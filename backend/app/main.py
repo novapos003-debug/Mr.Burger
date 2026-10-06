@@ -37,6 +37,54 @@ async def lifespan(app: FastAPI):
             conn.execute(text("ALTER TABLE pedido ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(100) UNIQUE;"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_pedido_idempotency_key ON pedido(idempotency_key);"))
             conn.execute(text("ALTER TABLE producto ADD COLUMN IF NOT EXISTS permite_adiciones BOOLEAN NOT NULL DEFAULT TRUE;"))
+
+            # Migración 04: Empaques dinámicos, bolsas T20-T40, saneamiento de catálogo y gastos operativos
+            conn.execute(text("ALTER TABLE detalle_receta ADD COLUMN IF NOT EXISTS solo_llevar BOOLEAN NOT NULL DEFAULT FALSE;"))
+            conn.execute(text("ALTER TABLE ingrediente ADD COLUMN IF NOT EXISTS tipo_articulo VARCHAR(30) DEFAULT 'INSUMO_RECETA';"))
+            conn.execute(text("ALTER TABLE ingrediente ADD COLUMN IF NOT EXISTS precio_venta NUMERIC(12, 2) DEFAULT 0;"))
+            conn.execute(text("ALTER TABLE pedido ADD COLUMN IF NOT EXISTS tipo_consumo VARCHAR(15) DEFAULT 'LOCAL';"))
+            conn.execute(text("ALTER TABLE pedido ADD COLUMN IF NOT EXISTS recargo_empaque NUMERIC(12, 2) DEFAULT 0;"))
+            try:
+                conn.execute(text("ALTER TABLE movimiento_caja DROP CONSTRAINT IF EXISTS ck_movcaja_categoria;"))
+                conn.execute(text("ALTER TABLE movimiento_caja ADD CONSTRAINT ck_movcaja_categoria CHECK (categoria IN ('PAGO_TURNO','PRESTAMO','ADELANTO','PROVEEDOR','DEVOLUCION','COBRO_VALE','CAMBIO_INICIAL','GASTO_OPERATIVO','OTRO'));"))
+            except Exception:
+                pass
+            # Desactivar productos demo y empaque 999
+            conn.execute(text("UPDATE producto SET activo = FALSE WHERE id IN (1, 2, 3, 4, 5, 6, 999);"))
+            # Desactivar ingredientes iniciales huérfanos
+            conn.execute(text("UPDATE ingrediente SET activo = FALSE WHERE id IN (1, 2, 3, 4, 5, 6, 7, 8, 9);"))
+            # Asegurar categorías de insumo 8 y 10
+            conn.execute(text("INSERT INTO categoria_insumo (id, nombre, descripcion) VALUES (8, 'DESECHABLES_EMPAQUES', 'Contenedores C1, P1, bolsas T20-T40, vasos y servilletas') ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre;"))
+            conn.execute(text("INSERT INTO categoria_insumo (id, nombre, descripcion) VALUES (10, 'GASTOS_OPERATIVOS', 'Artículos de aseo, papelería y mantenimiento') ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre;"))
+            # Actualizar C1 y P1
+            conn.execute(text("UPDATE ingrediente SET nombre = 'C1 (Empaque Térmico)', tipo_articulo = 'DESECHABLE_SERVICIO', costo_unitario = 500.00, precio_venta = 1500.00, activo = TRUE WHERE nombre ILIKE '%c1%' OR id = 61;"))
+            conn.execute(text("UPDATE ingrediente SET nombre = 'P1 (Porta Perro Caliente)', tipo_articulo = 'DESECHABLE_SERVICIO', costo_unitario = 350.00, precio_venta = 500.00, activo = TRUE WHERE nombre ILIKE '%porta perro%' OR id = 68;"))
+            # Inserción de Bolsas T20 a T40 y Papel de cocina
+            conn.execute(text("""
+                INSERT INTO ingrediente (nombre, categoria_insumo_id, tipo_articulo, unidad_base, costo_unitario, precio_venta, activo)
+                SELECT 'Bolsa T20 (Para Llevar Pequeña)', 8, 'DESECHABLE_SERVICIO', 'UNIDAD', 100.00, 0.00, TRUE
+                WHERE NOT EXISTS (SELECT 1 FROM ingrediente WHERE nombre ILIKE '%Bolsa T20%');
+            """))
+            conn.execute(text("""
+                INSERT INTO ingrediente (nombre, categoria_insumo_id, tipo_articulo, unidad_base, costo_unitario, precio_venta, activo)
+                SELECT 'Bolsa T25 (Para Llevar Mediana)', 8, 'DESECHABLE_SERVICIO', 'UNIDAD', 150.00, 0.00, TRUE
+                WHERE NOT EXISTS (SELECT 1 FROM ingrediente WHERE nombre ILIKE '%Bolsa T25%');
+            """))
+            conn.execute(text("""
+                INSERT INTO ingrediente (nombre, categoria_insumo_id, tipo_articulo, unidad_base, costo_unitario, precio_venta, activo)
+                SELECT 'Bolsa T30 (Para Llevar Grande)', 8, 'DESECHABLE_SERVICIO', 'UNIDAD', 200.00, 0.00, TRUE
+                WHERE NOT EXISTS (SELECT 1 FROM ingrediente WHERE nombre ILIKE '%Bolsa T30%');
+            """))
+            conn.execute(text("""
+                INSERT INTO ingrediente (nombre, categoria_insumo_id, tipo_articulo, unidad_base, costo_unitario, precio_venta, activo)
+                SELECT 'Bolsa T40 (Para Llevar Extra Grande)', 8, 'DESECHABLE_SERVICIO', 'UNIDAD', 300.00, 0.00, TRUE
+                WHERE NOT EXISTS (SELECT 1 FROM ingrediente WHERE nombre ILIKE '%Bolsa T40%');
+            """))
+            conn.execute(text("""
+                INSERT INTO ingrediente (nombre, categoria_insumo_id, tipo_articulo, unidad_base, costo_unitario, precio_venta, activo)
+                SELECT 'Papel de cocina', 10, 'GASTO_OPERATIVO', 'UNIDAD', 3500.00, 0.00, TRUE
+                WHERE NOT EXISTS (SELECT 1 FROM ingrediente WHERE nombre ILIKE '%Papel de cocina%');
+            """))
             conn.commit()
     except Exception as e:
         import logging

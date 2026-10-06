@@ -19,11 +19,13 @@ def listar_tipos(db: Session = Depends(get_db), _: Usuario = Depends(staff_requi
 def listar_categorias(
     incluir_inactivas: bool = False,
     db: Session = Depends(get_db),
-    _: Usuario = Depends(staff_required),
+    usuario: Usuario = Depends(staff_required),
 ):
     q = db.query(Categoria)
     if not incluir_inactivas:
         q = q.filter(Categoria.activo.is_(True))
+    if usuario.rol.nombre in ("mesero", "cocina"):
+        q = q.filter(Categoria.id != 99)
     return q.order_by(Categoria.orden, Categoria.nombre).all()
 
 

@@ -79,11 +79,24 @@ export const Mesero: React.FC = () => {
       if (mRes.status === 'fulfilled') setMesas(mRes.value)
       else menuOk = false
 
-      if (cRes.status === 'fulfilled') setCategorias(cRes.value)
-      else menuOk = false
+      if (cRes.status === 'fulfilled') {
+        const catsFiltradas = cRes.value.filter(
+          (c) => c.id !== 99 && !c.nombre.toUpperCase().includes('SERVICIO') && !c.nombre.toUpperCase().includes('EMPAQUE')
+        )
+        setCategorias(catsFiltradas)
+      } else menuOk = false
 
-      if (pRes.status === 'fulfilled') setProductos(pRes.value)
-      else menuOk = false
+      if (pRes.status === 'fulfilled') {
+        const prodsFiltrados = pRes.value.filter(
+          (p) =>
+            p.categoria_id !== 99 &&
+            !p.nombre.toLowerCase().startsWith('empaque') &&
+            !p.nombre.toLowerCase().includes('desechable') &&
+            p.nombre.toLowerCase() !== 'c1' &&
+            p.nombre.toLowerCase() !== 'p1'
+        )
+        setProductos(prodsFiltrados)
+      } else menuOk = false
 
       if (actRes.status === 'fulfilled') setPedidosActivos(actRes.value)
 
@@ -218,35 +231,6 @@ export const Mesero: React.FC = () => {
     setCartItems([])
   }
 
-  // --- LÓGICA DE EMPAQUE AUTOMÁTICO DINÁMICO ---
-  const itemsConEmpaque = [...cartItems]
-  
-  if (tipoConsumo === 'LLEVAR') {
-    // Agrupar los empaques por su ID
-    const empaquesRequeridos = new Map<number, number>()
-    
-    for (const item of cartItems) {
-      if (item.producto.empaque_llevar_id) {
-        const idEmpaque = item.producto.empaque_llevar_id
-        empaquesRequeridos.set(idEmpaque, (empaquesRequeridos.get(idEmpaque) || 0) + item.cantidad)
-      }
-    }
-
-    // Agregar las líneas de empaque al carrito final
-    empaquesRequeridos.forEach((cantidad, idEmpaque) => {
-      const productoEmpaque = productos.find(p => p.id === idEmpaque)
-      if (productoEmpaque) {
-        itemsConEmpaque.push({
-          uid: `empaque_auto_${idEmpaque}`,
-          producto: productoEmpaque,
-          cantidad: cantidad,
-          precio_unitario: Number(productoEmpaque.precio || 0),
-          variacion: { notas: 'Cargo Automático (Para Llevar)' }
-        })
-      }
-    })
-  }
-
   // Enviar a cocina
   const handleSubmitComanda = async () => {
     setErrorBanner(null)
@@ -257,7 +241,7 @@ export const Mesero: React.FC = () => {
       return
     }
 
-    if (itemsConEmpaque.length === 0) return
+    if (cartItems.length === 0) return
 
     setSubmitting(true)
     const idempotencyKey = `ord-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
@@ -265,7 +249,7 @@ export const Mesero: React.FC = () => {
     // Consolidar ítems idénticos para que no se dupliquen las líneas en cocina ni caja
     const lineasConsolidadas = (() => {
       const map = new Map<string, { producto_id: number; cantidad: number; variacion_snapshot?: any; preparado_id?: number }>()
-      for (const item of itemsConEmpaque) {
+      for (const item of cartItems) {
         const key = `${item.producto.id}__${JSON.stringify(item.variacion || {})}__${item.variacion?.preparado_id || ''}`
         const existing = map.get(key)
         if (existing) {
@@ -288,6 +272,7 @@ export const Mesero: React.FC = () => {
         const nextRonda = Math.max(...pedidoActivo.detalles.map((d) => d.ronda), 1) + 1
         await agregarRondaApi(pedidoActivo.id, {
           ronda: nextRonda,
+          tipo_consumo: tipoConsumo,
           lineas: lineasConsolidadas,
         })
 
@@ -329,7 +314,8 @@ export const Mesero: React.FC = () => {
             mesaNumero: mesaSeleccionada.numero,
             payloadRonda: {
               ronda: nextRonda,
-              lineas: itemsConEmpaque.map((item) => ({
+              tipo_consumo: tipoConsumo,
+              lineas: cartItems.map((item) => ({
                 producto_id: item.producto.id,
                 cantidad: item.cantidad,
                 variacion_snapshot: item.variacion,
@@ -346,7 +332,7 @@ export const Mesero: React.FC = () => {
               tipo_consumo: tipoConsumo,
               mesa_id: mesaSeleccionada.id,
               idempotency_key: idempotencyKey,
-              lineas: itemsConEmpaque.map((item) => ({
+              lineas: cartItems.map((item) => ({
                 producto_id: item.producto.id,
                 cantidad: item.cantidad,
                 variacion_snapshot: item.variacion,
@@ -470,7 +456,7 @@ export const Mesero: React.FC = () => {
         {/* Columna Derecha en Pantallas Grandes (Tablet horizontal / Desktop) */}
         <div className="hidden lg:flex w-84 xl:w-96 flex-col shrink-0 min-h-0 h-full">
           <ComandaSidebar
-            items={itemsConEmpaque}
+            items={cartItems}
             mesa={mesaSeleccionada}
             pedidoActivo={pedidoActivo}
             tipoConsumo={tipoConsumo}
@@ -551,7 +537,7 @@ export const Mesero: React.FC = () => {
 
               <div className="flex-1 min-h-0 overflow-y-auto">
                 <ComandaSidebar
-                  items={itemsConEmpaque}
+                  items={cartItems}
                   mesa={mesaSeleccionada}
                   pedidoActivo={pedidoActivo}
                   tipoConsumo={tipoConsumo}

@@ -138,7 +138,7 @@ class MovimientoCaja(Base):
     __table_args__ = (
         CheckConstraint("tipo IN ('ENTRADA','SALIDA')", name="ck_movcaja_tipo"),
         CheckConstraint(
-            "categoria IN ('PAGO_TURNO','PRESTAMO','ADELANTO','PROVEEDOR','DEVOLUCION','COBRO_VALE','CAMBIO_INICIAL','OTRO')",
+            "categoria IN ('PAGO_TURNO','PRESTAMO','ADELANTO','PROVEEDOR','DEVOLUCION','COBRO_VALE','CAMBIO_INICIAL','GASTO_OPERATIVO','OTRO')",
             name="ck_movcaja_categoria",
         ),
     )

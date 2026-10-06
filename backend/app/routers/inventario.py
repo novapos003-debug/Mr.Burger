@@ -80,9 +80,11 @@ def to_ingrediente_out(ing: Ingrediente) -> IngredienteOut:
         categoria_insumo_id=ing.categoria_insumo_id,
         categoria_insumo_nombre=ing.categoria_insumo.nombre if ing.categoria_insumo else None,
         nombre=ing.nombre,
+        tipo_articulo=getattr(ing, "tipo_articulo", "INSUMO_RECETA") or "INSUMO_RECETA",
         unidad_base=ing.unidad_base,
         costo_unitario=ing.costo_unitario,
         costo_proveedor=ing.costo_proveedor,
+        precio_venta=getattr(ing, "precio_venta", Decimal("0")) or Decimal("0"),
         stock_actual=ing.stock_actual,
         stock_minimo=ing.stock_minimo,
         stock_ideal=ing.stock_ideal,
@@ -296,6 +298,7 @@ def ver_receta(
                 unidad_base=linea.ingrediente.unidad_base,
                 costo_unitario=costo_u,
                 costo_total=costo_linea,
+                solo_llevar=getattr(linea, "solo_llevar", False) or False,
             )
         )
     return resultado
@@ -333,7 +336,15 @@ def reemplazar_receta(
 
     db.query(DetalleReceta).filter(DetalleReceta.product_id == producto_id).delete()
     for l in lineas:
-        db.add(DetalleReceta(product_id=producto_id, ingrediente_id=l.ingrediente_id, cantidad=l.cantidad, unidad=l.unidad))
+        db.add(
+            DetalleReceta(
+                product_id=producto_id,
+                ingrediente_id=l.ingrediente_id,
+                cantidad=l.cantidad,
+                unidad=l.unidad,
+                solo_llevar=l.solo_llevar,
+            )
+        )
     registrar(
         db, usuario, "MODIFICAR_RECETA", "producto", producto_id,
         f"lineas={len(lineas)}",

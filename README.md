@@ -485,3 +485,33 @@ Para evitar descuadres de caja y garantizar que solo trabaje personal con jornad
 1. **Capa 1 (WebSocket):** Si el Administrador cierra el turno de un colaborador desde el panel de usuarios, el dispositivo operativo del empleado es desconectado inmediatamente en tiempo real.
 2. **Capa 2 (Heartbeat Anticaídas):** Verificación de sesión cada 8 segundos y al reactivar la pantalla (`visibilitychange`). Si el turno ya expiró, purga la sesión local.
 3. **Capa 3 (Hard Block en Backend):** En `backend/app/core/deps.py`, los decoradores de rol verifican que exista un registro activo en la tabla `turno_laboral`. Toda petición operativa sin turno abierto es rechazada con `401 Unauthorized`.
+
+---
+
+## 16. Módulo de Empaques Para Llevar y Recargo Dinámico por Receta
+
+El sistema resuelve la gestión de desechables y empaques sin ensuciar la carta de comidas del mesero:
+
+1. **Insumos de Servicio (`DESECHABLE_SERVICIO`):** C1 (Caja Hamburguesa), P1 (Caja Perro Caliente), y bolsas T20, T25, T30, T40 están registradas como insumos con stock, costo unitario y precio de venta al público para despacho.
+2. **Asignación en Recetas (`solo_llevar = True`):** Cada plato puede tener asignado en su receta oficial el empaque y la bolsa correspondiente marcando la casilla **"🥡 Solo Llevar"**.
+3. **Regla de Consumo y Cobro Condicional:**
+   - Si el pedido se marca como **"🍽️ Comer Aquí" (LOCAL)**: Los insumos marcados con `solo_llevar` **no se descuentan** del inventario ni se cobran al cliente.
+   - Si el pedido se marca como **"🥡 Para Llevar" (LLEVAR)**: La comanda calcula automáticamente el `recargo_empaque` sumándolo al total del pedido, y tanto la cocina como la caja descuentan atómicamente del inventario los empaques correspondientes.
+4. **Catálogo Limpio:** Ningún artículo de empaque (C1, P1, bolsas) aparece como plato o producto seleccionable para el mesero, eliminando errores de digitación en salón.
+
+---
+
+## 17. Módulo de Gastos Operativos y Salidas de Caja Menor
+
+Permite registrar compras operativas que no corresponden a ingredientes de recetas gastronómicas (artículos de aseo, suministros y papelería):
+
+1. **Categoría `GASTO_OPERATIVO`:** Registrada en auditoría inmutable de `movimiento_caja`.
+2. **Atajos Rápidos en 1 Clic:**
+   - 🧼 Jabón Axion (Lavado de loza y cocina)
+   - 🧽 Esponjas y fibras
+   - 🧻 Papel higiénico (Baños)
+   - 🧻 Papel toalla / cocina
+   - 🧴 Límpido / Desinfectante
+   - 🧾 Rollos de papel térmico para comanda y factura
+3. **Acceso Dual:** Accesible de forma destacada tanto en la barra superior de **Caja Registradora** (`💸 Gastos / Salidas`) como en el **Panel Gerencial (Admin)** para que el dueño o supervisor registre salidas de gaveta sin interrumpir la operación.
+4. **Impacto en Arqueo y Planilla:** Todo gasto operativo se descuenta automáticamente del efectivo en gaveta esperado para el cuadre ciego final.

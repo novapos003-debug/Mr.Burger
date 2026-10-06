@@ -83,6 +83,7 @@ def cobrar_pedido(db: Session, pedido: Pedido, cobro: CobroIn, cajero) -> dict:
             if not es_prep:
                 nombre_prod = detalle.producto.nombre if detalle.producto else f"Item {detalle.producto_id}"
                 ref = f"Cobro en Caja Pedido #{pedido.consecutivo} - {nombre_prod}"
+                es_llevar = bool(getattr(pedido, "tipo_consumo", "LOCAL") == "LLEVAR")
                 descontar_insumos_de_producto(
                     db=db,
                     producto_id=detalle.producto_id,
@@ -90,6 +91,7 @@ def cobrar_pedido(db: Session, pedido: Pedido, cobro: CobroIn, cajero) -> dict:
                     usuario_id=cajero.id,
                     pedido_id=pedido.id,
                     referencia_base=ref,
+                    es_llevar=es_llevar,
                 )
             detalle.preparado_en = func.now()
             detalle.listo_en = detalle.listo_en or func.now()

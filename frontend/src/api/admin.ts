@@ -80,8 +80,10 @@ export const getIngredientesApi = async (categoriaInsumoId?: number): Promise<In
 export const crearIngredienteApi = async (data: {
   nombre: string
   categoria_insumo_id?: number | null
+  tipo_articulo?: string | null
   unidad_base: string
   costo_unitario?: number
+  precio_venta?: number
   stock_actual?: number
   stock_minimo?: number
 }): Promise<IngredienteItem> => {

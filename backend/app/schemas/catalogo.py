@@ -117,9 +117,11 @@ class ProductoOut(BaseModel):
 class IngredienteIn(BaseModel):
     nombre: str = Field(min_length=1, max_length=100)
     categoria_insumo_id: int | None = None
+    tipo_articulo: str = "INSUMO_RECETA"
     unidad_base: str = Field(pattern="^(GRAMO|MILILITRO|UNIDAD|LONJA|PORCION|PAQUETE)$")
     costo_unitario: Decimal = 0
     costo_proveedor: str | None = None
+    precio_venta: Decimal = 0
     stock_actual: Decimal = 0
     stock_minimo: Decimal = 0
     stock_ideal: Decimal | None = None
@@ -129,9 +131,11 @@ class IngredienteIn(BaseModel):
 class IngredienteUpdate(BaseModel):
     nombre: str | None = None
     categoria_insumo_id: int | None = None
+    tipo_articulo: str | None = None
     unidad_base: str | None = None
     costo_unitario: Decimal | None = None
     costo_proveedor: str | None = None
+    precio_venta: Decimal | None = None
     stock_actual: Decimal | None = None
     stock_minimo: Decimal | None = None
     stock_ideal: Decimal | None = None
@@ -143,9 +147,11 @@ class IngredienteOut(BaseModel):
     categoria_insumo_id: int | None = None
     categoria_insumo_nombre: str | None = None
     nombre: str
+    tipo_articulo: str | None = None
     unidad_base: str
     costo_unitario: Decimal
     costo_proveedor: str | None
+    precio_venta: Decimal = Decimal("0")
     stock_actual: Decimal
     stock_minimo: Decimal
     stock_ideal: Decimal | None
@@ -161,6 +167,7 @@ class DetalleRecetaIn(BaseModel):
     ingrediente_id: int
     cantidad: Decimal = Field(gt=0)
     unidad: str = Field(min_length=1, max_length=20)
+    solo_llevar: bool = False
 
 
 class RecetaOut(BaseModel):
@@ -171,6 +178,7 @@ class RecetaOut(BaseModel):
     unidad_base: str
     costo_unitario: Decimal | None = None
     costo_total: Decimal | None = None
+    solo_llevar: bool = False
 
 
 class MovimientoInventarioOut(BaseModel):

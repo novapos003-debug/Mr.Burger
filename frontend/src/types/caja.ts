@@ -93,6 +93,7 @@ export type CategoriaMovimiento =
   | 'DEVOLUCION'
   | 'COBRO_VALE'
   | 'CAMBIO_INICIAL'
+  | 'GASTO_OPERATIVO'
   | 'OTRO'
 
 export interface MovimientoCajaIn {

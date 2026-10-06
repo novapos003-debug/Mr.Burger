@@ -22,6 +22,7 @@ def expandir_insumos_producto(
     cantidad_producto: Decimal = Decimal("1"),
     visitados: set[int] | None = None,
     productos_map: dict[int, Any] | None = None,
+    es_llevar: bool = False,
 ) -> dict[int, dict[str, Any]]:
     """Expande recursivamente todos los insumos necesarios para producir `cantidad_producto`
     de un producto dado.
@@ -30,6 +31,7 @@ def expandir_insumos_producto(
     1. Recetas directas (DetalleReceta).
     2. Productos compuestos / Combos (ComponenteCombo): expande los ingredientes de cada subproducto.
     3. Conversión de unidades automática (ej: 0.07 kg -> 70 g).
+    4. Empaques para llevar: si es_llevar=False, omite los insumos marcados con solo_llevar=True.
 
     Retorna un diccionario agrupado por `ingrediente_id`:
     {
@@ -73,7 +75,7 @@ def expandir_insumos_producto(
         for comp in producto.componentes_combo:
             cant_hijo = comp.cantidad * cantidad_producto
             sub_insumos = expandir_insumos_producto(
-                db, comp.producto_hijo_id, cant_hijo, visitados.copy(), productos_map=productos_map
+                db, comp.producto_hijo_id, cant_hijo, visitados.copy(), productos_map=productos_map, es_llevar=es_llevar
             )
             for ing_id, datos in sub_insumos.items():
                 if ing_id not in insumos_agrupados:
@@ -85,6 +87,10 @@ def expandir_insumos_producto(
     # Caso B: Receta directa
     if producto.receta:
         for linea in producto.receta:
+            # Si el insumo es exclusivo para llevar (C1, P1, Bolsas) y el pedido es LOCAL, se omite
+            if getattr(linea, "solo_llevar", False) and not es_llevar:
+                continue
+
             ing = linea.ingrediente
             if not ing:
                 continue
@@ -115,11 +121,54 @@ def expandir_insumos_producto(
     return insumos_agrupados
 
 
+def calcular_recargo_empaque(db: Session, lineas: list[Any]) -> tuple[Decimal, list[dict[str, Any]]]:
+    """Calcula el recargo por concepto de empaques para llevar (cajas, bolsas con precio de venta)
+    según las recetas de los platillos del pedido.
+    """
+    total_recargo = Decimal("0")
+    detalles: list[dict[str, Any]] = []
+
+    for item in lineas:
+        p_id = getattr(item, "producto_id", None)
+        if p_id is None and isinstance(item, dict):
+            p_id = item.get("producto_id")
+        cant = getattr(item, "cantidad", Decimal("1"))
+        if cant is None and isinstance(item, dict):
+            cant = Decimal(str(item.get("cantidad", 1)))
+
+        prod = (
+            db.query(Producto)
+            .options(joinedload(Producto.receta).joinedload(DetalleReceta.ingrediente))
+            .filter(Producto.id == p_id)
+            .first()
+        )
+        if not prod or not prod.receta:
+            continue
+
+        for r in prod.receta:
+            if getattr(r, "solo_llevar", False) and r.ingrediente:
+                ing = r.ingrediente
+                p_venta = getattr(ing, "precio_venta", Decimal("0")) or Decimal("0")
+                if p_venta > Decimal("0"):
+                    cant_empaque = (r.cantidad * cant).quantize(Decimal("1"))
+                    monto = (p_venta * cant_empaque).quantize(Decimal("0.01"))
+                    total_recargo += monto
+                    detalles.append({
+                        "ingrediente_id": ing.id,
+                        "nombre": ing.nombre,
+                        "cantidad": cant_empaque,
+                        "precio_unitario": p_venta,
+                        "total": monto,
+                    })
+
+    return total_recargo, detalles
+
+
 def calcular_costo_y_margen(db: Session, producto: Producto) -> dict[str, Decimal]:
     """Calcula el costo de producción, utilidad bruta y margen porcentual de un producto
     con base en su receta oficial de 1 unidad.
     """
-    insumos = expandir_insumos_producto(db, producto.id, Decimal("1"))
+    insumos = expandir_insumos_producto(db, producto.id, Decimal("1"), es_llevar=False)
     costo_produccion = sum((d["costo_total"] for d in insumos.values()), Decimal("0")).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
     )
@@ -152,6 +201,7 @@ def descontar_insumos_de_producto(
     usuario_id: int,
     pedido_id: int | None = None,
     referencia_base: str = "",
+    es_llevar: bool = False,
 ) -> list[MovimientoInventario]:
     """Descuenta atómicamente del inventario los insumos requeridos para producir
     `cantidad` del producto `producto_id`, dejando saldo anterior, saldo nuevo
@@ -160,7 +210,7 @@ def descontar_insumos_de_producto(
     if cantidad <= Decimal("0"):
         return []
 
-    insumos = expandir_insumos_producto(db, producto_id, cantidad)
+    insumos = expandir_insumos_producto(db, producto_id, cantidad, es_llevar=es_llevar)
     if not insumos:
         return []
 

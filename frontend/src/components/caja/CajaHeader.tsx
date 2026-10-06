@@ -102,14 +102,14 @@ export const CajaHeader: React.FC<Props> = ({
             )}
           </button>
 
-          {/* Movimientos de Caja Menor (Retiros y Depósitos) */}
+          {/* Movimientos de Caja Menor (Gastos Operativos, Retiros y Depósitos) */}
           <button
             onClick={onMovimientosClick}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition cursor-pointer"
-            title="Registrar entradas o salidas de dinero no operativas (caja menor)"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-black text-xs bg-rose-950/80 hover:bg-rose-900 border border-rose-700/80 text-rose-300 shadow-md transition cursor-pointer"
+            title="Registrar gastos operativos (jabón Axion, esponjas, papel higiénico, insumos) o salidas de caja"
           >
-            <FileSpreadsheet className="w-4 h-4 text-sky-400" />
-            <span className="hidden sm:inline">Caja Menor</span>
+            <FileSpreadsheet className="w-4 h-4 text-rose-400" />
+            <span>💸 Gastos / Salidas</span>
           </button>
 
           {/* Botón Abrir / Cerrar Turno */}

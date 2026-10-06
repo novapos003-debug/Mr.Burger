@@ -28,8 +28,17 @@ export const CatalogoMesero: React.FC<Props> = ({
     return '🍽️'
   }
 
+  const categoriasValidas = useMemo(() => {
+    return categorias.filter(
+      (c) => c.id !== 99 && !c.nombre.toUpperCase().includes('SERVICIO') && !c.nombre.toUpperCase().includes('EMPAQUE')
+    )
+  }, [categorias])
+
   const productosFiltrados = useMemo(() => {
     return productos.filter((p) => {
+      if (p.categoria_id === 99) return false
+      const n = (p.nombre || '').toLowerCase()
+      if (n.startsWith('empaque') || n.includes('desechable') || n === 'c1' || n === 'p1') return false
       const matchCat = catSeleccionada === null || p.categoria_id === catSeleccionada
       const matchText =
         p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
@@ -68,10 +77,10 @@ export const CatalogoMesero: React.FC<Props> = ({
             }`}
           >
             <span>🍽️</span>
-            <span>Todos ({productos.length})</span>
+            <span>Todos ({productosFiltrados.length})</span>
           </button>
 
-          {categorias.map((cat) => {
+          {categoriasValidas.map((cat) => {
             const count = productos.filter((p) => p.categoria_id === cat.id).length
             const isSelected = catSeleccionada === cat.id
             return (

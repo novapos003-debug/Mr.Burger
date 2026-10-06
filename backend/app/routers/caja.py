@@ -229,10 +229,10 @@ async def cerrar_turno_endpoint(
 def crear_movimiento(
     data: MovimientoCajaIn,
     db: Session = Depends(get_db),
-    admin: Usuario = Depends(admin_required),
+    usuario: Usuario = Depends(cashier_required),
 ):
-    """Entrada/egreso manual de caja: SOLO admin (regla del dueño)."""
-    return registrar_movimiento(db, admin, data)
+    """Entrada/egreso manual de caja o gastos operativos (cajero o admin con turno abierto)."""
+    return registrar_movimiento(db, usuario, data)
 
 
 @router.get("/cierres", response_model=list[CierreOut])

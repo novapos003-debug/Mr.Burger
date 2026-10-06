@@ -29,6 +29,7 @@ class DetallePedidoIn(BaseModel):
 class RondaIn(BaseModel):
     ronda: int = Field(gt=0)
     lineas: list[DetallePedidoIn] = Field(min_length=1)
+    tipo_consumo: str | None = Field(default=None, pattern="^(LOCAL|LLEVAR)$")
 
 
 class DetallePedidoOut(BaseModel):
@@ -49,6 +50,7 @@ class DetallePedidoOut(BaseModel):
 # ---------- PEDIDO ----------
 class PedidoCreate(BaseModel):
     canal: str = Field(pattern="^(MESA|MOSTRADOR|DIDI|DOMICILIO)$")
+    tipo_consumo: str = Field(default="LOCAL", pattern="^(LOCAL|LLEVAR)$")
     mesa_id: int | None = Field(default=None, validate_default=True)
     cliente: str | None = None
     telefono: str | None = None
@@ -73,6 +75,7 @@ class PedidoOut(BaseModel):
     consecutivo: int
     fecha_dia: date
     canal: str
+    tipo_consumo: str = "LOCAL"
     mesa_id: int | None
     mesa_numero: int | None = None
     estado: str
@@ -83,6 +86,7 @@ class PedidoOut(BaseModel):
     didi_orden_id: str | None
     subtotal: Decimal | None  # oculto para cocina
     iva: Decimal | None
+    recargo_empaque: Decimal | None = None
     total: Decimal | None
     creado_en: datetime
     enviado_en: datetime | None

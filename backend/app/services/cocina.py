@@ -35,6 +35,7 @@ def descontar_inventario(db: Session, detalle: DetallePedido, cocinero: Usuario)
         return
 
     referencia = f"Pedido #{detalle.pedido.consecutivo} - {detalle.producto.nombre}"
+    es_llevar = bool(detalle.pedido and getattr(detalle.pedido, "tipo_consumo", "LOCAL") == "LLEVAR")
     descontar_insumos_de_producto(
         db=db,
         producto_id=detalle.producto_id,
@@ -42,6 +43,7 @@ def descontar_inventario(db: Session, detalle: DetallePedido, cocinero: Usuario)
         usuario_id=cocinero.id,
         pedido_id=detalle.pedido_id,
         referencia_base=referencia,
+        es_llevar=es_llevar,
     )
 
 

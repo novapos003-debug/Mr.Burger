@@ -86,7 +86,7 @@ class MovimientoCajaOut(BaseModel):
 class MovimientoCajaIn(BaseModel):
     tipo: str = Field(pattern="^(ENTRADA|SALIDA)$")
     categoria: str = Field(
-        pattern="^(PAGO_TURNO|PRESTAMO|ADELANTO|PROVEEDOR|DEVOLUCION|COBRO_VALE|CAMBIO_INICIAL|OTRO)$"
+        pattern="^(PAGO_TURNO|PRESTAMO|ADELANTO|PROVEEDOR|DEVOLUCION|COBRO_VALE|CAMBIO_INICIAL|GASTO_OPERATIVO|OTRO)$"
     )
     valor: Decimal = Field(gt=0)
     descripcion: str = Field(min_length=3, max_length=500)  # obligatoria (regla del dueño)

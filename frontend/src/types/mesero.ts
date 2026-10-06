@@ -85,6 +85,7 @@ export interface Pedido {
   pagado_en?: string | null
   subtotal?: number | null
   iva?: number | null
+  recargo_empaque?: number | null
   total?: number | null
   detalles: DetallePedido[]
 }

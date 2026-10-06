@@ -69,6 +69,7 @@ def pedido_out(db: Session, pedido: Pedido, usuario: Usuario) -> PedidoOut:
         consecutivo=pedido.consecutivo,
         fecha_dia=pedido.fecha_dia,
         canal=pedido.canal,
+        tipo_consumo=getattr(pedido, "tipo_consumo", "LOCAL") or "LOCAL",
         mesa_id=pedido.mesa_id,
         mesa_numero=pedido.mesa.numero if pedido.mesa else None,
         estado=pedido.estado,
@@ -79,6 +80,7 @@ def pedido_out(db: Session, pedido: Pedido, usuario: Usuario) -> PedidoOut:
         didi_orden_id=pedido.didi_orden_id,
         subtotal=pedido.subtotal if ver_dinero else None,
         iva=pedido.iva if ver_dinero else None,
+        recargo_empaque=getattr(pedido, "recargo_empaque", Decimal("0")) if ver_dinero else None,
         total=pedido.total if ver_dinero else None,
         creado_en=pedido.creado_en,
         enviado_en=pedido.enviado_en,
@@ -241,11 +243,13 @@ async def crear_pedido(
 
     dia = fecha_local()
     consecutivo = siguiente_consecutivo(db, dia)
+    tipo_con = getattr(data, "tipo_consumo", "LOCAL") or "LOCAL"
     pedido = Pedido(
         idempotency_key=data.idempotency_key,
         consecutivo=consecutivo,
         fecha_dia=dia,
         canal=data.canal,
+        tipo_consumo=tipo_con,
         mesa_id=data.mesa_id if data.canal == "MESA" else None,
         usuario_id=usuario.id,
         cliente=data.cliente,
@@ -259,7 +263,16 @@ async def crear_pedido(
 
     detalles = _crear_detalles(db, pedido, data.lineas, ronda=1, usuario=usuario)
     totales = calcular_totales(db, detalles)
-    pedido.subtotal, pedido.iva, pedido.total = totales["subtotal"], totales["iva"], totales["total"]
+
+    recargo_empaque = Decimal("0")
+    if tipo_con == "LLEVAR":
+        from app.services.inventario import calcular_recargo_empaque
+        recargo_empaque, _ = calcular_recargo_empaque(db, data.lineas)
+
+    pedido.recargo_empaque = recargo_empaque
+    pedido.subtotal = totales["subtotal"]
+    pedido.iva = totales["iva"]
+    pedido.total = totales["total"] + recargo_empaque
 
     if data.canal == "MESA":
         pedido.mesa.estado = "OCUPADA"  # la mesa se bloquea al abrir el pedido
@@ -419,7 +432,19 @@ async def agregar_ronda(
     _validar_lineas(db, data.lineas)
     detalles = _crear_detalles(db, pedido, data.lineas, ronda=data.ronda, usuario=usuario)
     totales = calcular_totales(db, pedido.detalles + detalles)
-    pedido.subtotal, pedido.iva, pedido.total = totales["subtotal"], totales["iva"], totales["total"]
+
+    if data.tipo_consumo:
+        pedido.tipo_consumo = data.tipo_consumo
+
+    recargo_empaque = Decimal("0")
+    if getattr(pedido, "tipo_consumo", "LOCAL") == "LLEVAR":
+        from app.services.inventario import calcular_recargo_empaque
+        recargo_empaque, _ = calcular_recargo_empaque(db, pedido.detalles + detalles)
+
+    pedido.recargo_empaque = recargo_empaque
+    pedido.subtotal = totales["subtotal"]
+    pedido.iva = totales["iva"]
+    pedido.total = totales["total"] + recargo_empaque
 
     # Regla del dueño: cada ronda es un ticket PROPIO para cocina. Si la cocina ya
     # había terminado/entregado el pedido, la ronda nueva lo reactiva como ticket

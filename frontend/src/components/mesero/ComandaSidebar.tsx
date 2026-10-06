@@ -97,6 +97,15 @@ export const ComandaSidebar: React.FC<Props> = ({
         </button>
       </div>
 
+      {tipoConsumo === 'LLEVAR' && (
+        <div className="mb-2.5 px-2.5 py-1.5 rounded-xl bg-orange-950/40 border border-orange-800/60 flex items-center gap-2 text-[10px] text-orange-300 shrink-0">
+          <span className="text-sm">🥡</span>
+          <span className="leading-tight">
+            <strong>Para llevar:</strong> Empaques (cajas, bolsas) se liquidan automáticamente según receta.
+          </span>
+        </div>
+      )}
+
       {/* Si hay pedido activo en esta mesa, mostrar lo que ya se ordenó */}
       {isRonda && pedidoActivo && (
         <div className="mb-2.5 p-2 rounded-2xl bg-amber-950/30 border border-amber-800/50 max-h-24 overflow-y-auto shrink-0">
@@ -213,15 +222,13 @@ export const ComandaSidebar: React.FC<Props> = ({
                     )}
                   </div>
 
-                  {!item.variacion?.notas?.includes('Cargo Automático') && (
-                    <button
-                      type="button"
-                      onClick={() => onRemoveItem(item.uid)}
-                      className="text-slate-600 hover:text-red-400 p-1 transition cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => onRemoveItem(item.uid)}
+                    className="text-slate-600 hover:text-red-400 p-1 transition cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
                 {/* Stepper de Cantidad */}
@@ -230,29 +237,25 @@ export const ComandaSidebar: React.FC<Props> = ({
                     ${item.precio_unitario.toLocaleString('es-CO')} c/u
                   </span>
 
-                  {!item.variacion?.notas?.includes('Cargo Automático') ? (
-                    <div className="flex items-center gap-2 bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-800">
-                      <button
-                        type="button"
-                        onClick={() => onUpdateCantidad(item.uid, -1)}
-                        className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-white transition"
-                      >
-                        <Minus className="w-2.5 h-2.5" />
-                      </button>
-                      <span className="text-xs font-black text-white w-4 text-center">
-                        {item.cantidad}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => onUpdateCantidad(item.uid, 1)}
-                        className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-white transition"
-                      >
-                        <Plus className="w-2.5 h-2.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="text-xs font-black text-amber-500">Autocalculado: {item.cantidad}</span>
-                  )}
+                  <div className="flex items-center gap-2 bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => onUpdateCantidad(item.uid, -1)}
+                      className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-white transition"
+                    >
+                      <Minus className="w-2.5 h-2.5" />
+                    </button>
+                    <span className="text-xs font-black text-white w-4 text-center">
+                      {item.cantidad}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onUpdateCantidad(item.uid, 1)}
+                      className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-white transition"
+                    >
+                      <Plus className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )

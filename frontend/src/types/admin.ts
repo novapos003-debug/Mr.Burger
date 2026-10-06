@@ -110,12 +110,14 @@ export interface IngredienteItem {
   nombre: string
   categoria_insumo_id?: number | null
   categoria_insumo_nombre?: string | null
+  tipo_articulo?: string | null
   unidad_base: string
   stock_actual: number
   stock_minimo: number
   stock_ideal?: number | null
   costo_unitario: number
   costo_proveedor?: string | null
+  precio_venta?: number | null
   proveedor_id?: number | null
   proveedor_nombre?: string | null
   stock_bajo?: boolean
@@ -168,12 +170,14 @@ export interface DetalleRecetaItem {
   unidad_base: string
   costo_unitario?: number | null
   costo_total?: number | null
+  solo_llevar?: boolean
 }
 
 export interface DetalleRecetaInput {
   ingrediente_id: number
   cantidad: number
   unidad: string
+  solo_llevar?: boolean
 }
 
 export interface UsuarioAdminItem {

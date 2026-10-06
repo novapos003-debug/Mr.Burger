@@ -46,11 +46,16 @@ export const InventarioTab: React.FC = () => {
   const [isNuevoInsumoOpen, setIsNuevoInsumoOpen] = useState(false)
   const [nombreInsumo, setNombreInsumo] = useState('')
   const [categoriaInsumoId, setCategoriaInsumoId] = useState<number | ''>('')
+  const [tipoArticulo, setTipoArticulo] = useState<string>('INSUMO_RECETA')
   const [unidadBase, setUnidadBase] = useState('GRAMO')
   const [costoUnitario, setCostoUnitario] = useState<number>(0)
+  const [precioVenta, setPrecioVenta] = useState<number>(0)
   const [stockActual, setStockActual] = useState<number>(0)
   const [stockMinimo, setStockMinimo] = useState<number>(100)
   const [guardandoInsumo, setGuardandoInsumo] = useState(false)
+
+  // Filtro de tipo de artículo
+  const [tipoArticuloFiltro, setTipoArticuloFiltro] = useState<string>('TODOS')
 
   // Modal Nueva Categoría
   const [isNuevaCatOpen, setIsNuevaCatOpen] = useState(false)
@@ -68,7 +73,9 @@ export const InventarioTab: React.FC = () => {
   const [insumoEditando, setInsumoEditando] = useState<IngredienteItem | null>(null)
   const [editNombre, setEditNombre] = useState('')
   const [editCategoriaId, setEditCategoriaId] = useState<number | ''>('')
+  const [editTipoArticulo, setEditTipoArticulo] = useState<string>('INSUMO_RECETA')
   const [editCostoUnitario, setEditCostoUnitario] = useState<number>(0)
+  const [editPrecioVenta, setEditPrecioVenta] = useState<number>(0)
   const [editStockMinimo, setEditStockMinimo] = useState<number>(0)
   const [guardandoEdicion, setGuardandoEdicion] = useState(false)
 
@@ -133,12 +140,17 @@ export const InventarioTab: React.FC = () => {
   const ingredientesFiltrados = useMemo(() => {
     return ingredientes.filter((i) => {
       const matchCat = categoriaFiltro === null || i.categoria_insumo_id === categoriaFiltro
+      const matchTipo =
+        tipoArticuloFiltro === 'TODOS' ||
+        (tipoArticuloFiltro === 'DESECHABLE_SERVICIO' && i.tipo_articulo === 'DESECHABLE_SERVICIO') ||
+        (tipoArticuloFiltro === 'GASTO_OPERATIVO' && i.tipo_articulo === 'GASTO_OPERATIVO') ||
+        (tipoArticuloFiltro === 'INSUMO_RECETA' && (i.tipo_articulo === 'INSUMO_RECETA' || !i.tipo_articulo))
       const matchText =
         i.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
         (i.categoria_insumo_nombre && i.categoria_insumo_nombre.toLowerCase().includes(busqueda.toLowerCase()))
-      return matchCat && matchText
+      return matchCat && matchTipo && matchText
     })
-  }, [ingredientes, categoriaFiltro, busqueda])
+  }, [ingredientes, categoriaFiltro, tipoArticuloFiltro, busqueda])
 
   // Guardar Nuevo Insumo
   const handleCrearInsumo = async (e: React.FormEvent) => {
@@ -149,8 +161,10 @@ export const InventarioTab: React.FC = () => {
       await crearIngredienteApi({
         nombre: nombreInsumo.trim(),
         categoria_insumo_id: categoriaInsumoId === '' ? null : Number(categoriaInsumoId),
+        tipo_articulo: tipoArticulo,
         unidad_base: unidadBase,
         costo_unitario: Number(costoUnitario),
+        precio_venta: tipoArticulo === 'DESECHABLE_SERVICIO' ? Number(precioVenta) : 0,
         stock_actual: Number(stockActual),
         stock_minimo: Number(stockMinimo),
       })
@@ -158,6 +172,7 @@ export const InventarioTab: React.FC = () => {
       setIsNuevoInsumoOpen(false)
       setNombreInsumo('')
       setCostoUnitario(0)
+      setPrecioVenta(0)
       setStockActual(0)
       cargarDatos()
     } catch (err: any) {
@@ -214,7 +229,9 @@ export const InventarioTab: React.FC = () => {
     setInsumoEditando(ing)
     setEditNombre(ing.nombre)
     setEditCategoriaId(ing.categoria_insumo_id ?? '')
+    setEditTipoArticulo(ing.tipo_articulo || 'INSUMO_RECETA')
     setEditCostoUnitario(Number(ing.costo_unitario) || 0)
+    setEditPrecioVenta(Number(ing.precio_venta) || 0)
     setEditStockMinimo(Number(ing.stock_minimo) || 0)
   }
 
@@ -227,7 +244,9 @@ export const InventarioTab: React.FC = () => {
       await actualizarIngredienteApi(insumoEditando.id, {
         nombre: editNombre.trim(),
         categoria_insumo_id: editCategoriaId === '' ? null : Number(editCategoriaId),
+        tipo_articulo: editTipoArticulo,
         costo_unitario: Number(editCostoUnitario),
+        precio_venta: editTipoArticulo === 'DESECHABLE_SERVICIO' ? Number(editPrecioVenta) : 0,
         stock_minimo: Number(editStockMinimo),
       })
       setMensajeExito(`✓ Insumo "${editNombre.trim()}" actualizado correctamente.`)
@@ -436,6 +455,44 @@ export const InventarioTab: React.FC = () => {
             )
           })}
         </div>
+
+        {/* Filtro por Tipo de Artículo (Insumos vs Empaques vs Gastos) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none pt-2 border-t border-slate-800/80">
+          {[
+            { id: 'TODOS', label: 'Todos los Artículos' },
+            { id: 'INSUMO_RECETA', label: '🥩 Insumos de Cocina' },
+            { id: 'DESECHABLE_SERVICIO', label: '🥡 Empaques y Desechables (C1, P1, Bolsas...)' },
+            { id: 'GASTO_OPERATIVO', label: '🧼 Gastos Operativos (Aseo, Papel...)' },
+          ].map((f) => {
+            const count =
+              f.id === 'TODOS'
+                ? ingredientes.length
+                : f.id === 'INSUMO_RECETA'
+                ? ingredientes.filter((i) => i.tipo_articulo === 'INSUMO_RECETA' || !i.tipo_articulo).length
+                : ingredientes.filter((i) => i.tipo_articulo === f.id).length
+            const isSelected = tipoArticuloFiltro === f.id
+            return (
+              <button
+                key={f.id}
+                onClick={() => setTipoArticuloFiltro(f.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-md'
+                    : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                }`}
+              >
+                <span>{f.label}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                    isSelected ? 'bg-orange-900 text-white' : 'bg-slate-800 text-slate-300'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* Tabla de Insumos */}
@@ -490,9 +547,36 @@ export const InventarioTab: React.FC = () => {
 
                   return (
                     <tr key={ing.id} className="hover:bg-slate-800/40 transition">
-                      <td className="p-3.5 font-bold text-white flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-purple-500" />
-                        <span>{ing.nombre}</span>
+                      <td className="p-3.5 font-bold text-white">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              ing.tipo_articulo === 'DESECHABLE_SERVICIO'
+                                ? 'bg-orange-500'
+                                : ing.tipo_articulo === 'GASTO_OPERATIVO'
+                                ? 'bg-rose-500'
+                                : 'bg-purple-500'
+                            }`}
+                          />
+                          <span>{ing.nombre}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1 mt-1 pl-4">
+                          {ing.tipo_articulo === 'DESECHABLE_SERVICIO' && (
+                            <span className="text-[9px] bg-orange-950/80 text-orange-300 border border-orange-800/80 px-1.5 py-0.2 rounded font-semibold">
+                              🥡 Empaque / Para Llevar
+                            </span>
+                          )}
+                          {ing.tipo_articulo === 'GASTO_OPERATIVO' && (
+                            <span className="text-[9px] bg-rose-950/80 text-rose-300 border border-rose-800/80 px-1.5 py-0.2 rounded font-semibold">
+                              🧼 Gasto Operativo
+                            </span>
+                          )}
+                          {Number(ing.precio_venta || 0) > 0 && (
+                            <span className="text-[9px] bg-emerald-950/80 text-emerald-300 border border-emerald-800/80 px-1.5 py-0.2 rounded font-mono font-bold">
+                              Llevar: ${Number(ing.precio_venta).toLocaleString('es-CO')}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="p-3.5 text-slate-400">
                         <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] font-semibold">
@@ -579,16 +663,52 @@ export const InventarioTab: React.FC = () => {
 
             <form onSubmit={handleCrearInsumo} className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-400 font-bold mb-1">Nombre del Insumo</label>
+                <label className="block text-slate-400 font-bold mb-1">Nombre del Insumo / Artículo</label>
                 <input
                   type="text"
                   required
                   value={nombreInsumo}
                   onChange={(e) => setNombreInsumo(e.target.value)}
-                  placeholder="Ej: Papa criolla, Tocineta, Salsa tártara..."
+                  placeholder="Ej: Papa criolla, Caja C1, Bolsa T25, Jabón Axion..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-purple-500"
                 />
               </div>
+
+              <div>
+                <label className="block text-slate-400 font-bold mb-1">Tipo de Artículo / Destino</label>
+                <select
+                  value={tipoArticulo}
+                  onChange={(e) => setTipoArticulo(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-bold focus:outline-none focus:border-purple-500"
+                >
+                  <option value="INSUMO_RECETA">🥩 INSUMO DE COCINA (Carne, pan, vegetales, salsas...)</option>
+                  <option value="DESECHABLE_SERVICIO">🥡 EMPAQUE / DESECHABLE (Cajas C1, P1, Bolsas T20-T40, vasos...)</option>
+                  <option value="GASTO_OPERATIVO">🧼 GASTO OPERATIVO (Jabón Axion, esponjas, papel higiénico, cocina...)</option>
+                </select>
+              </div>
+
+              {tipoArticulo === 'DESECHABLE_SERVICIO' && (
+                <div className="p-3 bg-orange-950/40 border border-orange-800/60 rounded-xl space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-orange-300 font-bold text-xs">
+                      Precio de Venta al Cliente para Llevar ($ COP)
+                    </label>
+                    <span className="text-[10px] text-orange-400 font-mono font-bold">Cargo por empaque</span>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={precioVenta}
+                    onChange={(e) => setPrecioVenta(parseFloat(e.target.value) || 0)}
+                    placeholder="Ej: 1500 (para C1) o 500 (para P1) o 0"
+                    className="w-full bg-slate-900 border border-orange-700/80 rounded-lg p-2 text-emerald-400 font-mono font-bold text-sm focus:outline-none"
+                  />
+                  <p className="text-[10px] text-orange-300/80 leading-tight">
+                    💡 Si se incluye en la receta marcado como <strong>"Solo Llevar"</strong>, este precio se sumará automáticamente a la cuenta final cuando el pedido sea para llevar.
+                  </p>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -938,7 +1058,7 @@ export const InventarioTab: React.FC = () => {
 
             <form onSubmit={handleGuardarEdicion} className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-400 font-bold mb-1">Nombre del Insumo</label>
+                <label className="block text-slate-400 font-bold mb-1">Nombre del Insumo / Artículo</label>
                 <input
                   type="text"
                   required
@@ -947,6 +1067,42 @@ export const InventarioTab: React.FC = () => {
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-purple-500 font-bold"
                 />
               </div>
+
+              <div>
+                <label className="block text-slate-400 font-bold mb-1">Tipo de Artículo / Destino</label>
+                <select
+                  value={editTipoArticulo}
+                  onChange={(e) => setEditTipoArticulo(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-bold focus:outline-none focus:border-purple-500"
+                >
+                  <option value="INSUMO_RECETA">🥩 INSUMO DE COCINA (Carne, pan, vegetales, salsas...)</option>
+                  <option value="DESECHABLE_SERVICIO">🥡 EMPAQUE / DESECHABLE (Cajas C1, P1, Bolsas T20-T40, vasos...)</option>
+                  <option value="GASTO_OPERATIVO">🧼 GASTO OPERATIVO (Jabón Axion, esponjas, papel higiénico, cocina...)</option>
+                </select>
+              </div>
+
+              {editTipoArticulo === 'DESECHABLE_SERVICIO' && (
+                <div className="p-3 bg-orange-950/40 border border-orange-800/60 rounded-xl space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-orange-300 font-bold text-xs">
+                      Precio de Venta al Cliente para Llevar ($ COP)
+                    </label>
+                    <span className="text-[10px] text-orange-400 font-mono font-bold">Cargo por empaque</span>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={editPrecioVenta}
+                    onChange={(e) => setEditPrecioVenta(parseFloat(e.target.value) || 0)}
+                    placeholder="Ej: 1500 (para C1) o 500 (para P1) o 0"
+                    className="w-full bg-slate-900 border border-orange-700/80 rounded-lg p-2 text-emerald-400 font-mono font-bold text-sm focus:outline-none"
+                  />
+                  <p className="text-[10px] text-orange-300/80 leading-tight">
+                    💡 Si se incluye en la receta marcado como <strong>"Solo Llevar"</strong>, este precio se sumará automáticamente a la cuenta final cuando el pedido sea para llevar.
+                  </p>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

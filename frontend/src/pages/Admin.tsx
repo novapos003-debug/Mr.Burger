@@ -36,6 +36,7 @@ import { UsuariosTab } from '../components/admin/UsuariosTab'
 import { ConfiguracionTab } from '../components/admin/ConfiguracionTab'
 import { AsistenciaTab } from '../components/admin/AsistenciaTab'
 import { AdicionesManager } from '../components/admin/AdicionesManager'
+import { MovimientosModal } from '../components/caja/MovimientosModal'
 import { FooterCredits } from '../components/common/FooterCredits'
 import {
   Shield,
@@ -164,6 +165,7 @@ export const Admin: React.FC = () => {
   const [guardandoEdicionProd, setGuardandoEdicionProd] = useState(false)
   const [eliminandoProducto, setEliminandoProducto] = useState(false)
   const [adicionesModalOpen, setAdicionesModalOpen] = useState(false)
+  const [isGastosModalOpen, setIsGastosModalOpen] = useState(false)
 
   // Feedback general
   const [bannerSuccess, setBannerSuccess] = useState<string | null>(null)
@@ -313,6 +315,7 @@ export const Admin: React.FC = () => {
           ingrediente_id: l.ingrediente_id,
           cantidad: Number(l.cantidad),
           unidad: l.unidad,
+          solo_llevar: Boolean(l.solo_llevar),
         }))
       )
 
@@ -418,6 +421,7 @@ export const Admin: React.FC = () => {
         ingrediente_id: primerIng.id,
         cantidad: 1,
         unidad: primerIng.unidad_base === 'GRAMO' ? 'g' : primerIng.unidad_base === 'MILILITRO' ? 'ml' : 'u',
+        solo_llevar: primerIng.tipo_articulo === 'DESECHABLE_SERVICIO',
       },
     ])
   }
@@ -434,6 +438,9 @@ export const Admin: React.FC = () => {
         const ing = ingredientes.find((i) => i.id === Number(valor))
         if (ing) {
           copia[idx].unidad = ing.unidad_base === 'GRAMO' ? 'g' : ing.unidad_base === 'MILILITRO' ? 'ml' : 'u'
+          if (ing.tipo_articulo === 'DESECHABLE_SERVICIO') {
+            copia[idx].solo_llevar = true
+          }
         }
       }
       return copia
@@ -445,7 +452,15 @@ export const Admin: React.FC = () => {
     setGuardandoReceta(true)
     setRecetaError(null)
     try {
-      await guardarRecetaProductoApi(productoSeleccionado.id, recetaLineas)
+      await guardarRecetaProductoApi(
+        productoSeleccionado.id,
+        recetaLineas.map((l) => ({
+          ingrediente_id: l.ingrediente_id,
+          cantidad: Number(l.cantidad),
+          unidad: l.unidad,
+          solo_llevar: Boolean(l.solo_llevar),
+        }))
+      )
       setBannerSuccess(
         `✓ ¡Receta de "${productoSeleccionado.nombre}" guardada! Los ingredientes han sido sincronizados para la comanda y cocina.`
       )
@@ -817,6 +832,15 @@ export const Admin: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsGastosModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-700/80 text-xs font-black text-rose-200 transition cursor-pointer shadow-lg shadow-rose-950/40"
+              title="Registrar gastos operativos de caja (Axion, esponjas, papel higiénico, aseo, etc.)"
+            >
+              <Receipt className="w-3.5 h-3.5 text-rose-400" />
+              <span>💸 Gastos / Salidas</span>
+            </button>
+
             <button
               onClick={() => {
                 if (tabActiva === 'DASHBOARD') cargarDashboard()
@@ -2311,14 +2335,15 @@ export const Admin: React.FC = () => {
                                         {ingredientes.map((ing) => (
                                           <option key={ing.id} value={ing.id}>
                                             {ing.nombre} ({ing.stock_actual} {ing.unidad_base} en stock)
+                                            {ing.tipo_articulo === 'DESECHABLE_SERVICIO' ? ' [🥡 Empaque]' : ''}
                                           </option>
                                         ))}
                                       </select>
                                     </div>
 
-                                    {/* Cantidad + Unidad + Eliminar en fila */}
-                                    <div className="flex items-end gap-2">
-                                      <div className="w-20 sm:w-24 shrink-0">
+                                    {/* Cantidad + Unidad + Solo Llevar + Eliminar en fila */}
+                                    <div className="flex items-end gap-2 flex-wrap sm:flex-nowrap">
+                                      <div className="w-16 sm:w-20 shrink-0">
                                         <label className="block text-[10px] text-slate-500 mb-0.5">
                                           Cantidad
                                         </label>
@@ -2334,7 +2359,7 @@ export const Admin: React.FC = () => {
                                         />
                                       </div>
 
-                                      <div className="w-20 sm:w-24 shrink-0">
+                                      <div className="w-16 sm:w-20 shrink-0">
                                         <label className="block text-[10px] text-slate-500 mb-0.5">
                                           Unidad
                                         </label>
@@ -2349,8 +2374,30 @@ export const Admin: React.FC = () => {
                                         />
                                       </div>
 
+                                      {/* Checkbox Solo Para Llevar */}
+                                      <div className="shrink-0 pb-1">
+                                        <label
+                                          className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-bold border cursor-pointer select-none transition ${
+                                            linea.solo_llevar
+                                              ? 'bg-orange-950/80 border-orange-600 text-orange-300'
+                                              : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                                          }`}
+                                          title="Marcar si este insumo (ej: caja C1, perro P1, bolsa T20) solo se consume cuando el pedido es para llevar"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={Boolean(linea.solo_llevar)}
+                                            onChange={(e) =>
+                                              handleModificarLineaReceta(idx, 'solo_llevar', e.target.checked)
+                                            }
+                                            className="w-3.5 h-3.5 rounded text-orange-600 focus:ring-orange-500"
+                                          />
+                                          <span>🥡 Solo Llevar</span>
+                                        </label>
+                                      </div>
+
                                       {/* Botón Eliminar Fila */}
-                                      <div className="shrink-0">
+                                      <div className="shrink-0 pb-1">
                                         <button
                                           type="button"
                                           onClick={() => handleEliminarLineaReceta(idx)}
@@ -2362,20 +2409,40 @@ export const Admin: React.FC = () => {
                                       </div>
                                     </div>
                                   </div>
+
+                                  {/* Info de recargo si es solo llevar */}
+                                  {linea.solo_llevar && (
+                                    <div className="mt-1.5 pt-1.5 border-t border-slate-900 flex items-center justify-between text-[10px]">
+                                      <span className="text-orange-300/90 flex items-center gap-1 font-medium">
+                                        🥡 Empaque exclusivo para llevar • No se descuenta si consumen en mesa
+                                      </span>
+                                      {(() => {
+                                        const ing = ingredientes.find((item) => item.id === linea.ingrediente_id)
+                                        const pVenta = Number(ing?.precio_venta || 0)
+                                        return pVenta > 0 ? (
+                                          <span className="font-mono font-bold text-emerald-400">
+                                            +${(pVenta * Number(linea.cantidad || 1)).toLocaleString('es-CO')} recargo automático
+                                          </span>
+                                        ) : (
+                                          <span className="text-slate-400 font-mono">(Costo interno - sin recargo)</span>
+                                        )
+                                      })()}
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
                           )}
                         </div>
 
-                        {/* Vista Previa de Opciones en Comanda */}
+                        {/* Vista Previa de Opciones en Comanda (excluyendo solo_llevar) */}
                         {recetaLineas.length > 0 && (
                           <div className="p-3 bg-slate-950/90 border border-slate-800 rounded-xl">
                             <span className="text-[10px] uppercase font-bold tracking-wider text-orange-400 block mb-1.5">
-                              Vista previa: Opciones que verá el mesero y la caja para este plato:
+                              Vista previa: Opciones de personalización que verá el mesero (modificaciones):
                             </span>
                             <div className="flex flex-wrap gap-1.5">
-                              {recetaLineas.map((linea, i) => {
+                              {recetaLineas.filter((l) => !l.solo_llevar).map((linea, i) => {
                                 const ing = ingredientes.find((item) => item.id === linea.ingrediente_id)
                                 return (
                                   <span
@@ -2843,6 +2910,16 @@ export const Admin: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Modal: Gastos y Movimientos de Caja Menor */}
+        <MovimientosModal
+          isOpen={isGastosModalOpen}
+          onClose={() => {
+            setIsGastosModalOpen(false)
+            cargarDashboard()
+            if (tabActiva === 'PLANILLA') cargarReporte()
+          }}
+        />
 
         {/* Pie de Página con Créditos */}
         <FooterCredits className="border-t border-slate-800/60 mt-12 mb-4" />
