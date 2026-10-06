@@ -299,6 +299,7 @@ def ver_receta(
                 costo_unitario=costo_u,
                 costo_total=costo_linea,
                 solo_llevar=getattr(linea, "solo_llevar", False) or False,
+                precio_venta=getattr(ing, "precio_venta", Decimal("0")) if ing else Decimal("0"),
             )
         )
     return resultado
@@ -325,6 +326,10 @@ def reemplazar_receta(
         ing = db.get(Ingrediente, l.ingrediente_id)
         if not ing:
             raise HTTPException(status_code=404, detail=f"Ingrediente {l.ingrediente_id} no existe")
+        # Si se especifica precio_venta para un empaque solo llevar, sincronizarlo con el insumo
+        if l.solo_llevar and l.precio_venta is not None:
+            ing.precio_venta = l.precio_venta
+            ing.tipo_articulo = "DESECHABLE_SERVICIO"
         # Validar compatibilidad de unidades
         try:
             convertir_unidad(l.cantidad, l.unidad, ing.unidad_base)

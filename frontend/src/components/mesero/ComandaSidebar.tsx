@@ -39,6 +39,10 @@ export const ComandaSidebar: React.FC<Props> = ({
 }) => {
   const totalItemsCount = items.reduce((acc, i) => acc + i.cantidad, 0)
   const totalNuevosItems = items.reduce((acc, i) => acc + i.precio_unitario * i.cantidad, 0)
+  const totalEmpaquesLlevar = tipoConsumo === 'LLEVAR'
+    ? items.reduce((acc, i) => acc + (Number(i.producto.recargo_llevar || 0) * i.cantidad), 0)
+    : 0
+  const granTotal = totalNuevosItems + totalEmpaquesLlevar
 
   const isRonda = !!pedidoActivo && !['PAGADO', 'CERRADO', 'CANCELADO'].includes(pedidoActivo.estado)
   const nextRondaNumero = pedidoActivo
@@ -98,11 +102,20 @@ export const ComandaSidebar: React.FC<Props> = ({
       </div>
 
       {tipoConsumo === 'LLEVAR' && (
-        <div className="mb-2.5 px-2.5 py-1.5 rounded-xl bg-orange-950/40 border border-orange-800/60 flex items-center gap-2 text-[10px] text-orange-300 shrink-0">
-          <span className="text-sm">🥡</span>
-          <span className="leading-tight">
-            <strong>Para llevar:</strong> Empaques (cajas, bolsas) se liquidan automáticamente según receta.
-          </span>
+        <div className="mb-2.5 px-3 py-2 rounded-xl bg-orange-950/70 border border-orange-500/60 flex flex-col gap-1 text-xs text-orange-200 shrink-0">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 font-bold">
+              <span>🥡</span> Pedido Para Llevar
+            </span>
+            <span className="font-mono font-black text-amber-300">
+              {totalEmpaquesLlevar > 0 ? `+$${totalEmpaquesLlevar.toLocaleString('es-CO')} empaques` : 'Sin recargo'}
+            </span>
+          </div>
+          <p className="text-[10px] text-orange-300/80 leading-tight">
+            {totalEmpaquesLlevar > 0
+              ? 'Se liquidan automáticamente los empaques térmicos y bolsas asignados a las recetas.'
+              : 'Los empaques asignados no tienen cobro adicional ($0) o el plato no requiere empaque.'}
+          </p>
         </div>
       )}
 
@@ -220,6 +233,16 @@ export const ComandaSidebar: React.FC<Props> = ({
                         "{item.variacion.notas}"
                       </p>
                     )}
+
+                    {/* Badge de empaque si el pedido es para llevar */}
+                    {tipoConsumo === 'LLEVAR' && Number(item.producto.recargo_llevar || 0) > 0 && (
+                      <div className="mt-1 flex items-center gap-1 text-[10px] text-orange-300 font-semibold bg-orange-950/60 border border-orange-800/60 px-1.5 py-0.5 rounded">
+                        <span>🥡 Empaque llevar: +${(Number(item.producto.recargo_llevar) * item.cantidad).toLocaleString('es-CO')}</span>
+                        {item.producto.empaques_llevar && item.producto.empaques_llevar.length > 0 && (
+                          <span className="text-[9px] text-orange-400 font-normal">({item.producto.empaques_llevar.join(', ')})</span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <button
@@ -270,14 +293,18 @@ export const ComandaSidebar: React.FC<Props> = ({
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block leading-none">
               Total Comanda ({totalItemsCount} ítems)
             </span>
-            {ivaPorcentaje && Number(ivaPorcentaje) > 0 ? (
+            {tipoConsumo === 'LLEVAR' && totalEmpaquesLlevar > 0 ? (
+              <span className="text-[10px] text-orange-400 font-bold block mt-0.5">
+                (Incluye +${totalEmpaquesLlevar.toLocaleString('es-CO')} empaques)
+              </span>
+            ) : ivaPorcentaje && Number(ivaPorcentaje) > 0 ? (
               <span className="text-[10px] text-slate-400">IVA {ivaPorcentaje}% incluido</span>
             ) : (
               <span className="text-[10px] text-emerald-400/90 font-medium">Exento de IVA (0%)</span>
             )}
           </div>
           <span className="text-lg font-black font-mono text-emerald-400">
-            ${totalNuevosItems.toLocaleString('es-CO')}
+            ${granTotal.toLocaleString('es-CO')}
           </span>
         </div>
 
@@ -299,12 +326,12 @@ export const ComandaSidebar: React.FC<Props> = ({
           ) : isRonda ? (
             <>
               <Layers className="w-4 h-4" />
-              <span>Enviar Ronda {nextRondaNumero} • ${totalNuevosItems.toLocaleString('es-CO')}</span>
+              <span>Enviar Ronda {nextRondaNumero} • ${granTotal.toLocaleString('es-CO')}</span>
             </>
           ) : (
             <>
               <Send className="w-4 h-4" />
-              <span>Enviar a Cocina • ${totalNuevosItems.toLocaleString('es-CO')}</span>
+              <span>Enviar a Cocina • ${granTotal.toLocaleString('es-CO')}</span>
             </>
           )}
         </button>

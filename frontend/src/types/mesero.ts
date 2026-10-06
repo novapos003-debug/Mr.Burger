@@ -46,6 +46,8 @@ export interface Producto {
     cantidad: number
     precio_unitario: number
   }>
+  recargo_llevar?: number
+  empaques_llevar?: string[]
 }
 
 export interface DetallePedido {

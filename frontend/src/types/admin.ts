@@ -171,6 +171,7 @@ export interface DetalleRecetaItem {
   costo_unitario?: number | null
   costo_total?: number | null
   solo_llevar?: boolean
+  precio_venta?: number | null
 }
 
 export interface DetalleRecetaInput {
@@ -178,6 +179,7 @@ export interface DetalleRecetaInput {
   cantidad: number
   unidad: string
   solo_llevar?: boolean
+  precio_venta?: number | null
 }
 
 export interface UsuarioAdminItem {

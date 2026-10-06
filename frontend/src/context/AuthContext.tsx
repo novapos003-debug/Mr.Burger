@@ -128,14 +128,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     connect()
 
-    // Sondeo de seguridad: si el turno se cerró por admin o caja (o el WS falló)
+    // Sondeo de seguridad pasivo: mantiene actualizado el estado del turno sin expulsiones prematuras
     const verificarTurno = async () => {
       try {
         const miTurno = await obtenerMiTurnoApi()
-        if (!miTurno) {
-          alert('Tu turno de trabajo ha sido cerrado. Tu sesión ha finalizado.')
-          logout()
-        } else {
+        if (miTurno) {
           setTurno(miTurno)
         }
       } catch (err: any) {
@@ -145,20 +142,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // Verificación menos agresiva para no inundar el servidor (de 8s pasó a 60s)
     const timerTurno = setInterval(verificarTurno, 60000)
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        verificarTurno()
-      }
-    }
-    document.addEventListener('visibilitychange', handleVisibility)
 
     return () => {
       if (pingInterval) clearInterval(pingInterval)
       if (ws) ws.close()
       clearInterval(timerTurno)
-      document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [token, user])
 
@@ -169,18 +158,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     api.defaults.headers.common['Authorization'] = `Bearer ${data.access_token}`
 
     const me = await getMeApi()
-    setUser(me)
-    localStorage.setItem('pos_user', JSON.stringify(me))
 
-    // Al iniciar sesión, registramos o traemos el turno activo automáticamente
+    // Registrar o verificar turno laboral activo ANTES de publicar el usuario al estado
     if (me.rol !== 'admin') {
       try {
         const turnoNuevo = await registrarEntradaApi()
         setTurno(turnoNuevo)
       } catch (err) {
-        console.error('Error al registrar turno:', err)
+        console.error('Aviso al registrar turno:', err)
       }
     }
+
+    setUser(me)
+    localStorage.setItem('pos_user', JSON.stringify(me))
 
     return me
   }

@@ -112,6 +112,8 @@ class ProductoOut(BaseModel):
     margen_porcentaje: Decimal | None = None
     es_combo: bool = False
     componentes_combo: list[ComponenteComboOut] = []
+    recargo_llevar: Decimal | None = Decimal("0")
+    empaques_llevar: list[str] = []
 
 
 class IngredienteIn(BaseModel):
@@ -168,6 +170,7 @@ class DetalleRecetaIn(BaseModel):
     cantidad: Decimal = Field(gt=0)
     unidad: str = Field(min_length=1, max_length=20)
     solo_llevar: bool = False
+    precio_venta: Decimal | None = None
 
 
 class RecetaOut(BaseModel):
@@ -179,6 +182,7 @@ class RecetaOut(BaseModel):
     costo_unitario: Decimal | None = None
     costo_total: Decimal | None = None
     solo_llevar: bool = False
+    precio_venta: Decimal | None = None
 
 
 class MovimientoInventarioOut(BaseModel):

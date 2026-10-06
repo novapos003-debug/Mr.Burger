@@ -85,6 +85,11 @@ async def lifespan(app: FastAPI):
                 SELECT 'Papel de cocina', 10, 'GASTO_OPERATIVO', 'UNIDAD', 3500.00, 0.00, TRUE
                 WHERE NOT EXISTS (SELECT 1 FROM ingrediente WHERE nombre ILIKE '%Papel de cocina%');
             """))
+            # Precios de venta por defecto para bolsas al llevar (personalizables por admin)
+            conn.execute(text("UPDATE ingrediente SET precio_venta = 200.00 WHERE nombre ILIKE '%Bolsa T20%' AND (precio_venta IS NULL OR precio_venta = 0);"))
+            conn.execute(text("UPDATE ingrediente SET precio_venta = 300.00 WHERE nombre ILIKE '%Bolsa T25%' AND (precio_venta IS NULL OR precio_venta = 0);"))
+            conn.execute(text("UPDATE ingrediente SET precio_venta = 400.00 WHERE nombre ILIKE '%Bolsa T30%' AND (precio_venta IS NULL OR precio_venta = 0);"))
+            conn.execute(text("UPDATE ingrediente SET precio_venta = 500.00 WHERE nombre ILIKE '%Bolsa T40%' AND (precio_venta IS NULL OR precio_venta = 0);"))
             conn.commit()
     except Exception as e:
         import logging

@@ -79,6 +79,11 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      const url = (error.config?.url || '') as string
+      if (url.includes('/auth/login')) {
+        return Promise.reject(error)
+      }
+
       // Si la petición fallida fue hecha con un token anterior/obsoleto, ignorar el 401 para evitar expulsar una sesión recién iniciada
       const reqAuth = (error.config?.headers?.Authorization || '') as string
       const currentToken = localStorage.getItem('pos_token')

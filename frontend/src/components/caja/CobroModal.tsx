@@ -256,6 +256,11 @@ export const CobroModal: React.FC<Props> = ({ isOpen, pedido, ivaPorcentaje = 0,
               {pedido.subtotal && (
                 <div>Subtotal base: <strong className="text-slate-200 font-mono">${Number(pedido.subtotal).toLocaleString('es-CO')}</strong></div>
               )}
+              {pedido.recargo_empaque && Number(pedido.recargo_empaque) > 0 && (
+                <div className="text-orange-400 font-semibold">
+                  🥡 Recargo empaque llevar: <strong className="font-mono text-amber-300">+${Number(pedido.recargo_empaque).toLocaleString('es-CO')}</strong>
+                </div>
+              )}
               {pedido.iva && Number(pedido.iva) > 0 ? (
                 <div>
                   IVA ({ivaPorcentaje && ivaPorcentaje > 0 ? ivaPorcentaje : 19}% inc.):{' '}

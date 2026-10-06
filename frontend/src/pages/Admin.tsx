@@ -316,6 +316,7 @@ export const Admin: React.FC = () => {
           cantidad: Number(l.cantidad),
           unidad: l.unidad,
           solo_llevar: Boolean(l.solo_llevar),
+          precio_venta: l.precio_venta !== undefined && l.precio_venta !== null ? Number(l.precio_venta) : undefined,
         }))
       )
 
@@ -422,6 +423,7 @@ export const Admin: React.FC = () => {
         cantidad: 1,
         unidad: primerIng.unidad_base === 'GRAMO' ? 'g' : primerIng.unidad_base === 'MILILITRO' ? 'ml' : 'u',
         solo_llevar: primerIng.tipo_articulo === 'DESECHABLE_SERVICIO',
+        precio_venta: Number(primerIng.precio_venta || 0),
       },
     ])
   }
@@ -440,6 +442,7 @@ export const Admin: React.FC = () => {
           copia[idx].unidad = ing.unidad_base === 'GRAMO' ? 'g' : ing.unidad_base === 'MILILITRO' ? 'ml' : 'u'
           if (ing.tipo_articulo === 'DESECHABLE_SERVICIO') {
             copia[idx].solo_llevar = true
+            copia[idx].precio_venta = Number(ing.precio_venta || 0)
           }
         }
       }
@@ -459,6 +462,7 @@ export const Admin: React.FC = () => {
           cantidad: Number(l.cantidad),
           unidad: l.unidad,
           solo_llevar: Boolean(l.solo_llevar),
+          precio_venta: l.precio_venta !== undefined && l.precio_venta !== null ? Number(l.precio_venta) : undefined,
         }))
       )
       setBannerSuccess(
@@ -2412,19 +2416,38 @@ export const Admin: React.FC = () => {
 
                                   {/* Info de recargo si es solo llevar */}
                                   {linea.solo_llevar && (
-                                    <div className="mt-1.5 pt-1.5 border-t border-slate-900 flex items-center justify-between text-[10px]">
+                                    <div className="mt-1.5 pt-1.5 border-t border-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[10px]">
                                       <span className="text-orange-300/90 flex items-center gap-1 font-medium">
-                                        🥡 Empaque exclusivo para llevar • No se descuenta si consumen en mesa
+                                        🥡 Empaque exclusivo para llevar (no se descuenta ni se cobra en mesa)
                                       </span>
                                       {(() => {
                                         const ing = ingredientes.find((item) => item.id === linea.ingrediente_id)
-                                        const pVenta = Number(ing?.precio_venta || 0)
-                                        return pVenta > 0 ? (
-                                          <span className="font-mono font-bold text-emerald-400">
-                                            +${(pVenta * Number(linea.cantidad || 1)).toLocaleString('es-CO')} recargo automático
-                                          </span>
-                                        ) : (
-                                          <span className="text-slate-400 font-mono">(Costo interno - sin recargo)</span>
+                                        const pVenta = Number(linea.precio_venta !== undefined ? linea.precio_venta : (ing?.precio_venta || 0))
+                                        return (
+                                          <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                                            <span className="text-slate-400">Cobro al cliente:</span>
+                                            <div className="flex items-center bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5">
+                                              <span className="text-emerald-400 font-mono font-bold mr-1">$</span>
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                step="100"
+                                                value={pVenta}
+                                                onChange={(e) =>
+                                                  handleModificarLineaReceta(idx, 'precio_venta', Math.max(0, parseFloat(e.target.value) || 0))
+                                                }
+                                                className="w-16 bg-transparent text-emerald-300 font-mono font-bold text-[11px] focus:outline-none"
+                                                title="Monto a cobrar por este empaque cuando el pedido sea para llevar"
+                                              />
+                                            </div>
+                                            {pVenta > 0 ? (
+                                              <span className="font-mono font-bold text-emerald-400">
+                                                (+${(pVenta * Number(linea.cantidad || 1)).toLocaleString('es-CO')} automático)
+                                              </span>
+                                            ) : (
+                                              <span className="text-amber-400/90 font-mono text-[9px]">(Gratis / sin cobro)</span>
+                                            )}
+                                          </div>
                                         )
                                       })()}
                                     </div>

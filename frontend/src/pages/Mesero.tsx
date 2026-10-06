@@ -293,8 +293,11 @@ export const Mesero: React.FC = () => {
         // Enviar a cocina
         await enviarCocinaApi(nuevo.id)
 
+        const infoEmpaque = nuevo.recargo_empaque && Number(nuevo.recargo_empaque) > 0
+          ? ` • Incluye $${Number(nuevo.recargo_empaque).toLocaleString('es-CO')} en empaque`
+          : ''
         setSuccessBanner(
-          `¡Comanda enviada a cocina para Mesa #${mesaSeleccionada.numero}! (Orden #${nuevo.consecutivo})`
+          `¡Comanda enviada a cocina para Mesa #${mesaSeleccionada.numero}! (Orden #${nuevo.consecutivo} • Total: $${Number(nuevo.total || 0).toLocaleString('es-CO')}${infoEmpaque})`
         )
       }
 

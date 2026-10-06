@@ -84,6 +84,9 @@ export const TirillaModal: React.FC<TirillaModalProps> = ({
         t += `SUBTOTAL:                  $${Number(datosRecibo.subtotal || datosRecibo.total).toLocaleString('es-CO')}\n`
         t += `IVA:                       Exento (0%)\n`
       }
+      if (datosRecibo.recargo_empaque && Number(datosRecibo.recargo_empaque) > 0) {
+        t += `EMPAQUE PARA LLEVAR:       +$${Number(datosRecibo.recargo_empaque).toLocaleString('es-CO')}\n`
+      }
       t += `TOTAL A PAGAR:             $${Number(datosRecibo.total).toLocaleString('es-CO')}\n`
       t += '------------------------------------------\n'
       datosRecibo.pagos.forEach((p) => {
@@ -243,6 +246,12 @@ export const TirillaModal: React.FC<TirillaModalProps> = ({
                   <span className="font-semibold text-slate-700">Exento (0%)</span>
                 </div>
               </>
+            )}
+            {datosRecibo.recargo_empaque && Number(datosRecibo.recargo_empaque) > 0 && (
+              <div className="flex justify-between font-bold text-orange-600">
+                <span>Empaque Para Llevar:</span>
+                <span>+${Number(datosRecibo.recargo_empaque).toLocaleString('es-CO')}</span>
+              </div>
             )}
             <div className="flex justify-between font-black text-sm text-slate-950 pt-1 border-t border-slate-800">
               <span>TOTAL A PAGAR:</span>

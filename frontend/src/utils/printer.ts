@@ -29,6 +29,8 @@ export interface DatosReciboVenta {
   subtotal: number
   iva_porcentaje: number
   iva_valor: number
+  recargo_empaque?: number
+  tipo_consumo?: string
   total: number
   pagos: Array<{
     metodo: string

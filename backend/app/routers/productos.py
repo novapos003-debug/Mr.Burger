@@ -77,6 +77,19 @@ def producto_out(
     if permite_adiciones is None:
         permite_adiciones = False if not es_cocina else True
 
+    recargo_llevar = Decimal("0")
+    empaques_llevar = []
+    if prod.receta:
+        for r in prod.receta:
+            if getattr(r, "solo_llevar", False) and r.ingrediente:
+                pv = getattr(r.ingrediente, "precio_venta", Decimal("0")) or Decimal("0")
+                if pv > Decimal("0"):
+                    sub_monto = (pv * r.cantidad).quantize(Decimal("0.01"))
+                    recargo_llevar += sub_monto
+                    empaques_llevar.append(f"{r.ingrediente.nombre} (+${int(sub_monto):,})")
+                else:
+                    empaques_llevar.append(f"{r.ingrediente.nombre} ($0)")
+
     return ProductoOut(
         id=prod.id,
         categoria_id=prod.categoria_id,
@@ -96,6 +109,8 @@ def producto_out(
         margen_porcentaje=margen_porcentaje,
         es_combo=bool(prod.componentes_combo),
         componentes_combo=componentes_combo,
+        recargo_llevar=recargo_llevar,
+        empaques_llevar=empaques_llevar,
     )
 
 

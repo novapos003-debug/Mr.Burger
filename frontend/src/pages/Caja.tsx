@@ -340,6 +340,8 @@ export const Caja: React.FC = () => {
           subtotal: subtotalCalc,
           iva_porcentaje: ivaCalc > 0 ? (ivaPorc > 0 ? ivaPorc : 19) : 0,
           iva_valor: ivaCalc,
+          recargo_empaque: Number(pedido.recargo_empaque || 0),
+          tipo_consumo: pedido.tipo_consumo,
           total: Number(pedido.total || 0),
           pagos: (pagos && pagos.length > 0 ? pagos : [{ id: 0, pedido_id: pedido.id, metodo: 'EFECTIVO' as const, monto: Number(pedido.total || 0), estado: 'VALIDO', pagado_en: '' }]).map((p) => ({
             metodo: p.metodo,
@@ -649,10 +651,22 @@ export const Caja: React.FC = () => {
                   {/* Total y Botón de Cobro */}
                   <div className="p-3.5 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between gap-2">
                     <div>
-                      <span className="text-[10px] text-slate-400 block uppercase font-bold">Total a Pagar</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold">Total a Pagar</span>
+                        {pedido.tipo_consumo === 'LLEVAR' && (
+                          <span className="text-[9px] px-1 py-0.2 rounded bg-orange-950/80 text-orange-300 border border-orange-800/80 font-bold">
+                            🥡 LLEVAR
+                          </span>
+                        )}
+                      </div>
                       <span className="text-xl font-black text-emerald-400 font-mono">
                         ${total.toLocaleString('es-CO')}
                       </span>
+                      {pedido.recargo_empaque && Number(pedido.recargo_empaque) > 0 ? (
+                        <span className="text-[10px] text-orange-400 block font-mono font-medium">
+                          (Empaque: +${Number(pedido.recargo_empaque).toLocaleString('es-CO')})
+                        </span>
+                      ) : null}
                     </div>
 
                     {!yaPagado ? (

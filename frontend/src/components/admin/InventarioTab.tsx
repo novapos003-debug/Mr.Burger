@@ -156,15 +156,16 @@ export const InventarioTab: React.FC = () => {
   const handleCrearInsumo = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!nombreInsumo.trim()) return
+    const esEmpaque = tipoArticulo === 'DESECHABLE_SERVICIO' || Number(categoriaInsumoId) === 8
     setGuardandoInsumo(true)
     try {
       await crearIngredienteApi({
         nombre: nombreInsumo.trim(),
         categoria_insumo_id: categoriaInsumoId === '' ? null : Number(categoriaInsumoId),
-        tipo_articulo: tipoArticulo,
+        tipo_articulo: esEmpaque ? 'DESECHABLE_SERVICIO' : tipoArticulo,
         unidad_base: unidadBase,
         costo_unitario: Number(costoUnitario),
-        precio_venta: tipoArticulo === 'DESECHABLE_SERVICIO' ? Number(precioVenta) : 0,
+        precio_venta: esEmpaque ? Number(precioVenta) : 0,
         stock_actual: Number(stockActual),
         stock_minimo: Number(stockMinimo),
       })
@@ -240,13 +241,14 @@ export const InventarioTab: React.FC = () => {
     e.preventDefault()
     if (!insumoEditando) return
     setGuardandoEdicion(true)
+    const esEmpaque = editTipoArticulo === 'DESECHABLE_SERVICIO' || editCategoriaId === 8
     try {
       await actualizarIngredienteApi(insumoEditando.id, {
         nombre: editNombre.trim(),
         categoria_insumo_id: editCategoriaId === '' ? null : Number(editCategoriaId),
-        tipo_articulo: editTipoArticulo,
+        tipo_articulo: esEmpaque ? 'DESECHABLE_SERVICIO' : editTipoArticulo,
         costo_unitario: Number(editCostoUnitario),
-        precio_venta: editTipoArticulo === 'DESECHABLE_SERVICIO' ? Number(editPrecioVenta) : 0,
+        precio_venta: esEmpaque ? Number(editPrecioVenta) : 0,
         stock_minimo: Number(editStockMinimo),
       })
       setMensajeExito(`✓ Insumo "${editNombre.trim()}" actualizado correctamente.`)
@@ -687,7 +689,7 @@ export const InventarioTab: React.FC = () => {
                 </select>
               </div>
 
-              {tipoArticulo === 'DESECHABLE_SERVICIO' && (
+              {(tipoArticulo === 'DESECHABLE_SERVICIO' || Number(categoriaInsumoId) === 8) && (
                 <div className="p-3 bg-orange-950/40 border border-orange-800/60 rounded-xl space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="block text-orange-300 font-bold text-xs">
@@ -1081,7 +1083,7 @@ export const InventarioTab: React.FC = () => {
                 </select>
               </div>
 
-              {editTipoArticulo === 'DESECHABLE_SERVICIO' && (
+              {(editTipoArticulo === 'DESECHABLE_SERVICIO' || Number(editCategoriaId) === 8) && (
                 <div className="p-3 bg-orange-950/40 border border-orange-800/60 rounded-xl space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="block text-orange-300 font-bold text-xs">
