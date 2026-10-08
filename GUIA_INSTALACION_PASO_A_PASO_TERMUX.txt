@@ -137,6 +137,8 @@ fi
 EOF
 
 chmod +x ~/iniciar.sh
+chmod +x ~/mrburger/actualizar_termux.sh
+ln -sf ~/mrburger/actualizar_termux.sh ~/actualizar.sh
 
 # Vincular al encendido de la pantalla
 mkdir -p ~/.termux/boot
@@ -232,4 +234,33 @@ es porque el stock esta en 0 y el sistema protege de vender sin existencias carg
 Para permitir que vendan sin trabas mientras terminan de digitar las compras:
 Entras al panel Admin > Configuracion > "Politica ante stock insuficiente"
 y la cambias a "ADVERTIR Y PERMITIR". Asi podran vender todo libremente.
+================================================================================
+
+================================================================================
+FASE 12: ¿CÓMO ACTUALIZAR EL LOGO O EL SISTEMA MAÑANA DESDE TU CASA / PC?
+================================================================================
+Si el cliente te envía el logo definitivo mañana (o quieres hacer un cambio):
+
+1. EN TU PC:
+   - Guarda el nuevo logo reemplazando el archivo: frontend/public/logo.png
+   - Recompila y sube los cambios a GitHub:
+     cd "frontend" && npm run build
+     git add .
+     git commit -m "Actualizar logo oficial Mr. Burger"
+     git push origin main
+
+2. EN LA CAJA (EN EL RESTAURANTE):
+   - Opción A (Vía Remota con AnyDesk sin moverte de tu casa):
+     Abres AnyDesk en tu PC, te conectas a la pantalla de la Caja, abres Termux y ejecutas:
+     ~/actualizar.sh
+   - Opción B (Si estás en el restaurante o el dueño lo hace en 5 segundos):
+     Abren Termux en la pantalla de la caja (con Wi-Fi conectado) y escriben:
+     ~/actualizar.sh
+
+3. ¿Y LOS TELÉFONOS DE MESEROS Y TABLET DE COCINA?:
+   - ¡NO TIENES QUE TOCAR NINGUNO DE LOS 5 DISPOSITIVOS!
+   - Gracias a la arquitectura PWA (Progressive Web App), todos los teléfonos
+     y tablets detectan la nueva versión automáticamente por Wi-Fi.
+   - Les saldrá un aviso "¡Nueva versión disponible! [Actualizar]" o simplemente
+     al recargar la pantalla, y el nuevo logo aparecerá en todos al instante.
 ================================================================================

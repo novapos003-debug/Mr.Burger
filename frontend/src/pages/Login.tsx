@@ -30,6 +30,7 @@ export const Login: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null)
   const [showServerModal, setShowServerModal] = useState(false)
+  const [logoError, setLogoError] = useState(false)
 
   // Si ya está autenticado, redirigir a su vista
   useEffect(() => {
@@ -91,8 +92,19 @@ export const Login: React.FC = () => {
       <div className="relative w-full max-w-md z-10">
         {/* Cabecera del Restaurante */}
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-orange-600 to-amber-500 text-white shadow-xl shadow-orange-600/30 mb-3 transform hover:scale-105 transition">
-            <UtensilsCrossed className="w-9 h-9" />
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl shadow-orange-600/10 mb-3 p-2 overflow-hidden transform hover:scale-105 transition">
+            {!logoError ? (
+              <img
+                src="/logo.png"
+                alt="Mr. Burger"
+                className="w-full h-full object-contain"
+                onError={() => setLogoError(true)}
+              />
+            ) : (
+              <div className="w-full h-full rounded-xl bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center text-white">
+                <UtensilsCrossed className="w-9 h-9" />
+              </div>
+            )}
           </div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white uppercase">
             Mr. Burger POS
