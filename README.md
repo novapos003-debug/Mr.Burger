@@ -29,6 +29,8 @@ Si una decisión no está aquí, se discute antes de codificar. Nada se borra: s
 16. [Módulo de Empaques Para Llevar y Recargo Dinámico por Receta](#16-módulo-de-empaques-para-llevar-y-recargo-dinámico-por-receta)
 17. [Módulo de Gastos Operativos y Salidas de Caja Menor](#17-módulo-de-gastos-operativos-y-salidas-de-caja-menor)
 18. [Trazabilidad Demo, Cuentas Fijadas y Asistente de Puesta en Blanco](#18-trazabilidad-demo-cuentas-fijadas-y-asistente-de-puesta-en-blanco)
+19. [Arquitectura de Despliegue Autónomo en Android (Termux) y Mantenimiento Remoto](#19-arquitectura-de-despliegue-autónomo-en-android-termux-y-mantenimiento-remoto)
+20. [Mapeo de Puertos, Red Local LAN y Auto-Resolución](#20-mapeo-de-puertos-red-local-lan-y-auto-resolución)
 
 ---
 
@@ -557,4 +559,76 @@ Permite realizar pruebas, capacitaciones y simulaciones con total libertad opera
    - **En Mesero:** Al alternar entre *“🍽️ Comer Aquí”* y *“🥡 Para Llevar”*, el catálogo de productos y la comanda recalculan en vivo el precio unitario y subtotal de cada plato sumando el valor del empaque térmico (C1/P1), mostrando el desglose transparente de empaques. Al volver a tocar *“🍽️ Comer Aquí”*, los precios caen inmediatamente a su base.
    - **En Caja (Nueva Orden):** Selector visible de destino para pedidos en mostrador y selección automática de empaque para Domicilios y DiDi Food.
    - **En Caja (Cobro de Pedidos Abiertos):** Endpoint `PATCH /pedidos/{id}/tipo-consumo` integrado en el modal de cobro para permitir cambiar entre local y llevar en el último segundo antes de timbrar, recalculando inmediatamente el total y los billetes recibidos.
+
+---
+
+## 19. Arquitectura de Despliegue Autónomo en Android (Termux) y Mantenimiento Remoto
+
+El sistema está diseñado para operar con **CERO fricción técnica** en el local físico, garantizando autonomía total de la caja y permitiendo el mantenimiento remoto completo sin pisar el restaurante:
+
+### Componentes de la Arquitectura Física:
+- **Caja POS (Servidor Maestro Local):** Pantalla táctil Todo-en-Uno Android. Ejecuta en segundo plano:
+  - `PostgreSQL 16` como base de datos relacional interna en puerto 5432.
+  - `FastAPI + Uvicorn` como motor de negocio y WebSockets en puerto 8000.
+  - `serve` sirviendo la PWA en puerto 5173.
+- **Cocina KDS:** Tablet Android montada en pared con alerta sonora y temporizador colorimétrico conectada por Wi-Fi.
+- **Meseros Móviles:** 4 smartphones Android de bajo consumo conectados a la comanda táctil.
+- **Impresora Térmica:** 80mm ESC/POS conectada por USB con apertura automática de gaveta monedero vía conector RJ11.
+
+```mermaid
+flowchart TD
+    subgraph CASA["Tu Casa / PC de Desarrollo"]
+        DEV["Haces cambios en código o logo\n(npm run build && git push origin main)"]
+    end
+
+    subgraph NUBE["GitHub"]
+        REPO["Repositorio novapos003-debug/Mr.Burger"]
+    end
+
+    subgraph RESTAURANTE["Restaurante Físico (LAN Wi-Fi 192.168.1.50)"]
+        subgraph CAJA_SERVER["Pantalla de la Caja (Termux 100% Autónomo)"]
+            BOOT["Al Encender: 2s check de GitHub\n(git fetch && git reset --hard)"]
+            DAEMON["En Vivo: Demonio cada 15 min\n(Descarga cambios silenciosamente)"]
+            PG["PostgreSQL (5432)"]
+            BACKEND["FastAPI Uvicorn (8000)"]
+            FRONTEND["Serve PWA (5173)"]
+        end
+
+        MESEROS["4 Celulares Meseros\n(Auto-actualización PWA)"]
+        COCINA["Tablet Cocina KDS\n(Auto-actualización PWA)"]
+        CAJA_UI["Chrome PWA Caja\n(Localhost)"]
+        PRINTER["Impresora 80mm + Cajón RJ11"]
+    end
+
+    DEV --> REPO
+    REPO --> BOOT & DAEMON
+    BACKEND <--> PG
+    FRONTEND --> CAJA_UI
+    CAJA_SERVER -- "Wi-Fi LAN" --> MESEROS & COCINA
+    CAJA_UI --> PRINTER
+```
+
+### Mecanismos de Blindaje Autónomo:
+1. **Sincronización Antifallos (`git reset --hard`):** Evita cualquier conflicto por saltos de línea (CRLF/LF) o modificaciones accidentales en el dispositivo local.
+2. **Protección contra Cortes Eléctricos (`rm -f .git/index.lock`):** Asegura que si la energía se corta en medio de una descarga, Git no quede bloqueado al reiniciar.
+3. **Distribución Precompilada (`dist` en Git):** El código frontend se compila en el PC del desarrollador (1 segundo). Termux no requiere compilar en Android, ahorrando memoria y CPU.
+4. **Auto-Migración de Base de Datos:** FastAPI en su ciclo de vida (`lifespan`) corre `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, permitiendo añadir campos o tablas desde casa sin interactuar con PostgreSQL.
+5. **Reconexión Automática WebSocket:** Si Uvicorn se reinicia en 1 segundo para aplicar cambios de backend, todos los celulares y tablets se reconectan silenciosamente a los 3 segundos.
+
+---
+
+## 20. Mapeo de Puertos, Red Local LAN y Auto-Resolución
+
+| Servicio | Puerto | Protocolo | Función |
+| :--- | :--- | :--- | :--- |
+| **Frontend Web PWA** | `5173` | HTTP / TCP | Entrega de interfaz gráfica React SPA |
+| **Backend API REST** | `8000` | HTTP / TCP | Endpoints de autenticación, comanda, caja y catálogo |
+| **WebSocket en Vivo** | `8000` | WS / TCP | Canal `/ws/pedidos` para comanda en vivo hacia cocina y caja |
+| **Base de Datos** | `5432` | PostgreSQL | Persistencia inmutable transaccional en disco |
+
+### Auto-Detección y Cero Configuración para Meseros:
+- El cliente móvil [`client.ts`](file:///C:/Users/jhona/Documents/Default%20Project/frontend/src/api/client.ts) auto-detecta la dirección IP de origen (`window.location.hostname`).
+- Al abrir la URL `http://192.168.1.50:5173`, el aplicativo automáticamente redirige todas las consultas de datos a `http://192.168.1.50:8000/api` y el WebSocket a `ws://192.168.1.50:8000/ws/pedidos`.
+- **Los meseros y cocineros no necesitan ingresar a menús de configuración ni digitar direcciones IP.**
+
 
