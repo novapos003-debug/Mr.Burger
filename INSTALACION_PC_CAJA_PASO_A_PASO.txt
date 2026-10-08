@@ -1,0 +1,143 @@
+================================================================================
+GUIA DE INSTALACION EN LA PC DE LA CAJA (WINDOWS) - MR. BURGER POS
+DISENADA PARA CUALQUIER COMPUTADOR (NUEVO O VIEJITO) - PASO A PASO
+================================================================================
+
+SI WINGET TE DIO ERROR, NO TE PREOCUPES:
+En computadores anteriores a veces winget no viene actualizado.
+Instalar con los enlaces directos es 100 veces más rápido y seguro.
+
+================================================================================
+PASO 1: DESCARGAR E INSTALAR LOS 4 PROGRAMAS (ENLACES DIRECTOS)
+================================================================================
+Abre Google Chrome o Microsoft Edge en esa PC y abre estos 4 enlaces para descargarlos:
+
+1. GIT (Para clonar y recibir actualizaciones automáticas):
+   Enlace directo: https://github.com/git-for-windows/git/releases/download/v2.46.2.windows.1/Git-2.46.2-64-bit.exe
+   Instalación: Dale Siguiente, Siguiente a todo hasta Finalizar.
+
+2. PYTHON 3.11:
+   Enlace directo: https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe
+   ⚠️ ¡OJO, PASO OBLIGATORIO AL INSTALAR PYTHON!:
+   En la PRIMERA pantalla que se abre, abajo hay una casilla que dice:
+   [x] "Add python.exe to PATH"   <--- ¡MARCA ESTA CASILLA ANTES DE DAR CLIC EN INSTALAR!
+   Luego dale clic a "Install Now".
+
+3. NODE.JS (Para servir el aplicativo web):
+   Enlace directo: https://nodejs.org/dist/v20.18.0/node-v20.18.0-x64.msi
+   Instalación: Dale Siguiente, Siguiente a todo hasta Finalizar.
+
+4. POSTGRESQL (Base de Datos):
+   Enlace oficial de descarga: https://www.enterprisedb.com/downloads/postgres-postgresql-downloads
+   (Descarga la versión 16 de Windows x86-64).
+   Enlace de descarga directa:
+   https://get.enterprisedb.com/postgresql/postgresql-16.4-1-windows-x64.exe
+   Instalación:
+   - Dale Siguiente.
+   - ⚠️ Cuando te pida la CONTRASEÑA para el usuario postgres, escribe:
+     restaurante_dev
+   - Confirma la contraseña:
+     restaurante_dev
+   - Puerto: déjalo en 5432.
+   - Siguiente a todo hasta terminar. Al final si sale una ventana de "Stack Builder", desmárcala o ciérrala (no se necesita).
+
+*(Una vez instalados los 4, reinicia la PC o cierra y abre la consola).*
+
+================================================================================
+PASO 2: CONECTAR A LA RED Y VER LA IP DE ESTA PC
+================================================================================
+1. Asegúrate de que la PC esté conectada al Wi-Fi del restaurante (o por cable de red).
+2. Presiona la tecla Windows + R, escribe: cmd  (y da Enter).
+3. Escribe:
+   ipconfig
+4. Busca donde dice "Dirección IPv4" (ejemplo: 192.168.1.50 o 192.168.1.15).
+   *** ANOTA ESTA IP ***: Con esta IP se conectarán los meseros y la cocina.
+
+================================================================================
+PASO 3: DESCARGAR MR. BURGER DESDE GITHUB
+================================================================================
+En la misma consola de comandos (CMD), escribe:
+
+git clone https://github.com/novapos003-debug/Mr.Burger.git C:\mrburger
+
+(Verás que en 5 segundos descarga todo y crea la carpeta C:\mrburger).
+
+================================================================================
+PASO 4: INSTALAR LIBRERIAS Y CONFIGURAR BASE DE DATOS
+================================================================================
+1. En la consola (CMD) escribe:
+   cd C:\mrburger
+   pip install -r backend\requirements.txt
+   npm install -g serve
+
+2. Cargar recetas y catálogo en la Base de Datos:
+   Abre la carpeta C:\mrburger en el explorador de archivos y haz DOBLE CLIC en:
+   👉 configurar_bd_windows.bat
+   (Verás que crea la base de datos y monta las recetas e insumos en 5 segundos).
+
+3. Habilitar el Firewall de Windows para los celulares:
+   En C:\mrburger, haz CLIC DERECHO sobre:
+   👉 configurar_firewall_windows.bat  >  "Ejecutar como Administrador"
+   (Esto permite que los celulares de los meseros y la tablet se conecten sin trabas).
+
+================================================================================
+PASO 5: CREAR EL ACCESO DIRECTO DE 1 CLIC (CERO COMANDOS PARA EL PERSONAL)
+================================================================================
+El cajero y el dueño NO tienen que escribir comandos:
+
+1. En la carpeta C:\mrburger, haz CLIC DERECHO sobre:
+   iniciar_silencioso.vbs
+2. Selecciona: "Enviar a" > "Escritorio (crear acceso directo)".
+3. En el escritorio de la PC, cámbiale el nombre a ese icono por:
+   "Mr. Burger POS"
+
+4. AUTO-ARRANQUE AL ENCENDER LA PC (Opcional pero muy recomendado):
+   - Presiona Windows + R, escribe: shell:startup  (y da Enter).
+   - Copia y pega en esa carpeta un acceso directo de "iniciar_silencioso.vbs".
+   - Así, cada mañana al prender la PC, Mr. Burger se abre solo.
+
+5. PRUÉBALO AHORA MISMO:
+   - Haz doble clic en el icono "Mr. Burger POS" del escritorio.
+   - En 2 segundos se abrirá Google Chrome en: http://localhost:5173
+   - En Chrome, toca los 3 puntos arriba a la derecha > "Instalar aplicación" (para pantalla completa).
+
+================================================================================
+PASO 6: PROBAR IMPRESORA Y CAJON EN LA CAJA
+================================================================================
+1. Conecta la impresora térmica por USB a la PC.
+2. Conecta el cable telefónico (RJ11) del cajón monedero a la impresora.
+3. En la app abierta de Mr. Burger, entra como Admin o Cajero:
+   - Usuario: admin  | Clave: admin123
+   (o usuario: cajero | Clave: cajero123)
+4. Ve al módulo de Caja > Configuración de Impresora:
+   - Toca "Conectar Impresora USB" y dale Permitir.
+   - Toca "Imprimir Prueba". La impresora debe cortar papel y el cajón debe abrirse.
+
+================================================================================
+PASO 7: CONECTAR LA TABLET DE COCINA Y LOS 4 CELULARES
+================================================================================
+En la tablet y en cada celular de mesero (conectados al Wi-Fi del restaurante):
+1. Abre Chrome y entra a la IP de la PC (la que viste en el Paso 2):
+   Ejemplo: http://192.168.1.50:5173
+2. Toca los 3 puntos de Chrome > "Instalar aplicación".
+3. Inicia sesión:
+   - Cocina:  usuario: cocina   | clave: cocina123  (Súbele todo el volumen al Ding-Dong)
+   - Meseros: usuario: mesero1  | clave: mesero123  (mesero2, mesero3, etc.)
+
+================================================================================
+PASO 8: SIMULACRO REAL EN VIVO (1 MINUTO)
+================================================================================
+1. Mesero: pide 1 Hamburguesa Especial Res + Gaseosa en Mesa 1 > Enviar a Cocina.
+2. Cocina: Suena el Ding-Dong > toca "Aceptar" y "Listo".
+3. Caja (PC): Toca Mesa 1 > Cobrar Efectivo > Imprime tirilla y abre cajón.
+4. Mesa 1 queda libre. ¡TODO OPERATIVO!
+
+================================================================================
+ACTUALIZACIONES DESDE TU CASA:
+================================================================================
+Cuando hagas cambios desde tu casa (como cambiar el logo en frontend/public/logo.png):
+Haces git push desde tu casa, y cada vez que prendan la PC en el restaurante
+se actualiza sola. O si estás por AnyDesk, solo le das doble clic a:
+C:\mrburger\actualizar_windows.bat
+Y todos los celulares y tablets se actualizan solos por Wi-Fi.
+================================================================================
