@@ -15,6 +15,7 @@ import {
   agregarRondaApi,
 } from '../api/mesero'
 import { getParametrosConfiguracion } from '../api/admin'
+import { useCocinaWebSocket } from '../hooks/useCocinaWebSocket'
 import type {
   Mesa,
   Categoria,
@@ -60,14 +61,12 @@ export const Mesero: React.FC = () => {
   const [tipoConsumo, setTipoConsumo] = useState<'LOCAL' | 'LLEVAR'>('LOCAL')
   const [ivaPorcentaje, setIvaPorcentaje] = useState<number>(0)
 
-  // Cargar datos
-  const cargarDatos = useCallback(async () => {
+  // Cargar catálogo e info estática (categorías, productos, IVA)
+  const cargarCatalogo = useCallback(async () => {
     try {
-      const [mRes, cRes, pRes, actRes, cfgRes] = await Promise.allSettled([
-        getMesasApi(),
+      const [cRes, pRes, cfgRes] = await Promise.allSettled([
         getCategoriasApi(),
         getProductosApi(),
-        getPedidosActivosApi(),
         getParametrosConfiguracion(),
       ])
 
@@ -75,16 +74,13 @@ export const Mesero: React.FC = () => {
         setIvaPorcentaje(Number(cfgRes.value.iva_porcentaje) || 0)
       }
 
-      let menuOk = true
-      if (mRes.status === 'fulfilled') setMesas(mRes.value)
-      else menuOk = false
-
+      let catalogoOk = true
       if (cRes.status === 'fulfilled') {
         const catsFiltradas = cRes.value.filter(
           (c) => c.id !== 99 && !c.nombre.toUpperCase().includes('SERVICIO') && !c.nombre.toUpperCase().includes('EMPAQUE')
         )
         setCategorias(catsFiltradas)
-      } else menuOk = false
+      } else catalogoOk = false
 
       if (pRes.status === 'fulfilled') {
         const prodsFiltrados = pRes.value.filter(
@@ -96,26 +92,52 @@ export const Mesero: React.FC = () => {
             p.nombre.toLowerCase() !== 'p1'
         )
         setProductos(prodsFiltrados)
-      } else menuOk = false
+      } else catalogoOk = false
 
-      if (actRes.status === 'fulfilled') setPedidosActivos(actRes.value)
-
-      if (!menuOk) {
-        setErrorBanner('Error al sincronizar mesas y menú con el servidor local')
+      if (!catalogoOk) {
+        setErrorBanner('Error al sincronizar menú con el servidor local')
       } else {
         setErrorBanner(null)
       }
     } catch {
-      setErrorBanner('Error al sincronizar mesas y menú con el servidor local')
+      setErrorBanner('Error al sincronizar menú con el servidor local')
     }
   }, [])
 
+  // Cargar estado operativo en caliente (mesas y pedidos activos)
+  const cargarEstadoOperativo = useCallback(async () => {
+    try {
+      const [mRes, actRes] = await Promise.allSettled([
+        getMesasApi(),
+        getPedidosActivosApi(),
+      ])
+      if (mRes.status === 'fulfilled') setMesas(mRes.value)
+      if (actRes.status === 'fulfilled') setPedidosActivos(actRes.value)
+    } catch {
+      // Ignorar fallos temporales de red local
+    }
+  }, [])
+
+  // Carga completa (para montaje inicial y botón de refresco manual)
+  const cargarDatos = useCallback(async () => {
+    await Promise.all([cargarCatalogo(), cargarEstadoOperativo()])
+  }, [cargarCatalogo, cargarEstadoOperativo])
+
+  // WebSocket en tiempo real para el mesero:
+  // - Si un pedido/ronda se crea o actualiza en cualquier parte: refresca mesas y pedidos al instante
+  // - Si el admin cambia productos, precios o stock: refresca catálogo de inmediato
+  useCocinaWebSocket({
+    onNewOrder: () => cargarEstadoOperativo(),
+    onOrderUpdate: () => cargarEstadoOperativo(),
+    onCatalogUpdate: () => cargarCatalogo(),
+  })
+
   useEffect(() => {
     cargarDatos()
-    // Polling más espaciado para evitar saturar la red Wi-Fi (30s en lugar de 8s)
-    const interval = setInterval(cargarDatos, 30000)
+    // Polling ligero solo de mesas y pedidos activos cada 30s (sin sobrecargar con catálogo estático)
+    const interval = setInterval(cargarEstadoOperativo, 30000)
     return () => clearInterval(interval)
-  }, [cargarDatos])
+  }, [cargarDatos, cargarEstadoOperativo])
 
   // Sincronización automática de pedidos pendientes por microcortes Wi-Fi
   useEffect(() => {

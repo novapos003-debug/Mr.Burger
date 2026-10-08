@@ -385,9 +385,12 @@ async def enviar_a_cocina(
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
     if pedido.estado != "NUEVO":
+        # Si ya fue enviado o está en preparación (caso de reintento offline tras corte Wi-Fi), devolver OK idempotente
+        if pedido.estado in ("ENVIADO_A_COCINA", "EN_PREPARACION"):
+            return pedido_out(db, pedido, usuario)
         raise HTTPException(
             status_code=409,
-            detail=f"No se puede enviar un pedido en estado {pedido.estado}. Ya fue enviado a cocina."
+            detail=f"No se puede enviar un pedido en estado {pedido.estado}. Ya fue procesado.",
         )
 
     pedido.estado = "ENVIADO_A_COCINA"

@@ -18,6 +18,7 @@ from app.schemas import (
 from app.services.disponibilidad import disponibilidad_masiva, disponibilidad_producto
 from app.services.historial import registrar
 from app.services.inventario import calcular_costo_y_margen
+from app.services.websocket import ws_manager
 
 router = APIRouter(prefix="/productos", tags=["catálogo"])
 
@@ -192,7 +193,7 @@ def listar_adiciones_configuracion(
 
 
 @router.put("/adiciones/configuracion", response_model=list[AdicionItem])
-def guardar_adiciones_configuracion(
+async def guardar_adiciones_configuracion(
     adiciones: list[AdicionItem],
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(admin_required),
@@ -213,6 +214,7 @@ def guardar_adiciones_configuracion(
     registrar(db, usuario, "MODIFICAR_ADICIONES", "configuracion", None, f"total={len(adiciones)}")
     safe_commit(db)
     db.refresh(cfg)
+    await ws_manager.broadcast({"evento": "catalogo_actualizado", "data": {"tipo": "adiciones"}})
     return adiciones
 
 
@@ -243,7 +245,7 @@ def obtener_producto(
 
 
 @router.post("", response_model=ProductoOut, status_code=status.HTTP_201_CREATED)
-def crear_producto(
+async def crear_producto(
     data: ProductoIn,
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(admin_required),
@@ -257,11 +259,12 @@ def crear_producto(
     safe_commit(db)
     db.refresh(prod)
     disponible, _ = disponibilidad_producto(db, prod)
+    await ws_manager.broadcast({"evento": "catalogo_actualizado", "data": {"tipo": "producto_creado", "id": prod.id}})
     return producto_out(prod, disponible)
 
 
 @router.put("/{producto_id}", response_model=ProductoOut)
-def actualizar_producto(
+async def actualizar_producto(
     producto_id: int,
     data: ProductoUpdate,
     db: Session = Depends(get_db),
@@ -283,11 +286,12 @@ def actualizar_producto(
     safe_commit(db)
     db.refresh(prod)
     disponible, _ = disponibilidad_producto(db, prod)
+    await ws_manager.broadcast({"evento": "catalogo_actualizado", "data": {"tipo": "producto_actualizado", "id": prod.id}})
     return producto_out(prod, disponible)
 
 
 @router.put("/{producto_id}/disponibilidad", response_model=ProductoOut)
-def forzar_disponibilidad(
+async def forzar_disponibilidad(
     producto_id: int,
     data: ProductoDisponibilidadUpdate,
     db: Session = Depends(get_db),
@@ -305,11 +309,12 @@ def forzar_disponibilidad(
     safe_commit(db)
     db.refresh(prod)
     disponible, _ = disponibilidad_producto(db, prod)
+    await ws_manager.broadcast({"evento": "catalogo_actualizado", "data": {"tipo": "producto_disponibilidad", "id": prod.id}})
     return producto_out(prod, disponible)
 
 
 @router.delete("/{producto_id}", status_code=status.HTTP_204_NO_CONTENT)
-def desactivar_producto(
+async def desactivar_producto(
     producto_id: int,
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(admin_required),
@@ -321,3 +326,4 @@ def desactivar_producto(
     prod.activo = False
     registrar(db, usuario, "DESACTIVAR_PRODUCTO", "producto", prod.id, prod.nombre)
     safe_commit(db)
+    await ws_manager.broadcast({"evento": "catalogo_actualizado", "data": {"tipo": "producto_desactivado", "id": prod.id}})

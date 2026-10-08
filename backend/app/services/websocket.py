@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 from fastapi import WebSocket
@@ -20,12 +21,18 @@ class PedidoWebSocketManager:
             self.connections.remove(websocket)
 
     async def broadcast(self, event: dict) -> None:
+        if not self.connections:
+            return
         data = json.dumps(event, default=str)
-        for conn in list(self.connections):
+
+        async def _enviar(conn: WebSocket):
             try:
-                await conn.send_text(data)
+                await asyncio.wait_for(conn.send_text(data), timeout=2.5)
             except Exception:
                 self.disconnect(conn)
+
+        # Enviar en paralelo a todos los clientes para que uno lento o con Wi-Fi inestable no demore a los demás
+        await asyncio.gather(*[_enviar(c) for c in list(self.connections)], return_exceptions=True)
 
 
 ws_manager = PedidoWebSocketManager()

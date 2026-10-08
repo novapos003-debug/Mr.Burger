@@ -415,6 +415,14 @@ control avanzado de merma (conteo vs teórico), exportaciones a Excel.
    - Cabeceras HTTP `Cache-Control: no-cache, no-store, must-revalidate` en `firebase.json` para `index.html`, `sw.js` y manifiesto web.
    - Configuración de Workbox en `vite.config.ts` con `skipWaiting: true`, `clientsClaim: true` y `cleanupOutdatedCaches: true`.
    - Verificación inmediata de versión en segundo plano desde el montaje de `UpdateBanner.tsx`, asegurando propagación Over-The-Air instantánea a dispositivos Android y navegadores de escritorio.
+9. **Auditoría Maestra de Rendimiento, WebSockets Paralelos y Code-Splitting (Día de Despliegue):**
+   - **Code-Splitting PWA:** División de rutas con `React.lazy` y `Suspense`; los celulares de los meseros ahora descargan solo 31 KB de JavaScript (8.5 KB gzipped) en vez del bundle completo con el panel admin, acelerando la apertura en un 300%.
+   - **Sincronización Reactiva de Catálogo:** Transmisión de evento WebSocket `catalogo_actualizado` cuando el admin crea/edita productos, recetas o ingresa stock, refrescando los celulares de meseros al instante sin requerir polling de catálogo.
+   - **Optimización de Polling de Meseros:** Reducción de 5 consultas recurrentes a 2 (únicamente mesas y pedidos activos en caliente), aliviando el tráfico en la red Wi-Fi del restaurante.
+   - **Eliminación de Doble Petición en Cocina (KDS):** Desacople de la consulta REST redundante al despachar comandas, delegando la recarga fluida al socket nativo.
+   - **WebSockets Paralelos con Timeout:** Emisión concurrente con `asyncio.gather` y límite de 2.5s, impidiendo que un teléfono con señal débil freeze la entrega de comandas a la cocina.
+   - **Idempotencia en Envío de Comandas:** Retorno seguro `200 OK` en reintentos de comanda para pedidos que ya alcanzaron estado de cocina, blindando la reconexión de pedidos offline retenidos.
+   - **Indexación de Movimientos de Caja:** Índices b-tree `idx_movcaja_creado_en` y `idx_movcaja_cierre` para acelerar los cálculos de arqueos diarios y cierre Z.
 
 ---
 

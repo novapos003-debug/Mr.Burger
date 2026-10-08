@@ -29,6 +29,7 @@ from app.schemas import (
 )
 from app.services.historial import registrar
 from app.services.inventario import calcular_costo_y_margen
+from app.services.websocket import ws_manager
 
 router = APIRouter(prefix="/ingredientes", tags=["inventario"])
 
@@ -145,7 +146,7 @@ def crear_ingrediente(
 
 
 @router.put("/{ingrediente_id}", response_model=IngredienteOut)
-def actualizar_ingrediente(
+async def actualizar_ingrediente(
     ingrediente_id: int,
     data: IngredienteUpdate,
     db: Session = Depends(get_db),
@@ -193,6 +194,7 @@ def actualizar_ingrediente(
         )
     safe_commit(db)
     db.refresh(ing)
+    await ws_manager.broadcast({"evento": "catalogo_actualizado", "data": {"tipo": "stock", "id": ing.id}})
     return to_ingrediente_out(ing)
 
 

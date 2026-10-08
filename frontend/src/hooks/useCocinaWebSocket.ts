@@ -5,9 +5,10 @@ import { getWsBaseUrl } from '../api/client'
 interface UseCocinaWebSocketOptions {
   onNewOrder?: (event: WebSocketEvent) => void
   onOrderUpdate?: (event: WebSocketEvent) => void
+  onCatalogUpdate?: (event: WebSocketEvent) => void
 }
 
-export function useCocinaWebSocket({ onNewOrder, onOrderUpdate }: UseCocinaWebSocketOptions = {}) {
+export function useCocinaWebSocket({ onNewOrder, onOrderUpdate, onCatalogUpdate }: UseCocinaWebSocketOptions = {}) {
   const [status, setStatus] = useState<WebSocketStatus>('desconectado')
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<number | null>(null)
@@ -17,11 +18,13 @@ export function useCocinaWebSocket({ onNewOrder, onOrderUpdate }: UseCocinaWebSo
   // Callbacks refs to avoid stale closures in event listeners
   const onNewOrderRef = useRef(onNewOrder)
   const onOrderUpdateRef = useRef(onOrderUpdate)
+  const onCatalogUpdateRef = useRef(onCatalogUpdate)
 
   useEffect(() => {
     onNewOrderRef.current = onNewOrder
     onOrderUpdateRef.current = onOrderUpdate
-  }, [onNewOrder, onOrderUpdate])
+    onCatalogUpdateRef.current = onCatalogUpdate
+  }, [onNewOrder, onOrderUpdate, onCatalogUpdate])
 
   const connect = useCallback(() => {
     if (unmountedRef.current) return
@@ -81,6 +84,8 @@ export function useCocinaWebSocket({ onNewOrder, onOrderUpdate }: UseCocinaWebSo
           // Eventos de nuevos pedidos o rondas que entran a cocina
           if (payload.evento === 'pedido_enviado' || payload.evento === 'ronda_agregada') {
             onNewOrderRef.current?.(payload)
+          } else if (payload.evento === 'catalogo_actualizado') {
+            onCatalogUpdateRef.current?.(payload)
           } else {
             // Actualizaciones de estado (detalle_aceptado, detalle_listo, etc.)
             onOrderUpdateRef.current?.(payload)

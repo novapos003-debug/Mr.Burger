@@ -75,22 +75,30 @@ export const Cocina: React.FC = () => {
   // Acciones en comanda
   const handleAceptarDetalle = async (detalleId: number) => {
     await aceptarDetalle(detalleId)
-    await fetchCola(false)
+    if (wsStatus !== 'conectado') {
+      await fetchCola(false)
+    }
   }
 
   const handleMarcarListo = async (detalleId: number) => {
     await marcarListo(detalleId)
-    await fetchCola(false)
+    if (wsStatus !== 'conectado') {
+      await fetchCola(false)
+    }
   }
 
   const handleAceptarTicket = async (ticket: Ticket) => {
     await aceptarTicket(ticket)
-    await fetchCola(false)
+    if (wsStatus !== 'conectado') {
+      await fetchCola(false)
+    }
   }
 
   const handleMarcarTicketListo = async (ticket: Ticket) => {
     await marcarTicketListo(ticket)
-    await fetchCola(false)
+    if (wsStatus !== 'conectado') {
+      await fetchCola(false)
+    }
   }
 
   // Cálculos de métricas para la barra de estado

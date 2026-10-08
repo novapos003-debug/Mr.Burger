@@ -522,3 +522,5 @@ CREATE INDEX IF NOT EXISTS idx_movinv_creado_en ON movimiento_inventario (creado
 CREATE INDEX IF NOT EXISTS idx_pago_pedido_id ON pago (pedido_id);
 CREATE INDEX IF NOT EXISTS idx_vale_pedido ON vale (pedido_id);
 CREATE INDEX IF NOT EXISTS idx_vale_estado ON vale (estado);
+CREATE INDEX IF NOT EXISTS idx_movcaja_creado_en ON movimiento_caja (creado_en);
+CREATE INDEX IF NOT EXISTS idx_movcaja_cierre ON movimiento_caja (cierre_id);

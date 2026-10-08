@@ -128,20 +128,28 @@ export const Caja: React.FC = () => {
     tipo: 'RECIBO'
   })
 
-  // Cargar datos
+  // Cargar configuración de negocio una sola vez (o ante actualización)
+  const cargarConfiguracion = useCallback(async () => {
+    try {
+      const cfg = await getParametrosConfiguracion()
+      setConfigLocal(cfg)
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  // Cargar datos operativos de caja (turno, pedidos y vales)
   const cargarDatos = useCallback(async (showLoader = false) => {
     try {
       if (showLoader) setIsRefreshing(true)
-      const [turnoRes, pedidosRes, valesRes, cfgRes] = await Promise.allSettled([
+      const [turnoRes, pedidosRes, valesRes] = await Promise.allSettled([
         getTurnoActual(),
         getPedidosActivos('activos'),
         getVales('PENDIENTE'),
-        getParametrosConfiguracion(),
       ])
       if (turnoRes.status === 'fulfilled') setTurno(turnoRes.value)
       if (pedidosRes.status === 'fulfilled') setPedidos(pedidosRes.value)
       if (valesRes.status === 'fulfilled') setValesPendientes(valesRes.value.length)
-      if (cfgRes.status === 'fulfilled') setConfigLocal(cfgRes.value)
     } catch (err) {
       console.error('Error cargando datos de caja:', err)
     } finally {
@@ -151,13 +159,15 @@ export const Caja: React.FC = () => {
   }, [])
 
   useEffect(() => {
+    cargarConfiguracion()
     cargarDatos(false)
-  }, [cargarDatos])
+  }, [cargarConfiguracion, cargarDatos])
 
   // WebSocket para sincronización reactiva en vivo
   useCocinaWebSocket({
     onNewOrder: () => cargarDatos(false),
     onOrderUpdate: () => cargarDatos(false),
+    onCatalogUpdate: () => cargarConfiguracion(),
   })
 
   const handleAbrirTurno = async (montoInicial: number) => {

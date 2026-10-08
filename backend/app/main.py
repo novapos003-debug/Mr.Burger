@@ -37,6 +37,8 @@ async def lifespan(app: FastAPI):
             conn.execute(text("ALTER TABLE pedido ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(100) UNIQUE;"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_pedido_idempotency_key ON pedido(idempotency_key);"))
             conn.execute(text("ALTER TABLE producto ADD COLUMN IF NOT EXISTS permite_adiciones BOOLEAN NOT NULL DEFAULT TRUE;"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_movcaja_creado_en ON movimiento_caja (creado_en);"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_movcaja_cierre ON movimiento_caja (cierre_id);"))
 
             # Migración 04: Empaques dinámicos, bolsas T20-T40, saneamiento de catálogo y gastos operativos
             conn.execute(text("ALTER TABLE detalle_receta ADD COLUMN IF NOT EXISTS solo_llevar BOOLEAN NOT NULL DEFAULT FALSE;"))
