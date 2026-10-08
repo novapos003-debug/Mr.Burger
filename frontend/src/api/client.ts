@@ -14,10 +14,6 @@ export const setServerIp = (ip: string): void => {
 }
 
 export const getApiBaseUrl = (): string => {
-  // En localhost o 127.0.0.1 (el computador servidor local), usar siempre el proxy local de Vite
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return '/api'
-  }
   const customIp = getServerIp()
   if (customIp) {
     const clean = customIp.trim().replace(/\/api$/, '').replace(/\/$/, '')
@@ -27,6 +23,7 @@ export const getApiBaseUrl = (): string => {
     const hostWithPort = clean.includes(':') ? clean : `${clean}:8000`
     return `http://${hostWithPort}/api`
   }
+
   // Si estamos en la nube (Firebase Hosting), apuntar por defecto a Render
   if (
     typeof window !== 'undefined' &&
@@ -34,14 +31,23 @@ export const getApiBaseUrl = (): string => {
   ) {
     return 'https://mrburger-api.onrender.com/api'
   }
+
+  // En desarrollo con Vite (npm run dev), usar el proxy local de Vite
+  if (import.meta.env.DEV) {
+    return '/api'
+  }
+
+  // En producción (Termux / LAN con 'serve -s dist -l 5173'), apuntar directamente al backend en el puerto 8000
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
+    const hostname = window.location.hostname || 'localhost'
+    return `${protocol}//${hostname}:8000/api`
+  }
+
   return import.meta.env.VITE_API_URL || '/api'
 }
 
 export const getWsBaseUrl = (): string => {
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${protocol}//${window.location.host}/ws/pedidos`
-  }
   const customIp = getServerIp()
   if (customIp) {
     const clean = customIp.replace(/^https?:\/\//, '').replace(/\/api$/, '').replace(/\/$/, '')
@@ -50,14 +56,28 @@ export const getWsBaseUrl = (): string => {
     const hostWithPort = clean.includes(':') ? clean : `${clean}:8000`
     return `${protocol}//${hostWithPort}/ws/pedidos`
   }
+
   if (
     typeof window !== 'undefined' &&
     (window.location.hostname.includes('web.app') || window.location.hostname.includes('firebaseapp.com'))
   ) {
     return 'wss://mrburger-api.onrender.com/ws/pedidos'
   }
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.host}/ws/pedidos`
+
+  // En desarrollo con Vite, el proxy maneja ws://localhost:5173/ws/pedidos
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${protocol}//${window.location.host}/ws/pedidos`
+  }
+
+  // En producción (Termux / LAN), conectar directamente al puerto 8000 del servidor
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const hostname = window.location.hostname || 'localhost'
+    return `${protocol}//${hostname}:8000/ws/pedidos`
+  }
+
+  return 'ws://localhost:8000/ws/pedidos'
 }
 
 export const api = axios.create({

@@ -14,7 +14,9 @@ cd ~/mrburger
 
 # 1. Descargar cambios de GitHub
 echo "📥 1/2 Descargando cambios de GitHub..."
-git pull origin main
+rm -f .git/index.lock
+git fetch origin main
+git reset --hard origin/main
 
 # Si no existe dist precompilado, compilar como respaldo
 if [ ! -d ~/mrburger/frontend/dist ]; then
