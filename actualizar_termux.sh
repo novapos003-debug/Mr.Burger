@@ -13,20 +13,22 @@ echo ""
 cd ~/mrburger
 
 # 1. Descargar cambios de GitHub
-echo "📥 1/3 Descargando cambios de GitHub..."
+echo "📥 1/2 Descargando cambios de GitHub..."
 git pull origin main
 
-# 2. Reconstruir Frontend
-echo "⚡ 2/3 Recompilando Frontend..."
-cd ~/mrburger/frontend
-npm run build
+# Si no existe dist precompilado, compilar como respaldo
+if [ ! -d ~/mrburger/frontend/dist ]; then
+    echo "⚡ Compilando Frontend..."
+    cd ~/mrburger/frontend
+    npm run build
+fi
 
-# 3. Reiniciar el servidor Frontend para servir los nuevos archivos
-echo "🔄 3/3 Reiniciando servicios..."
+# 2. Reiniciar servicios
+echo "🔄 2/2 Refrescando servicios..."
 pkill -f "serve -s dist" || true
+cd ~/mrburger/frontend
 nohup serve -s dist -l 5173 --cors > ~/frontend.log 2>&1 &
 
-# Reiniciar Backend por si hubo cambios en Python
 pkill -f "uvicorn app.main:app" || true
 cd ~/mrburger/backend
 export DATABASE_URL="postgresql://restaurante:restaurante_dev@localhost:5432/restaurante"

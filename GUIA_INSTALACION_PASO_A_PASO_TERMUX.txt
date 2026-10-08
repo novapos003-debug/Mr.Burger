@@ -116,6 +116,12 @@ cat << 'EOF' > ~/iniciar.sh
 #!/data/data/com.termux/files/usr/bin/bash
 termux-wake-lock
 
+# 0. Auto-actualización silenciosa al encender si hay internet (máx. 2 segundos)
+if ping -c 1 -W 2 8.8.8.8 > /dev/null 2>&1; then
+    cd ~/mrburger
+    git pull origin main --quiet 2>/dev/null || true
+fi
+
 # 1. PostgreSQL
 if ! pg_isready -q; then
     pg_ctl -D $PREFIX/var/lib/postgresql start
@@ -133,6 +139,29 @@ fi
 if ! pgrep -f "serve -s dist" > /dev/null; then
     cd ~/mrburger/frontend
     nohup serve -s dist -l 5173 --cors > ~/frontend.log 2>&1 &
+fi
+
+# 4. Demonio de Auto-Actualización 100% Automático (Revisa cada 15 min en segundo plano)
+if ! pgrep -f "mrburger_auto_updater" > /dev/null; then
+    nohup bash -c '
+    while true; do
+        sleep 900
+        if ping -c 1 -W 2 8.8.8.8 > /dev/null 2>&1; then
+            cd ~/mrburger
+            BEFORE=$(git rev-parse HEAD 2>/dev/null)
+            git pull origin main --quiet 2>/dev/null || true
+            AFTER=$(git rev-parse HEAD 2>/dev/null)
+            if [ "$BEFORE" != "$AFTER" ]; then
+                echo "[$(date)] ¡Actualización remota descargada con éxito!" >> ~/update.log
+                pkill -f "uvicorn app.main:app" || true
+                cd ~/mrburger/backend
+                export DATABASE_URL="postgresql://restaurante:restaurante_dev@localhost:5432/restaurante"
+                export SECRET_KEY="ymKGPH7kaMDwp4CJZluFvgU3BRcAnbrj"
+                nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 >> ~/backend.log 2>&1 &
+            fi
+        fi
+    done
+    ' > /dev/null 2>&1 &
 fi
 EOF
 
@@ -239,28 +268,28 @@ y la cambias a "ADVERTIR Y PERMITIR". Asi podran vender todo libremente.
 ================================================================================
 FASE 12: ¿CÓMO ACTUALIZAR EL LOGO O EL SISTEMA MAÑANA DESDE TU CASA / PC?
 ================================================================================
-Si el cliente te envía el logo definitivo mañana (o quieres hacer un cambio):
+¡ESTÁ 100% AUTOMATIZADO! NO TIENES QUE TOCAR LA CAJA NI VIAJAR AL RESTAURANTE.
 
-1. EN TU PC:
+1. EN TU PC (EN TU CASA):
    - Guarda el nuevo logo reemplazando el archivo: frontend/public/logo.png
-   - Recompila y sube los cambios a GitHub:
+   - Recompila y sube a GitHub con estos comandos:
      cd "frontend" && npm run build
      git add .
      git commit -m "Actualizar logo oficial Mr. Burger"
      git push origin main
 
 2. EN LA CAJA (EN EL RESTAURANTE):
-   - Opción A (Vía Remota con AnyDesk sin moverte de tu casa):
-     Abres AnyDesk en tu PC, te conectas a la pantalla de la Caja, abres Termux y ejecutas:
-     ~/actualizar.sh
-   - Opción B (Si estás en el restaurante o el dueño lo hace en 5 segundos):
-     Abren Termux en la pantalla de la caja (con Wi-Fi conectado) y escriben:
-     ~/actualizar.sh
+   - ¡NO TIENES QUE HACER NADA!
+   - La pantalla de la Caja tiene automatizado:
+     * Al encenderse en la mañana, verifica GitHub y descarga los cambios.
+     * Durante el día, revisa cada 15 minutos en segundo plano y actualiza sola.
+   - (Opcional: Si tienes prisa y no quieres esperar los 15 min, puedes
+     reiniciar la pantalla o ejecutar en Termux: ~/actualizar.sh).
 
 3. ¿Y LOS TELÉFONOS DE MESEROS Y TABLET DE COCINA?:
-   - ¡NO TIENES QUE TOCAR NINGUNO DE LOS 5 DISPOSITIVOS!
+   - ¡TAMPOCO TIENES QUE TOCARLOS!
    - Gracias a la arquitectura PWA (Progressive Web App), todos los teléfonos
      y tablets detectan la nueva versión automáticamente por Wi-Fi.
-   - Les saldrá un aviso "¡Nueva versión disponible! [Actualizar]" o simplemente
+   - En pantalla les sale "¡Nueva versión disponible! [Actualizar]" o simplemente
      al recargar la pantalla, y el nuevo logo aparecerá en todos al instante.
 ================================================================================
