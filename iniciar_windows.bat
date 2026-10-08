@@ -22,9 +22,14 @@ taskkill /F /FI "WINDOWTITLE eq MrBurger-Frontend*" 2>nul
 echo [1/3] Iniciando Cerebro Backend (Puerto 8000)...
 start "MrBurger-Backend" /min cmd /c "cd /d %~dp0backend && set DATABASE_URL=postgresql://restaurante:restaurante_dev@localhost:5432/restaurante&& set SECRET_KEY=ymKGPH7kaMDwp4CJZluFvgU3BRcAnbrj&& py -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
-:: 2. Iniciar Frontend PWA
+:: 2. Iniciar Frontend PWA (Usa Node si existe, o Python directamente sin instalar nada extra)
 echo [2/3] Iniciando Servidor Web PWA (Puerto 5173)...
-start "MrBurger-Frontend" /min cmd /c "cd /d %~dp0frontend && npx serve -s dist -l 5173 --cors"
+where npx >nul 2>nul
+if %errorlevel% equ 0 (
+    start "MrBurger-Frontend" /min cmd /c "cd /d %~dp0frontend && npx serve -s dist -l 5173 --cors"
+) else (
+    start "MrBurger-Frontend" /min cmd /c "cd /d %~dp0 && py serve_frontend.py"
+)
 
 :: 3. Abrir la Caja POS en el navegador
 echo [3/3] Abriendo pantalla de Caja en el navegador...
