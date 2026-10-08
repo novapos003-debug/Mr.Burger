@@ -562,17 +562,18 @@ Permite realizar pruebas, capacitaciones y simulaciones con total libertad opera
 
 ---
 
-## 19. Arquitectura de Despliegue Autónomo en Android (Termux) y Mantenimiento Remoto
+## 19. Arquitectura de Despliegue Autónomo (Windows PC y Android Termux)
 
 El sistema está diseñado para operar con **CERO fricción técnica** en el local físico, garantizando autonomía total de la caja y permitiendo el mantenimiento remoto completo sin pisar el restaurante:
 
 ### Componentes de la Arquitectura Física:
-- **Caja POS (Servidor Maestro Local):** Pantalla táctil Todo-en-Uno Android. Ejecuta en segundo plano:
+- **Caja POS (Servidor Maestro Local):** PC con Windows (o Pantalla Android Todo-en-Uno). Ejecuta en segundo plano:
   - `PostgreSQL 16` como base de datos relacional interna en puerto 5432.
   - `FastAPI + Uvicorn` como motor de negocio y WebSockets en puerto 8000.
   - `serve` sirviendo la PWA en puerto 5173.
-- **Cocina KDS:** Tablet Android montada en pared con alerta sonora y temporizador colorimétrico conectada por Wi-Fi.
-- **Meseros Móviles:** 4 smartphones Android de bajo consumo conectados a la comanda táctil.
+  - Scripts de 1 clic: `iniciar_windows.bat` (arranque) y `configurar_firewall_windows.bat`.
+- **Cocina KDS:** Tablet Android montada en pared con alerta sonora ("Ding-Dong") y temporizador colorimétrico conectada por Wi-Fi.
+- **Meseros Móviles:** 4 smartphones Android de bajo consumo conectados a la comanda táctil por Wi-Fi.
 - **Impresora Térmica:** 80mm ESC/POS conectada por USB con apertura automática de gaveta monedero vía conector RJ11.
 
 ```mermaid

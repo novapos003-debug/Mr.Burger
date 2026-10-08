@@ -1,0 +1,169 @@
+================================================================================
+GUIA MAESTRA DEFINITIVA: INSTALACION EN CAJA WINDOWS - POS MR. BURGER
+DESDE CERO HASTA DEJARLO OPERANDO EN VIVO (PASO A PASO)
+================================================================================
+
+¡EXCELENTE NOTICIA!
+Tener una PC con Windows como la Caja es MUCHO MEJOR, más rápido y más estable
+que Android/Termux:
+- Cero problemas de batería o de procesos suspendidos.
+- La impresora térmica USB funciona nativa en Windows y es ultra veloz.
+- Si la PC tiene puerto de red, puedes conectarla directo por cable de red (Ethernet)
+  al router para máxima estabilidad, o por Wi-Fi.
+
+RESUMEN DE PUERTOS:
+- Puerto 5173: Frontend Web PWA (Servido por 'serve -s dist -l 5173')
+- Puerto 8000: Cerebro Backend API + WebSockets en vivo (FastAPI / Uvicorn)
+- Puerto 5432: Base de Datos PostgreSQL 16
+*NOTA CLAVE*: Todos los celulares y tablets se conectan por Wi-Fi a:
+http://[IP_DE_ESTA_PC]:5173
+El sistema internamente detecta la IP y conecta los datos y WebSockets
+al puerto 8000 de forma 100% AUTOMATICA.
+
+================================================================================
+FASE 1: CONEXION FISICA Y RED WI-FI / ETHERNET
+================================================================================
+1. Ubica la PC en la mesa de caja y enciéndela.
+2. Conecta el cable USB de la impresora térmica a un puerto USB de la PC.
+3. Conecta el cable RJ11 del cajón monedero a la impresora.
+4. Conecta la PC al Wi-Fi del restaurante (o por cable de red al router si está cerca).
+   *REGLA DE ORO*: Conectar a la red Wi-Fi PRINCIPAL (nunca a "Red de Invitados").
+
+================================================================================
+FASE 2: CONOCER O FIJAR LA IP DE LA PC WINDOWS
+================================================================================
+1. Presiona la tecla Windows, escribe "cmd" o "PowerShell" y da Enter.
+2. Escribe:
+   ipconfig
+3. Busca donde dice "Dirección IPv4" (ejemplo: 192.168.1.50 o 192.168.1.15).
+   *ANOTA ESTA IP*: Esta es la dirección que abrirán los meseros y la cocina.
+
+4. (OPCIONAL PERO RECOMENDADO) FIJAR LA IP PARA QUE NUNCA CAMBIE:
+   - Presiona Windows + R, escribe: ncpa.cpl  (y da Enter).
+   - Clic derecho a tu conexión Wi-Fi (o Ethernet) > Propiedades.
+   - Doble clic a "Protocolo de Internet versión 4 (TCP/IPv4)".
+   - Marca "Usar la siguiente dirección IP":
+     * Dirección IP: La que tenía (ej. cambia el último número por 50: 192.168.1.50).
+     * Máscara de subred: 255.255.255.0
+     * Puerta de enlace: 192.168.1.1 (o la que te mostró ipconfig).
+     * DNS preferido: 8.8.8.8
+     * DNS alternativo: 8.8.4.4
+   - Clic en Aceptar.
+
+================================================================================
+FASE 3: INSTALAR LOS 3 PROGRAMAS BÁSICOS (SI LA PC NO LOS TIENE)
+================================================================================
+Revisa si la PC ya tiene instalados: Python, Node y PostgreSQL.
+Si no los tiene, instálalos así (toma 5 minutos):
+
+OPCIÓN A: VÍA CONSOLA CON WINGET (La más rápida si Windows 10/11 está al día):
+Abre PowerShell como Administrador y pega este comando:
+winget install Python.Python.3.11 OpenJS.NodeJS.LTS PostgreSQL.PostgreSQL -e
+
+OPCIÓN B: VÍA INSTALADORES TRADICIONALES (O desde tu memoria USB):
+1. Python 3.10 o 3.11:
+   Al instalarlo, ¡MUY IMPORTANTE!: Marca la casilla abajo que dice:
+   [x] "Add python.exe to PATH" (Agregar Python al PATH).
+2. Node.js LTS:
+   Instalar dando Siguiente, Siguiente, Finalizar.
+3. PostgreSQL 16:
+   Instalar dando Siguiente. Cuando te pida la CONTRASEÑA para el usuario postgres,
+   escribe exactamente: restaurante_dev
+   Puerto: 5432 (dejar por defecto).
+
+================================================================================
+FASE 4: COPIAR EL PROYECTO A LA PC
+================================================================================
+1. Conecta tu memoria USB a la PC.
+2. Copia la carpeta del proyecto a la raíz del disco C:, de modo que quede en:
+   C:\mrburger
+   (O descárgalo directamente desde GitHub si la PC tiene internet:
+    git clone https://github.com/novapos003-debug/Mr.Burger.git C:\mrburger)
+
+================================================================================
+FASE 5: INICIALIZAR LIBRERÍAS, BASE DE DATOS Y FIREWALL
+================================================================================
+1. Abrir CMD o PowerShell en la carpeta C:\mrburger y ejecutar:
+   pip install -r backend\requirements.txt
+   npm install -g serve
+
+2. Configurar la Base de Datos:
+   En la carpeta C:\mrburger haz doble clic en el archivo:
+   👉 configurar_bd_windows.bat
+   (Creará la base de datos 'restaurante', las recetas y el catálogo inicial).
+
+3. Habilitar puertos en el Firewall para los celulares:
+   En la carpeta C:\mrburger haz clic DERECHO en:
+   👉 configurar_firewall_windows.bat > "Ejecutar como administrador"
+   (Esto permite que los celulares de los meseros y la tablet se conecten sin trabas).
+
+================================================================================
+FASE 6: ENCENDER EL SISTEMA (1 SOLO CLIC) Y AUTO-ARRANQUE
+================================================================================
+1. En la carpeta C:\mrburger haz doble clic en:
+   👉 iniciar_windows.bat
+   *Listo*: Levantará el Backend (puerto 8000), el Frontend (puerto 5173) y
+   abrirá automáticamente Chrome en http://localhost:5173.
+
+2. CONFIGURAR AUTO-ARRANQUE (Para que prenda solo al encender la PC todos los días):
+   - Presiona Windows + R en el teclado.
+   - Escribe: shell:startup  (y da Enter).
+   - Se abrirá la carpeta de inicio de Windows.
+   - Arrastra el archivo "iniciar_windows.bat" con clic derecho a esa carpeta y selecciona
+     "Crear accesos directos aquí".
+   ¡Listo! Cada vez que prendan la PC en la mañana, Mr. Burger se abrirá solo.
+
+================================================================================
+FASE 7: CONFIGURAR LA IMPRESORA TÉRMICA EN LA CAJA
+================================================================================
+1. En Google Chrome en la PC (http://localhost:5173):
+2. Inicia sesión como Admin (admin / admin123) o Cajero (cajero / cajero123).
+3. Toca los 3 puntos arriba a la derecha de Chrome > "Instalar aplicación" (para que quede icono en el escritorio).
+4. Ve al módulo de Caja / Configuración de Impresora:
+   - Clic en "Conectar Impresora USB" y dale Permitir.
+   - Haz clic en "Imprimir Prueba". La impresora debe cortar la tirilla y abrir el cajón monedero.
+
+================================================================================
+FASE 8: CONECTAR LA TABLET DE COCINA (KDS)
+================================================================================
+1. Conecta la tablet de cocina a la red Wi-Fi del restaurante.
+2. Abre Google Chrome en la tablet y escribe la IP de la PC Windows:
+   Ejemplo: http://192.168.1.50:5173
+3. Toca los 3 puntos de Chrome > "Instalar aplicación".
+4. Inicia sesión con el rol de COCINA (cocina / cocina123).
+5. Súbele el volumen al máximo para escuchar la campana ("Ding-Dong").
+*El indicador de Cerebro Local se pondrá verde automáticamente*.
+
+================================================================================
+FASE 9: CONECTAR LOS 4 CELULARES DE LOS MESEROS
+================================================================================
+En cada celular de los meseros:
+1. Conéctalos al Wi-Fi del restaurante (desactivar datos móviles para asegurar que usen Wi-Fi).
+2. Abre Google Chrome y escribe la IP de la PC Windows:
+   Ejemplo: http://192.168.1.50:5173
+3. Toca los 3 puntos de Chrome > "Instalar aplicación".
+4. Inicia sesión con el rol de MESERO (mesero1 / mesero123).
+*No requiere configurar nada más, la conexión a la comanda es automática*.
+
+================================================================================
+FASE 10: SIMULACRO REAL EN VIVO (DRY RUN)
+================================================================================
+1. Celular Mesero: Pide 1 Hamburguesa Especial Res + 1 Gaseosa en Mesa 1 > "ENVIAR A COCINA".
+2. Tablet Cocina: Suena el "Ding-Dong", aparece Mesa 1 > Toca "Aceptar" y luego "Listo".
+3. Pantalla Caja (PC Windows): Toca Mesa 1 > Cobrar Efectivo > Imprime tirilla y abre cajón.
+4. Mesa 1 queda liberada.
+
+================================================================================
+FASE 11: ¿CÓMO ACTUALIZAR EL LOGO O EL SISTEMA MAÑANA DESDE TU CASA?
+================================================================================
+1. EN TU CASA (TU PC):
+   - Modificas el logo o código, compilas y subes a GitHub:
+     cd frontend && npm run build
+     git add . && git commit -m "Actualizar logo" && git push origin main
+
+2. EN EL RESTAURANTE (PC WINDOWS):
+   - Cada vez que arranca la PC con iniciar_windows.bat, descarga las actualizaciones de GitHub solita.
+   - O si estás conectado por AnyDesk en la PC Windows, solo haces doble clic en:
+     👉 actualizar_windows.bat
+   - Todos los celulares y tablets se actualizan solos por Wi-Fi sin tocarlos.
+================================================================================
