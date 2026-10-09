@@ -10,15 +10,16 @@ raw_db_url = os.getenv(
 # Elimina cualquier salto de línea, retorno de carro o espacio accidental introducido al copiar/pegar
 DATABASE_URL = "".join(raw_db_url.split())
 
+is_sqlite = DATABASE_URL.startswith("sqlite")
 connect_args = {}
+if not is_sqlite:
+    connect_args["client_encoding"] = "utf8"
 if any(cloud_host in DATABASE_URL for cloud_host in ("supabase", "neon", "render", "aws")):
     connect_args["sslmode"] = "require"
 
 import logging
 
 logger = logging.getLogger(__name__)
-
-is_sqlite = DATABASE_URL.startswith("sqlite")
 engine_kwargs = {
     "pool_pre_ping": True,
 }
