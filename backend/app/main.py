@@ -34,6 +34,10 @@ async def lifespan(app: FastAPI):
     try:
         Base.metadata.create_all(bind=engine)
         with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE turno_laboral ADD COLUMN IF NOT EXISTS rol VARCHAR(50) NOT NULL DEFAULT 'cajero';"))
+            conn.execute(text("ALTER TABLE turno_laboral ADD COLUMN IF NOT EXISTS es_demo BOOLEAN NOT NULL DEFAULT FALSE;"))
+            conn.execute(text("ALTER TABLE producto ADD COLUMN IF NOT EXISTS empaque_llevar_id INT REFERENCES producto(id);"))
+            conn.execute(text("ALTER TABLE producto ADD COLUMN IF NOT EXISTS manual_disponible BOOLEAN;"))
             conn.execute(text("ALTER TABLE pedido ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(100) UNIQUE;"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_pedido_idempotency_key ON pedido(idempotency_key);"))
             conn.execute(text("ALTER TABLE producto ADD COLUMN IF NOT EXISTS permite_adiciones BOOLEAN NOT NULL DEFAULT TRUE;"))

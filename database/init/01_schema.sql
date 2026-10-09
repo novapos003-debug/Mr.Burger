@@ -483,9 +483,11 @@ INSERT INTO usuario (rol_id, nombre, usuario, password_hash) VALUES
 CREATE TABLE IF NOT EXISTS turno_laboral (
     id              SERIAL PRIMARY KEY,
     usuario_id      INT NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+    rol             VARCHAR(50) NOT NULL DEFAULT 'operativo',
     entrada_en      TIMESTAMPTZ NOT NULL DEFAULT now(),
     salida_en       TIMESTAMPTZ,
-    motivo_cierre   VARCHAR(50)
+    motivo_cierre   VARCHAR(50),
+    es_demo         BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE INDEX IF NOT EXISTS idx_turno_laboral_usuario ON turno_laboral (usuario_id, salida_en);

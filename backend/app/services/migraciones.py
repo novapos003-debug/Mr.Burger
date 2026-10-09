@@ -39,6 +39,7 @@ def _una_sola_vez(conn, clave: str, descripcion: str) -> bool:
 def migrar_demo_y_fijados(conn) -> None:
     conn.execute(text("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS fijado BOOLEAN NOT NULL DEFAULT FALSE;"))
     conn.execute(text("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS es_demo BOOLEAN NOT NULL DEFAULT FALSE;"))
+    conn.execute(text("ALTER TABLE turno_laboral ADD COLUMN IF NOT EXISTS rol VARCHAR(50) NOT NULL DEFAULT 'cajero';"))
     for tabla in TABLAS_TRAZABLES:
         conn.execute(text(f"ALTER TABLE {tabla} ADD COLUMN IF NOT EXISTS es_demo BOOLEAN NOT NULL DEFAULT FALSE;"))
         conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_{tabla}_es_demo ON {tabla}(es_demo);"))
