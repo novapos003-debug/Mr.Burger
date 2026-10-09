@@ -31,6 +31,7 @@ Si una decisión no está aquí, se discute antes de codificar. Nada se borra: s
 18. [Trazabilidad Demo, Cuentas Fijadas y Asistente de Puesta en Blanco](#18-trazabilidad-demo-cuentas-fijadas-y-asistente-de-puesta-en-blanco)
 19. [Arquitectura de Despliegue Autónomo en Android (Termux) y Mantenimiento Remoto](#19-arquitectura-de-despliegue-autónomo-en-android-termux-y-mantenimiento-remoto)
 20. [Mapeo de Puertos, Red Local LAN y Auto-Resolución](#20-mapeo-de-puertos-red-local-lan-y-auto-resolución)
+21. [Hoja de Ruta Operativa — Mañana en el Restaurante (Checklist & Matriz de Insumos)](#21-hoja-de-ruta-operativa--mañana-en-el-restaurante)
 
 ---
 
@@ -631,5 +632,186 @@ flowchart TD
 - El cliente móvil [`client.ts`](file:///C:/Users/jhona/Documents/Default%20Project/frontend/src/api/client.ts) auto-detecta la dirección IP de origen (`window.location.hostname`).
 - Al abrir la URL `http://192.168.1.50:5173`, el aplicativo automáticamente redirige todas las consultas de datos a `http://192.168.1.50:8000/api` y el WebSocket a `ws://192.168.1.50:8000/ws/pedidos`.
 - **Los meseros y cocineros no necesitan ingresar a menús de configuración ni digitar direcciones IP.**
+
+---
+
+## 21. Hoja de Ruta Operativa — Mañana en el Restaurante
+
+Esta sección reúne el **Checklist Operativo de Apertura** para la puesta en marcha de la caja y la **Matriz Maestra de Recetas e Insumos** oficial de Mr. Burger con los gramajes y unidades exactas calibradas en el sistema.
+
+### 21.1 Checklist de Apertura en el Local (Paso a Paso con 1 Clic)
+
+Cuando llegues al local en la mañana, sigue este procedimiento de 5 minutos:
+
+1. **Encendido y Descarga de Actualizaciones:**
+   - Enciende el PC de Caja.
+   - Si había consolas abiertas, ciérralas.
+   - Haz doble clic en el archivo:
+     ```text
+     actualizar_windows.bat
+     ```
+   - Este script sincronizará automáticamente los últimos cambios de GitHub (`f1639b4`), asegurará la base de datos PostgreSQL, compilará el frontend y dejará el sistema al día.
+
+2. **Arranque del Sistema:**
+   - Haz doble clic en:
+     ```text
+     iniciar_con_consolas.bat
+     ```
+     *(o `iniciar_windows.bat` si prefieres arranque silencioso en segundo plano).*
+   - Abre Google Chrome en: `http://localhost:5173`
+
+3. **Calibración de la Impresora Térmica y Cajón:**
+   - Haz clic en el botón **`🖨️ Impresora`** (disponible en la cabecera de Caja, en el menú superior Navbar y en *Admin > Configuración*).
+   - Elige el ancho de papel de tu impresora térmica: **`80mm`** (estándar Mr. Burger) o **`58mm`**.
+   - Haz clic en **`🖨️ Probar Impresión`**: verificará que imprima la tirilla de calibración limpia, sin márgenes excesivos ni cortes extraños.
+   - Haz clic en **`⚡ Probar Apertura Cajón`**: comprobará la señal de pulso RJ11 hacia el cajón monedero.
+   - Asegúrate de dejar activada la casilla: `Abrir cajón monedero automáticamente al timbrar venta` y pulsa **Guardar Configuración**.
+
+4. **Apertura de Caja y Turno Laboral:**
+   - Inicia sesión con las credenciales de tu perfil de Cajero.
+   - En la ventana de apertura de caja, ingresa la base de efectivo inicial (ej. `$521.650 COP`).
+   - El sistema guardará de inmediato el movimiento `CAMBIO_INICIAL` en la base de datos local.
+
+5. **Verificación del Menú de Ventas (Desbloqueo de Catálogo):**
+   - Pulsa el botón **`+ Nuevo Pedido`**.
+   - **Verificación:** Ahora verás **todos los productos del menú** listados de inmediato (las 24+ opciones gastronómicas), organizados con sus botones de categoría:
+     - `Todos (24)`
+     - `Hamburguesas (19)`
+     - `Perros (6)`
+     - `Asados (7)`
+     - `Mazorcas & Desgranados (8)`
+     - `Alitas (3)`
+     - `Papas & Adiciones (5)`
+     - `Bebidas (6)`
+   - Cada categoría muestra la cantidad exacta de productos disponibles. Si un insumo está en stock 0, el producto muestra el badge informativo *“Sin stock”*, pero la política operativa `ADVERTIR_Y_PERMITIR` te permite facturarlo y venderlo sin bloqueos artificiales mientras se actualiza el inventario físico.
+
+6. **Prueba de Venta Completa:**
+   - Crea un pedido rápido (ejemplo: una *Hamburguesa Especial Res* o una *Gaseosa*).
+   - Abre el cobro, selecciona el método de pago (Efectivo / Transferencia / Tarjeta) y presiona **Cobrar e Imprimir**.
+   - Verifica que:
+     - Se abra el cajón monedero automáticamente.
+     - Se imprima la tirilla de venta en la impresora térmica.
+     - El pedido pase a Cocina (KDS) en tiempo real vía WebSocket.
+
+7. **Historial de Cierres y Reporte Z en Admin:**
+   - Al finalizar el turno, realiza el Arqueo de Caja registrando el efectivo físico contado.
+   - Ingresa al panel de Administración (`/admin`) -> Pestaña **"Asistencia & Turnos"** -> Sub-pestaña **"Cierres de Caja & Arqueos Z"** (o directamente desde el botón en *Flujo de Caja Real*).
+   - En esta tabla verás reflejado el turno cerrado con:
+     - ID del Cierre y Cajero responsable.
+     - Horas exactas de Apertura y Cierre.
+     - Base Inicial registrada (`$521.650`).
+     - Total de ventas facturadas en el turno.
+     - Efectivo esperado en gaveta vs. Efectivo físico contado.
+     - Diferencia exacta ($0 = Cuadrado Perfecto con badge verde).
+     - Botón **`📄 Ver Z`** para abrir e imprimir en formato tirilla el Reporte Z oficial cuando lo desees.
+
+---
+
+### 21.2 Matriz Maestra de Recetas e Insumos Oficiales de Mr. Burger
+
+Todos los productos cuentan con su formulación estandarizada en la base de datos (tabla `detalle_receta` y `componente_combo`). Cada vez que se timbra una venta, el sistema descuenta automáticamente los siguientes gramajes y unidades del kardex de inventario:
+
+#### 🍔 Hamburguesas
+
+| Producto | Pan (unid) | Proteína Principal | Tocineta | Queso | Verduras / Aros | Ripio Papa | Salsa Base | Empaque Térmico |
+| :--- | :---: | :--- | :---: | :--- | :--- | :---: | :--- | :---: |
+| **Especial Res** | 1 | Carne de res (125g) | 20g | 1 lonja Americano | Tomate (1 un), Batavia (20g) | 15g | Salsa Mr Burger (20ml) | C1 (1 un)* |
+| **Especial Doble Res** | 1 | Carne de res (250g) | 30g | 2 lonjas Americano | Tomate (1 un), Batavia (20g) | 15g | Salsa Mr Burger (25ml) | C1 (1 un)* |
+| **Especial Pollo** | 1 | Pechuga pollo (130g) | 20g | 1 lonja Americano | Tomate (1 un), Batavia (20g) | 15g | Salsa Mr Burger (20ml) | C1 (1 un)* |
+| **Especial Doble Pollo** | 1 | Pechuga pollo (260g) | 30g | 2 lonjas Americano | Tomate (1 un), Batavia (20g) | 15g | Salsa Mr Burger (25ml) | C1 (1 un)* |
+| **Especial Mixta** | 1 | Res (125g) + Pollo (130g) | 25g | 2 lonjas Americano | Tomate (1 un), Batavia (20g) | 15g | Salsa Mr Burger (25ml) | C1 (1 un)* |
+| **Mr. Burger Doble Res** | 1 | Carne de res (250g) | 30g | 2 lonjas Americano | Aros de cebolla (3 un) | - | Salsa Mr Burger (25ml) | C1 (1 un)* |
+| **Mr. Burger Doble Pollo** | 1 | Pechuga pollo (260g) | 30g | 2 lonjas Americano | Aros de cebolla (3 un) | - | Salsa Mr Burger (25ml) | C1 (1 un)* |
+| **Mr. Burger Doble Angus** | 1 | Carne Angus (300g) | 35g | 2 lonjas Americano | Aros de cebolla (3 un) | - | Salsa Mr Burger (25ml) | C1 (1 un)* |
+| **Angus Sencilla** | 1 | Carne Angus (150g) | 25g | 1 lonja Cheddar | Cebolla morada (20g), Batavia (20g) | - | Salsa Mr Burger (20ml) | C1 (1 un)* |
+| **Angus Doble** | 1 | Carne Angus (300g) | 35g | 2 lonjas Cheddar | Cebolla morada (20g), Batavia (20g) | - | Salsa Mr Burger (25ml) | C1 (1 un)* |
+| **T.T Todo Terreno Res** | 1 | Carne de res (125g) | 30g | 2 lonjas Tajado | Cebolla cabezona (30g) | - | Salsa BBQ (20ml) | C1 (1 un)* |
+| **T.T Todo Terreno Doble Res** | 1 | Carne de res (250g) | 40g | 2 lonjas Tajado | Cebolla cabezona (30g) | - | Salsa BBQ (25ml) | C1 (1 un)* |
+| **T.T Todo Terreno Pollo** | 1 | Pechuga pollo (130g) | 30g | 2 lonjas Tajado | Cebolla cabezona (30g) | - | Salsa BBQ (20ml) | C1 (1 un)* |
+| **T.T Todo Terreno Doble Pollo**| 1 | Pechuga pollo (260g) | 40g | 2 lonjas Tajado | Cebolla cabezona (30g) | - | Salsa BBQ (25ml) | C1 (1 un)* |
+| **T.T Todo Terreno Mixta** | 1 | Res (125g) + Pollo (130g) | 35g | 2 lonjas Tajado | Cebolla cabezona (30g) | - | Salsa BBQ (25ml) | C1 (1 un)* |
+| **Ranchera Res** | 1 | Carne de res (125g) | - | 1 lonja Tajado | Salchicha Ranchera (2 un) | - | Chimichurry (15ml) | C1 (1 un)* |
+| **Ranchera Doble Res** | 1 | Carne de res (250g) | - | 2 lonjas Tajado | Salchicha Ranchera (2 un) | - | Chimichurry (20ml) | C1 (1 un)* |
+| **Cinco Estrellas Res** | 1 | Carne de res (125g) | 20g | 1 lonja Americano | Aros de cebolla (2 un) | - | Salsa Mr Burger (20ml) | C1 (1 un)* |
+| **Cinco Estrellas Doble Res** | 1 | Carne de res (250g) | 30g | 2 lonjas Americano | Aros de cebolla (3 un) | - | Salsa Mr Burger (25ml) | C1 (1 un)* |
+
+*\* El empaque térmico C1 se descuenta automáticamente y se cobra cuando el consumo es Para Llevar o Domicilio.*
+
+---
+
+#### 🌭 Perros Calientes
+
+| Producto | Pan Perro | Salchicha / Embutido | Tocineta | Queso | Acompañamiento / Verdura | Salsa | Empaque Térmico |
+| :--- | :---: | :--- | :---: | :--- | :--- | :--- | :---: |
+| **Perro Ítalo Suizo** | 1 un | Salchicha Suiza (1 un) | 15g | 1 lonja Tajado | Ripio papa (15g), Batavia (10g) | Salsa Mr Burger (15ml) | P1 (1 un)* |
+| **Perro Mr. Burger** | 1 un | Salchicha Ideal (1 un) | 15g | 1 lonja Tajado | Ripio papa (15g), Batavia (10g) | Salsa Mr Burger (15ml) | P1 (1 un)* |
+| **Perro Ranchero** | 1 un | Salchicha Ranchera (2 un)| 15g | 1 lonja Tajado | Ripio papa (15g), Batavia (10g) | Salsa Mr Burger (15ml) | P1 (1 un)* |
+| **Perro Americano** | 1 un | Salchicha Americana (1 un)| 15g | 1 lonja Americano | - | Salsa Mr Burger (15ml) | P1 (1 un)* |
+| **Perro Quesudo** | 1 un | Salchicha Americana (1 un)| 15g | 2 lonjas Tajado | Mazorca (0.5 un) | Salsa Mr Burger (15ml) | P1 (1 un)* |
+| **Perro Mexicano** | 1 un | Salchicha Ideal (1 un) | 15g | 1 lonja Tajado | Ripio papa (15g), Batavia (10g) | Salsa Mr Burger (15ml) + Chimi (15ml) | P1 (1 un)* |
+
+*\* El empaque térmico porta-perro P1 se descuenta y cobra automáticamente en pedidos Para Llevar.*
+
+---
+
+#### 🍟 Salchipapas, Papas y Acompañamientos
+
+| Producto | Papas Francesa | Embutido / Proteína | Tocineta | Queso / Adición | Salsas / Cocción | Empaque Térmico |
+| :--- | :---: | :--- | :---: | :--- | :--- | :---: |
+| **Salchipapa Americana** | 150g | Salchicha Americana (1 un) | - | - | Salsa Mr Burger (20ml), Tomate (15ml) | C1 (1 un)* |
+| **Salchipapa Especial** | 180g | Salchicha Americana (1 un) | 20g | 2 lonjas Tajado | Salsa Mr Burger (25ml) | C1 (1 un)* |
+| **Papas con Queso** | 150g | - | 20g | 2 lonjas Tajado | - | C1 (1 un)* |
+| **Porción Papas Francesa** | 150g | - | - | - | Aceite (20ml) | C1 (1 un)* |
+| **Aros de Cebolla (6 un)** | - | Aros de cebolla (6 un) | - | - | Salsa BBQ (20ml), Aceite (20ml) | C1 (1 un)* |
+
+---
+
+#### 🥩 Asados al Carbón / Plancha
+
+Todos los platos de asados incluyen su porción reglamentaria de 150g de papas a la francesa y aderezo chimichurry / BBQ:
+
+| Plato Asado | Gramaje Proteína Cruda | Porción de Papas | Salsa / Marinado | Empaque Térmico |
+| :--- | :--- | :---: | :--- | :---: |
+| **Costilla St. Louis** | Costilla de cerdo (300g) | 150g | Salsa BBQ (40ml) | C1 (1 un)* |
+| **Asado Baby** | Baby Beef de res (250g) | 150g | Chimichurry (30ml) | C1 (1 un)* |
+| **Churrasco a la Brasa** | Corte de Churrasco (250g) | 150g | Chimichurry (30ml) | C1 (1 un)* |
+| **Filete de Pollo Brasa** | Filete pechuga pollo (250g) | 150g | Chimichurry (30ml) | C1 (1 un)* |
+| **Chuzo de Res** | Brocheta carne de res (200g) | 150g | Chimichurry (20ml) | C1 (1 un)* |
+| **Chuzo de Pollo** | Brocheta pechuga pollo (200g) | 150g | Chimichurry (20ml) | C1 (1 un)* |
+| **Chuzo Mixto** | Res (100g) + Pollo (100g) | 150g | Chimichurry (20ml) | C1 (1 un)* |
+
+---
+
+#### 🌽 Mazorcas y Desgranados
+
+| Producto | Mazorca Entera | Proteína Base | Mantequilla | Queso | Ripio Papa | Salsa Base | Empaque |
+| :--- | :---: | :--- | :---: | :--- | :---: | :--- | :---: |
+| **Desgranado Mixto** | 1 un | Res (80g) + Pollo (80g) | 20g | 1 lonja Tajado | 15g | Salsa Mr Burger (20ml) | C1 (1 un)* |
+| **Desgranado Res** | 1 un | Carne de res (150g) | 20g | 1 lonja Tajado | 15g | Salsa Mr Burger (20ml) | C1 (1 un)* |
+| **Desgranado Pollo** | 1 un | Pechuga pollo (150g) | 20g | 1 lonja Tajado | 15g | Salsa Mr Burger (20ml) | C1 (1 un)* |
+| **Desgranado Ranchero**| 1 un | Salchicha Ranchera (2 un) | 20g | 1 lonja Tajado | 15g | Salsa Mr Burger (20ml) | C1 (1 un)* |
+| **Mazorca Ranchera** | 1 un | Salchicha Ranchera (1 un) | - | 1 lonja Tajado | - | - | C1 (1 un)* |
+| **Mazorca Gratinada** | 1 un | - | - | 2 lonjas Tajado | - | Salsa Mr Burger (20ml) | C1 (1 un)* |
+| **Mazorca Americana** | 1 un | - | 20g | - | - | Salsa Mr Burger (20ml) | C1 (1 un)* |
+| **Mazorca Esp. Pollo** | 1 un | Pechuga pollo (100g) | - | 1 lonja Tajado | - | - | C1 (1 un)* |
+
+---
+
+#### 🍗 Alitas Broaster / Crujientes (6 Piezas)
+
+| Producto | Papas Francesa | Salsa Especial | Aceite Cocción | Empaque Térmico |
+| :--- | :---: | :--- | :---: | :---: |
+| **Alitas BBQ (6 piezas)** | 150g | Salsa BBQ (40ml) | 30ml | C1 (1 un)* |
+| **Alitas Miel Mostaza (6 piezas)** | 150g | Mostaza con miel (30ml) | 30ml | C1 (1 un)* |
+| **Alitas Picantes (6 piezas)** | 150g | Salsa BBQ Picante (30ml) | 30ml | C1 (1 un)* |
+
+---
+
+#### 🥤 Combos Dinámicos
+
+Los combos agrupan productos hijos y descuentan inventario a través de `componente_combo`:
+- **Combo Con Papas:** Descuenta 1 *Gaseosa Personal* + 1 *Porción Papas a la Francesa* (150g papa + 20ml aceite) + 1 Empaque C1 si es para llevar.
+- **Combo Con Aros de Cebolla:** Descuenta 1 *Gaseosa Personal* + 1 *Aros de Cebolla (6 unidades)* (6 aros + 20ml aceite + 20ml salsa BBQ) + 1 Empaque C1 si es para llevar.
+
 
 
