@@ -21,10 +21,6 @@ net start postgresql-x64-17 >nul 2>nul
 net start postgresql-15 >nul 2>nul
 net start postgresql-16 >nul 2>nul
 
-:: Cerrar procesos previos si estaban abiertos para evitar puertos ocupados
-taskkill /F /FI "WINDOWTITLE eq MrBurger-Backend*" 2>nul
-taskkill /F /FI "WINDOWTITLE eq MrBurger-Frontend*" 2>nul
-
 :: Detectar comando de Python disponible
 set PY_CMD=python
 where python >nul 2>nul
@@ -32,18 +28,18 @@ if %errorlevel% neq 0 (
     set PY_CMD=py
 )
 
+:: Cerrar procesos previos y liberar estrictamente los puertos 8000 y 5173
+taskkill /F /FI "WINDOWTITLE eq MrBurger-Backend*" 2>nul
+taskkill /F /FI "WINDOWTITLE eq MrBurger-Frontend*" 2>nul
+%PY_CMD% liberar_puertos.py >nul 2>nul
+
 :: 1. Iniciar Backend FastAPI (con IPv4 127.0.0.1 para máxima compatibilidad Windows)
 echo [1/3] Iniciando Cerebro Backend (Puerto 8000)...
 start "MrBurger-Backend" /min cmd /c "cd /d %~dp0backend && set DATABASE_URL=postgresql://restaurante:restaurante_dev@127.0.0.1:5432/restaurante&& set SECRET_KEY=ymKGPH7kaMDwp4CJZluFvgU3BRcAnbrj&& %PY_CMD% -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
-:: 2. Iniciar Frontend PWA (Usa Node si existe, o Python directamente sin instalar nada extra)
+:: 2. Iniciar Frontend PWA estrictamente en el puerto 5173
 echo [2/3] Iniciando Servidor Web PWA (Puerto 5173)...
-where npx >nul 2>nul
-if %errorlevel% equ 0 (
-    start "MrBurger-Frontend" /min cmd /c "cd /d %~dp0frontend && npx serve -s dist -l 5173 --cors"
-) else (
-    start "MrBurger-Frontend" /min cmd /c "cd /d %~dp0 && %PY_CMD% serve_frontend.py"
-)
+start "MrBurger-Frontend" /min cmd /c "cd /d %~dp0 && %PY_CMD% serve_frontend.py"
 
 :: 3. Abrir la Caja POS en el navegador
 echo [3/3] Abriendo pantalla de Caja en el navegador...
