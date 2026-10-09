@@ -56,11 +56,15 @@ def require_roles(*roles: str):
                 .first()
             )
             if not turno_activo:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Tu turno laboral ha sido cerrado o ha finalizado. Tu sesión no está activa.",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
+                try:
+                    nuevo_turno = TurnoLaboral(
+                        usuario_id=current_user.id,
+                        rol=current_user.rol.nombre,
+                    )
+                    db.add(nuevo_turno)
+                    db.commit()
+                except Exception:
+                    db.rollback()
 
         return current_user
 

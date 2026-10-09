@@ -27,7 +27,13 @@ export const AperturaTurnoModal: React.FC<Props> = ({ isOpen, onClose, onConfirm
       onClose()
     } catch (err: any) {
       console.error('Error abriendo turno:', err)
-      setError(err.response?.data?.detail || 'Error al abrir turno de caja')
+      const detail = err.response?.data?.detail
+      const errorMsg = typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail) && detail[0]?.msg
+          ? detail[0].msg
+          : err.message || 'Error al abrir turno de caja'
+      setError(errorMsg)
     } finally {
       setLoading(false)
     }
@@ -55,7 +61,7 @@ export const AperturaTurnoModal: React.FC<Props> = ({ isOpen, onClose, onConfirm
         {/* Formulario */}
         <form onSubmit={handleAbrir} className="p-5 space-y-4">
           <p className="text-xs text-slate-400 leading-relaxed">
-            Ingresa el monto de la base de efectivo inicial (sencillo para cambio) con el que se inicia la jornada en la gaveta de dinero.
+            Ingresa el monto de la base de efectivo inicial (sencillo para cambio) con el que se inicia la jornada en la gaveta de dinero. Puedes ingresar cualquier valor exacto con monedas y billetes.
           </p>
 
           {error && (
@@ -73,11 +79,11 @@ export const AperturaTurnoModal: React.FC<Props> = ({ isOpen, onClose, onConfirm
               <input
                 type="number"
                 min="0"
-                step="1000"
+                step="any"
                 value={monto || ''}
                 onChange={(e) => setMonto(Number(e.target.value))}
                 className="w-full pl-8 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-emerald-400 font-mono font-bold text-xl focus:border-emerald-500 focus:outline-none"
-                placeholder="100000"
+                placeholder="521650"
                 required
               />
             </div>

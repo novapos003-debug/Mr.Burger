@@ -320,6 +320,13 @@ def main():
     else:
         log("Tablas del sistema ya están presentes.", "OK")
 
+    # Siempre aplicar la migración 04 para asegurar todas las columnas (es_demo, empaques, asistencia, caja)
+    migracion_04 = os.path.join(root_dir, "database", "init", "04_migracion_es_demo_y_columnas.sql")
+    if os.path.exists(migracion_04):
+        log("Sincronizando columnas del sistema (es_demo, asistencia, caja)...", "INFO")
+        execute_sql_file_psycopg2(conn_app, migracion_04)
+        log("Columnas y restricciones operativas sincronizadas.", "OK")
+
     # 7. Verificar usuario admin
     log("Paso 7: Verificando usuario administrador...", "INFO")
     with conn_app.cursor() as cur:
