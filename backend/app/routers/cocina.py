@@ -165,3 +165,30 @@ async def marcar_listo(
             }
         raise HTTPException(status_code=404, detail="Pedido ya no está activo en cocina")
     return ticket
+
+
+@router.post("/detalles/{detalle_id}/cancelar")
+async def cancelar_detalle_cocina(
+    detalle_id: int,
+    db: Session = Depends(get_db),
+    cocinero: Usuario = Depends(kitchen_required),
+):
+    """Cancela o rechaza un ítem desde la cocina si no se puede preparar."""
+    detalle = _get_detalle(db, detalle_id)
+    if detalle.estado in ("LISTO", "ENTREGADO", "CANCELADO"):
+        raise HTTPException(status_code=409, detail=f"Detalle en estado {detalle.estado}; no se puede cancelar desde cocina")
+
+    detalle.estado = "CANCELADO"
+    detalle.cancelado_en = func.now()
+    registrar(
+        db, cocinero, "CANCELAR_DETALLE_COCINA", "detalle", detalle.id,
+        f"pedido={detalle.pedido.consecutivo} producto={detalle.producto.nombre}",
+    )
+    safe_commit(db)
+    await ws_manager.broadcast(
+        {
+            "evento": "detalle_cancelado",
+            "data": {"detalle_id": detalle.id, "pedido_id": detalle.pedido_id},
+        }
+    )
+    return {"status": "ok", "mensaje": f"Ítem {detalle.producto.nombre} cancelado"}

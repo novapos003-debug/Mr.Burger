@@ -231,6 +231,25 @@ def crear_usuario(
         db, admin, "CREAR_USUARIO", "usuario", nuevo_u.id,
         f"usuario={nuevo_u.usuario} rol={rol.nombre} fijado={nuevo_u.fijado} demo={nuevo_u.es_demo}",
     )
+    from app.services.sync import encolar_sync
+
+    encolar_sync(
+        db,
+        tipo="CREAR_USUARIO",
+        entidad="usuario",
+        payload={
+            "id": nuevo_u.id,
+            "nombre": nuevo_u.nombre,
+            "usuario": nuevo_u.usuario,
+            "rol_id": nuevo_u.rol_id,
+            "password_hash": nuevo_u.password_hash,
+            "activo": nuevo_u.activo,
+            "fijado": nuevo_u.fijado,
+            "es_demo": nuevo_u.es_demo,
+        },
+        entidad_id=nuevo_u.id,
+        dispositivo_id=f"ADMIN_{admin.id}",
+    )
     safe_commit(db)
     db.refresh(nuevo_u)
     return _usuario_out(nuevo_u)
@@ -250,6 +269,19 @@ def cambiar_password_usuario(
 
     u.password_hash = hash_password(data.nueva_password)
     registrar(db, admin, "MODIFICAR_PASSWORD", "usuario", u.id, f"cambio clave para usuario={u.usuario}")
+    from app.services.sync import encolar_sync
+
+    encolar_sync(
+        db,
+        tipo="MODIFICAR_PASSWORD",
+        entidad="usuario",
+        payload={
+            "usuario_id": u.id,
+            "nueva_password_hash": u.password_hash,
+        },
+        entidad_id=u.id,
+        dispositivo_id=f"ADMIN_{admin.id}",
+    )
     safe_commit(db)
     return {"status": "ok", "mensaje": f"Contraseña actualizada para {u.usuario}"}
 

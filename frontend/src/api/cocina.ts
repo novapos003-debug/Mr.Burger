@@ -16,6 +16,10 @@ export const marcarListo = async (detalleId: number): Promise<Ticket> => {
   return res.data
 }
 
+export const cancelarDetalle = async (detalleId: number): Promise<void> => {
+  await api.post(`/cocina/detalles/${detalleId}/cancelar`)
+}
+
 /**
  * Acepta todos los detalles en estado ENVIADO del ticket (descuenta inventario en backend)
  */

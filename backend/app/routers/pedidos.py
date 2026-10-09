@@ -239,6 +239,8 @@ async def crear_pedido(
             raise HTTPException(status_code=409, detail=f"Mesa {mesa.numero} ya está ocupada")
     elif data.canal == "DIDI" and not data.didi_orden_id:
         raise HTTPException(status_code=422, detail="El canal DIDI requiere didi_orden_id")
+    elif data.canal == "DOMICILIO" and not (data.direccion and data.direccion.strip()):
+        raise HTTPException(status_code=422, detail="El canal DOMICILIO requiere obligatoriamente la dirección de entrega")
 
     _validar_lineas(db, data.lineas)
 
@@ -617,3 +619,47 @@ async def cancelar_pedido_endpoint(
         )
 
     return pedido_out(db, pedido, admin)
+
+
+@router.post("/{pedido_id}/entregar", response_model=PedidoOut)
+async def entregar_pedido_endpoint(
+    pedido_id: int,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(staff_required),
+):
+    """Marca un pedido y sus detalles listos como ENTREGADO (mesero, caja o admin)."""
+    pedido = (
+        db.query(Pedido)
+        .options(
+            joinedload(Pedido.detalles).joinedload(DetallePedido.producto),
+            joinedload(Pedido.mesa),
+            joinedload(Pedido.pagos),
+        )
+        .filter(Pedido.id == pedido_id)
+        .first()
+    )
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if pedido.estado in ("CANCELADO", "CERRADO"):
+        raise HTTPException(status_code=409, detail=f"No se puede entregar un pedido en estado {pedido.estado}")
+
+    for d in pedido.detalles:
+        if d.estado != "CANCELADO":
+            d.estado = "ENTREGADO"
+            d.entregado_en = d.entregado_en or func.now()
+
+    if pedido.estado == "PAGADO":
+        if pedido.canal == "MESA" and pedido.mesa:
+            liberar_mesa(db, pedido)
+    else:
+        pedido.estado = "ENTREGADO"
+
+    registrar(db, usuario, "ENTREGAR_PEDIDO", "pedido", pedido.id, f"pedido={pedido.consecutivo}")
+    safe_commit(db)
+    db.refresh(pedido)
+
+    await await_broadcast(
+        "pedido_actualizado",
+        {"pedido_id": pedido.id, "consecutivo": pedido.consecutivo, "estado": pedido.estado},
+    )
+    return pedido_out(db, pedido, usuario)
