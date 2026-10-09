@@ -227,7 +227,7 @@ def descontar_insumos_de_producto(
     mapa_ings = {i.id: i for i in ings_db}
 
     cfg = db.get(Configuracion, "politica_stock_insuficiente")
-    politica = cfg.valor.strip().upper() if cfg and cfg.valor else "BLOQUEAR"
+    politica = cfg.valor.strip().upper() if cfg and cfg.valor else "ADVERTIR_Y_PERMITIR"
 
     for ing_id in ing_ids:
         info = insumos[ing_id]

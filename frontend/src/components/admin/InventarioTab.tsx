@@ -37,7 +37,7 @@ export const InventarioTab: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [busqueda, setBusqueda] = useState('')
   const [categoriaFiltro, setCategoriaFiltro] = useState<number | null>(null)
-  const [politicaStock, setPoliticaStock] = useState<string>('BLOQUEAR')
+  const [politicaStock, setPoliticaStock] = useState<string>('ADVERTIR_Y_PERMITIR')
 
   // Feedback
   const [mensajeExito, setMensajeExito] = useState<string | null>(null)
@@ -533,10 +533,16 @@ export const InventarioTab: React.FC = () => {
                       Óptimo
                     </span>
                   )
-                  if (stock <= 0) {
+                  if (stock < 0) {
+                    estadoBadge = (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-950/80 text-purple-300 border border-purple-700/80 flex items-center justify-center gap-1" title="Ventas permitidas en negativo. Reconciliar al cargar inventario diario.">
+                        Negativo ({stock.toLocaleString('es-CO')})
+                      </span>
+                    )
+                  } else if (stock === 0) {
                     estadoBadge = (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-950/80 text-red-400 border border-red-800/80 animate-pulse">
-                        Agotado
+                        Agotado (0)
                       </span>
                     )
                   } else if (stock <= min) {
@@ -585,7 +591,7 @@ export const InventarioTab: React.FC = () => {
                           {ing.categoria_insumo_nombre || 'Sin categoría'}
                         </span>
                       </td>
-                      <td className="p-3.5 text-right font-mono font-bold text-white">
+                      <td className={`p-3.5 text-right font-mono font-bold ${stock < 0 ? 'text-purple-400' : stock === 0 ? 'text-red-400' : 'text-white'}`}>
                         {stock.toLocaleString('es-CO')} <span className="text-slate-400 font-normal">{ing.unidad_base}</span>
                       </td>
                       <td className="p-3.5 text-right font-mono text-slate-400">
