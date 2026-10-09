@@ -7,8 +7,11 @@ echo.
 echo Este script debe ejecutarse como Administrador (clic derecho > Ejecutar como administrador).
 echo.
 
-netsh advfirewall firewall add rule name="MrBurger Frontend (5173)" dir=in action=allow protocol=TCP localport=5173
-netsh advfirewall firewall add rule name="MrBurger Backend (8000)" dir=in action=allow protocol=TCP localport=8000
+netsh advfirewall firewall delete rule name="MrBurger Frontend (5173)" >nul 2>nul
+netsh advfirewall firewall delete rule name="MrBurger Backend (8000)" >nul 2>nul
+
+netsh advfirewall firewall add rule name="MrBurger Frontend (5173)" dir=in action=allow protocol=TCP localport=5173 profile=any
+netsh advfirewall firewall add rule name="MrBurger Backend (8000)" dir=in action=allow protocol=TCP localport=8000 profile=any
 
 echo.
 echo ============================================================

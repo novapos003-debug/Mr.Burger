@@ -17,8 +17,9 @@ if %errorlevel% neq 0 (
 :: Liberar puertos previos
 %PY_CMD% liberar_puertos.py
 
+chcp 65001 >nul
 :: Iniciar Backend en ventana visible
-start "Backend MrBurger" cmd /k "cd /d %~dp0backend && set DATABASE_URL=postgresql://restaurante:restaurante_dev@127.0.0.1:5432/restaurante&& set SECRET_KEY=ymKGPH7kaMDwp4CJZluFvgU3BRcAnbrj&& %PY_CMD% -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+start "Backend MrBurger" cmd /k "cd /d %~dp0backend && set PYTHONUTF8=1&& set PYTHONIOENCODING=utf-8&& set DATABASE_URL=postgresql://restaurante:restaurante_dev@127.0.0.1:5432/restaurante&& set SECRET_KEY=ymKGPH7kaMDwp4CJZluFvgU3BRcAnbrj&& %PY_CMD% -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
 :: Iniciar Frontend en ventana visible
 start "Frontend MrBurger" cmd /k "cd /d %~dp0 && %PY_CMD% serve_frontend.py"
