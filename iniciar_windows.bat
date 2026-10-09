@@ -14,6 +14,13 @@ if exist ".git" (
     git reset --hard origin/main --quiet 2>nul
 )
 
+:: Asegurar que el servicio de PostgreSQL esté iniciado
+net start postgresql-x64-15 >nul 2>nul
+net start postgresql-x64-16 >nul 2>nul
+net start postgresql-x64-17 >nul 2>nul
+net start postgresql-15 >nul 2>nul
+net start postgresql-16 >nul 2>nul
+
 :: Cerrar procesos previos si estaban abiertos para evitar puertos ocupados
 taskkill /F /FI "WINDOWTITLE eq MrBurger-Backend*" 2>nul
 taskkill /F /FI "WINDOWTITLE eq MrBurger-Frontend*" 2>nul
@@ -25,9 +32,9 @@ if %errorlevel% neq 0 (
     set PY_CMD=py
 )
 
-:: 1. Iniciar Backend FastAPI
+:: 1. Iniciar Backend FastAPI (con IPv4 127.0.0.1 para máxima compatibilidad Windows)
 echo [1/3] Iniciando Cerebro Backend (Puerto 8000)...
-start "MrBurger-Backend" /min cmd /c "cd /d %~dp0backend && set DATABASE_URL=postgresql://restaurante:restaurante_dev@localhost:5432/restaurante&& set SECRET_KEY=ymKGPH7kaMDwp4CJZluFvgU3BRcAnbrj&& %PY_CMD% -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+start "MrBurger-Backend" /min cmd /c "cd /d %~dp0backend && set DATABASE_URL=postgresql://restaurante:restaurante_dev@127.0.0.1:5432/restaurante&& set SECRET_KEY=ymKGPH7kaMDwp4CJZluFvgU3BRcAnbrj&& %PY_CMD% -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
 :: 2. Iniciar Frontend PWA (Usa Node si existe, o Python directamente sin instalar nada extra)
 echo [2/3] Iniciando Servidor Web PWA (Puerto 5173)...

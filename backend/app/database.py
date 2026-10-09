@@ -5,10 +5,28 @@ from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 raw_db_url = os.getenv(
     "DATABASE_URL",
-    "postgresql://restaurante:restaurante_dev@localhost:5432/restaurante"
+    "postgresql://restaurante:restaurante_dev@127.0.0.1:5432/restaurante"
 )
 # Elimina cualquier salto de línea, retorno de carro o espacio accidental introducido al copiar/pegar
 DATABASE_URL = "".join(raw_db_url.split())
+
+# 1. Normalizar 'localhost' a '127.0.0.1' para evitar el fallo de resolución IPv6 (::1) en Windows
+if "@localhost:" in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("@localhost:", "@127.0.0.1:")
+
+# 2. Si apunta a 127.0.0.1:5432 pero el puerto 5432 está cerrado y el 5433 está abierto, autoconmutar a 5433
+if "@127.0.0.1:5432/" in DATABASE_URL:
+    try:
+        import socket
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.2)
+            if s.connect_ex(("127.0.0.1", 5432)) != 0:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s2:
+                    s2.settimeout(0.2)
+                    if s2.connect_ex(("127.0.0.1", 5433)) == 0:
+                        DATABASE_URL = DATABASE_URL.replace("@127.0.0.1:5432/", "@127.0.0.1:5433/")
+    except Exception:
+        pass
 
 is_sqlite = DATABASE_URL.startswith("sqlite")
 connect_args = {}
