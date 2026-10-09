@@ -282,6 +282,55 @@ def encolar_sync(
     return registro
 
 
+def reconciliar_usuarios_locales(db: Session) -> int:
+    """Inspecciona y encola automáticamente usuarios locales creados previamente que no estén en la nube."""
+    from app.models.usuario import Usuario
+
+    SEEDS_SISTEMA = {"admin", "caja", "mesero", "cocina"}
+    usuarios_activos = db.query(Usuario).filter(Usuario.activo == True).all()
+    encolados = 0
+
+    for u in usuarios_activos:
+        if u.usuario in SEEDS_SISTEMA:
+            continue
+
+        ya_en_sync = (
+            db.query(RegistroSync)
+            .filter(
+                RegistroSync.tipo == "CREAR_USUARIO",
+                RegistroSync.entidad_id == u.id,
+            )
+            .first()
+        )
+        if not ya_en_sync:
+            encolar_sync(
+                db,
+                tipo="CREAR_USUARIO",
+                entidad="usuario",
+                payload={
+                    "id": u.id,
+                    "nombre": u.nombre,
+                    "usuario": u.usuario,
+                    "rol_id": u.rol_id,
+                    "password_hash": u.password_hash,
+                    "activo": u.activo,
+                    "fijado": u.fijado,
+                    "es_demo": u.es_demo,
+                },
+                entidad_id=u.id,
+                dispositivo_id="SISTEMA_RECONCILIACION",
+            )
+            encolados += 1
+
+    if encolados > 0:
+        safe_commit(db)
+        import logging
+        logging.info("Reconciliación: %d usuario(s) local(es) encolados para sincronización en la nube", encolados)
+
+    return encolados
+
+
+
 def obtener_pull(
     db: Session,
     since: datetime | None = None,

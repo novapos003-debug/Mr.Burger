@@ -124,6 +124,17 @@ async def lifespan(app: FastAPI):
         import logging
         logging.error("Error aplicando migraciones demo/empaques: %s", e_mig)
 
+    # Reconciliación automática de usuarios creados localmente sin evento de sincronización
+    if settings.MODO_CEREBRO != "NUBE":
+        try:
+            from app.services.sync import reconciliar_usuarios_locales
+
+            with SessionLocal() as db_sync:
+                reconciliar_usuarios_locales(db_sync)
+        except Exception as e_rec:
+            import logging
+            logging.warning("Aviso en reconciliación automática de usuarios: %s", e_rec)
+
     worker_task = None
     if settings.MODO_CEREBRO != "NUBE":
         worker_task = asyncio.create_task(sync_background_loop())
