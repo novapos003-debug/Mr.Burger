@@ -1,5 +1,5 @@
 ================================================================================
-HOJA DE RUTA DEFINITIVA: INSTALACION EN CAJA WINDOWS - POS MR. BURGER
+HOJA DE RUTA DEFINITIVA: PUESTA EN MARCHA EN CAJA WINDOWS — POS MR. BURGER
 DESDE QUE LLEGAS AL LOCAL HASTA QUE TE VAS (PASO A PASO CRONOLOGICO)
 ================================================================================
 
@@ -10,23 +10,13 @@ Solo prenden la PC (o hacen doble clic en el icono "Mr. Burger" del escritorio)
 y el sistema abre automáticamente en pantalla completa listo para cobrar.
 
 RESUMEN DE PUERTOS EN LA RED LOCAL:
-- Puerto 5173: Frontend Web PWA (Servido por 'serve -s dist -l 5173')
+- Puerto 5173: Frontend Web PWA (Servido por Python 'serve_frontend.py')
 - Puerto 8000: Cerebro Backend API + WebSockets en vivo (FastAPI / Uvicorn)
 - Puerto 5432: Base de Datos Local PostgreSQL 16
 *NOTA CLAVE*: Meseros y Cocina abren en sus celulares y tablets:
 http://[IP_DE_ESTA_PC]:5173
 El sistema internamente detecta la IP y conecta los datos y WebSockets
 al puerto 8000 de forma 100% AUTOMATICA (sin configuraciones manuales).
-
---------------------------------------------------------------------------------
-FASE 0: ANTES DE COMENZAR (CHECKLIST DE LA USB)
---------------------------------------------------------------------------------
-En tu memoria USB debes tener:
-[ ] 1. Carpeta del proyecto (Default Project / mrburger)
-[ ] 2. Instalador de Python 3.10 o 3.11 (por si la PC no tiene internet)
-[ ] 3. Instalador de Node.js LTS (por si la PC no tiene internet)
-[ ] 4. Instalador de PostgreSQL 16 (por si la PC no tiene internet)
-[ ] 5. Este archivo de texto abierto para guiarte
 
 ================================================================================
 FASE 1: LLEGADA AL LOCAL Y CONEXION FISICA
@@ -44,204 +34,127 @@ FASE 1: LLEGADA AL LOCAL Y CONEXION FISICA
    "Invitados" (las redes de invitados bloquean la comunicación con los celulares).
 
 ================================================================================
-FASE 2: CONOCER Y FIJAR LA IP ESTATICA DE LA PC WINDOWS
+FASE 2: CONOCER Y FIJAR LA IP ESTATICA DE LA PC WINDOWS (1 MINUTO)
 ================================================================================
 POR QUE SE HACE:
 Para que si el router se apaga por la noche o hay un corte de luz, la PC no
 cambie de dirección y los celulares de los meseros siempre sepan a dónde enviar.
 
-PASO A PASO PARA FIJAR LA IP (Toma 1 minuto):
-1. Presiona la tecla Windows + R en el teclado.
-2. Escribe: ncpa.cpl  (y da Enter). Se abrirá la ventana de Conexiones de Red.
-3. Clic DERECHO sobre tu red (Wi-Fi o Ethernet) > Propiedades.
-4. En la lista, haz doble clic sobre:
-   "Protocolo de Internet versión 4 (TCP/IPv4)".
-5. Marca la casilla "Usar la siguiente dirección IP":
-   - Abre primero CMD o PowerShell y escribe: ipconfig
-   - Mira qué IP tiene asignada actualmente (ejemplo: 192.168.1.15).
-   - En la ventana de configuración escribe:
-     * Dirección IP: Cambia solo el último número por 50 (Ej: 192.168.1.50).
-       (Si la red era 192.168.0.X, pones 192.168.0.50).
-       *** ANOTA ESTA IP: ESTA ES LA IP DEL RESTAURANTE PARA SIEMPRE ***
-     * Máscara de subred: Haz clic y se llenará sola: 255.255.255.0
-     * Puerta de enlace predeterminada: La que te dio ipconfig (ej: 192.168.1.1).
-     * Servidor DNS preferido: 8.8.8.8
-     * Servidor DNS alternativo: 8.8.4.4
-6. Clic en Aceptar y Aceptar.
-7. Abre Google Chrome en la PC y abre cualquier página para confirmar que navega bien.
+PASO A PASO:
+1. Presiona la tecla Windows + R en el teclado, escribe: cmd  (y da Enter).
+2. Escribe:
+   ipconfig
+3. Anota tu "Dirección IPv4" (ejemplo: 192.168.1.150) y la "Puerta de enlace predeterminada" (ejemplo: 192.168.1.1).
+   *** ANOTA ESTA IP: ESTA ES LA IP DEL RESTAURANTE PARA SIEMPRE ***
+4. Ve a: Configuración de Windows > Red e Internet > Wi-Fi (o Ethernet) > Clic en tu red > Configuración de IP > Editar.
+5. Cambia a "Manual", activa "IPv4" y escribe:
+   - Dirección IP: La que anotaste (ej. 192.168.1.150)
+   - Longitud de prefijo de subred: 24   (o Máscara de subred: 255.255.255.0)
+   - Puerta de enlace: La que anotaste (ej. 192.168.1.1)
+   - DNS preferido: 8.8.8.8
+   - DNS alternativo: 8.8.4.4
+6. Clic en Guardar. Abre Chrome y confirma que navega bien.
 
 ================================================================================
-FASE 3: INSTALAR LOS 3 PROGRAMAS BÁSICOS (SI LA PC NO LOS TIENE)
+FASE 3: DESACTIVAR LA SUSPENSIÓN DE WINDOWS
 ================================================================================
-Primero verifica si ya están instalados:
-Abre PowerShell o CMD y escribe:
-python --version
-node -v
-psql --version
-
-Si falta alguno, tienes dos formas fáciles de instalarlos:
-
-OPCIÓN A (Súper rápida si la PC tiene Windows 10/11 e internet):
-Abre PowerShell como Administrador (clic derecho en botón inicio > PowerShell / Terminal Administrador) y pega:
-winget install Python.Python.3.11 OpenJS.NodeJS.LTS PostgreSQL.PostgreSQL -e
-
-OPCIÓN B (Con instaladores desde tu USB o descargados de internet):
-1. Python:
-   - Ejecuta el instalador de Python.
-   - ⚠️ ¡PASO VITAL!: En la PRIMERA ventana que sale, marca la casilla abajo que dice:
-     [x] "Add python.exe to PATH"
-   - Clic en "Install Now".
-2. Node.js:
-   - Ejecuta el instalador > Siguiente > Siguiente > Siguiente > Instalar.
-3. PostgreSQL 16:
-   - Ejecuta el instalador > Siguiente.
-   - Cuando te pida la CONTRASEÑA para el usuario postgres, escribe exactamente:
-     restaurante_dev
-   - Deja el puerto 5432 por defecto y dale Siguiente hasta terminar.
+Para que el equipo nunca se apague ni hiberne a mitad de servicio:
+1. Ve a Configuración de Windows > Sistema > Inicio/apagado y batería.
+2. En "Suspender el equipo después de...", selecciona:
+   - Con batería: NUNCA
+   - Enchufado:   NUNCA
 
 ================================================================================
-FASE 4: COPIAR EL PROYECTO A LA PC (C:\mrburger)
+FASE 4: ACTUALIZAR EL SISTEMA CON EL NUEVO CÓDIGO (1 DOBLE CLIC)
 ================================================================================
-1. Conecta tu memoria USB a la PC.
-2. Copia la carpeta del proyecto directamente al disco C:\ de modo que la ruta sea:
-   C:\mrburger
-   (Verifica que adentro de C:\mrburger veas las carpetas backend, frontend, etc.).
-   *(O si la PC tiene internet y Git: git clone https://github.com/novapos003-debug/Mr.Burger.git C:\mrburger)*
+1. Abre la carpeta del proyecto en el explorador de archivos:
+   C:\Users\jhona\Documents\Default Project   (o C:\mrburger).
+2. Haz DOBLE CLIC en:
+   👉 actualizar_windows.bat
+
+   ¿Qué hace esto en 5 segundos?:
+   - Descarga la última versión de GitHub con 'git reset --hard origin/main'.
+   - Inicia PostgreSQL.
+   - Arranca el Backend con soporte UTF-8 y aplica migraciones de base de datos.
+   - *** RECONCILIACIÓN AUTOMÁTICA ***: Detecta al cajero que creaste ayer y lo
+     encola para subirlo de inmediato a la nube (Render).
+   - Inicia el Frontend PWA en el puerto 5173 mediante Python.
+   - Abre Google Chrome automáticamente en: http://localhost:5173
 
 ================================================================================
-FASE 5: INICIALIZAR LIBRERÍAS, BASE DE DATOS Y FIREWALL
+FASE 5: ABRIR EL FIREWALL DE WINDOWS (1 CLIC COMO ADMINISTRADOR)
 ================================================================================
-1. Instalar librerías del sistema:
-   Abre CMD o PowerShell en la carpeta C:\mrburger y ejecuta:
-   pip install -r backend\requirements.txt
-   npm install -g serve
-
-2. Iniciar la Base de Datos con el catálogo y recetas oficiales:
-   Entra a la carpeta C:\mrburger en el explorador de archivos y haz doble clic en:
-   👉 configurar_bd_windows.bat
-   (Verás que en 5 segundos crea el usuario, la base de datos y carga todas las recetas).
-
-3. Abrir los puertos del Firewall de Windows para los celulares:
-   En C:\mrburger, haz CLIC DERECHO sobre el archivo:
+1. En la carpeta del proyecto, haz CLIC DERECHO sobre el archivo:
    👉 configurar_firewall_windows.bat  >  Selecciona "Ejecutar como administrador"
+2. Presiona cualquier tecla cuando termine.
    (Esto asegura que el firewall de Windows no bloquee a los celulares de los meseros).
 
 ================================================================================
-FASE 6: AUTOMATIZACION TOTAL (CERO COMANDOS PARA EL CLIENTE)
+FASE 6: CONFIGURAR LA IMPRESORA TÉRMICA Y GAVETA EN LA CAJA
 ================================================================================
-Queremos que el cajero y el dueño NUNCA tengan que abrir consolas negras ni
-escribir códigos:
-
-1. CREAR EL ACCESO DIRECTO EN EL ESCRITORIO:
-   - En la carpeta C:\mrburger, haz CLIC DERECHO sobre el archivo:
-     iniciar_silencioso.vbs
-   - Selecciona "Enviar a" > "Escritorio (crear acceso directo)".
-   - Ve al Escritorio, cámbiale el nombre a ese acceso directo por:
-     "Mr. Burger POS"
-   - (Opcional para que quede hermoso): Clic derecho al acceso directo > Propiedades >
-     Cambiar icono > Examinar > Elige C:\mrburger\frontend\public\favicon.png o icono.
-
-2. CONFIGURAR AUTO-ARRANQUE AL ENCENDER LA PC:
-   - Presiona Windows + R en el teclado.
-   - Escribe exactamente: shell:startup  (y da Enter).
-   - Se abrirá la carpeta de inicio automático de Windows.
-   - Copia y pega en esa carpeta un acceso directo de "iniciar_silencioso.vbs".
-   ¡LISTO! A partir de hoy, cada vez que prendan la PC en el restaurante,
-   Mr. Burger se levantará y se abrirá solo sin que nadie toque nada.
-
-3. PROBAR EL ARRANQUE AHORA MISMO:
-   - Haz doble clic en el icono "Mr. Burger POS" de tu escritorio.
-   - Verás que en 2 segundos se abre Google Chrome con la app de Mr. Burger en:
-     http://localhost:5173
-   - En Chrome, toca los 3 puntos arriba a la derecha > "Instalar Mr. Burger".
-   - Ahora la app se verá en pantalla completa como un sistema nativo profesional.
+1. En la app abierta de Mr. Burger en la PC (http://localhost:5173), inicia sesión:
+   - Usuario: El cajero que creaste ayer (o admin / admin123)
+2. Haz clic en "ABRIR TURNO":
+   - Ingresa el monto de base inicial en efectivo (ej. $150.000).
+   - Confirma la apertura (se registra contablemente como CAMBIO_INICIAL).
+3. En la esquina superior derecha, haz clic en el botón 🖨️ "Impresora":
+   - Selecciona el ancho de tirilla (80mm o 58mm).
+   - Activa "Abrir cajón monedero al cobrar".
+   - Toca "Imprimir Tirilla de Prueba" para verificar el corte y la apertura del cajón.
 
 ================================================================================
-FASE 7: CONFIGURAR LA IMPRESORA TÉRMICA Y GAVETA EN LA CAJA
-================================================================================
-1. En la app abierta de Mr. Burger en la PC, inicia sesión:
-   - Usuario: admin (o cajero)
-   - Clave:   admin123 (o cajero123)
-2. Ve al módulo de Caja > Configuración de Impresora:
-   - Toca "Conectar Impresora USB" y dale Permitir.
-   - Haz clic en "Imprimir Prueba".
-   - La impresora debe cortar la tirilla y el cajón monedero debe abrirse solo.
-
-================================================================================
-FASE 8: CONECTAR LA TABLET DE COCINA (KDS)
+FASE 7: CONECTAR LA TABLET DE COCINA (KDS)
 ================================================================================
 1. Conecta la tablet de cocina a la red Wi-Fi del restaurante.
 2. Abre Google Chrome en la tablet y escribe la IP que fijaste en la Fase 2:
-   Ejemplo: http://192.168.1.50:5173
-3. Toca los 3 puntos de Chrome > "Instalar aplicación" (o "Agregar a pantalla principal").
-4. Inicia sesión con el rol de COCINA:
+   Ejemplo: http://192.168.1.150:5173
+3. Inicia sesión con el rol de COCINA:
    - Usuario: cocina
    - Clave:   cocina123
-5. Súbele el volumen al máximo a la tablet para que se escuche la campana ("Ding-Dong").
-*El indicador de Cerebro Local se pondrá verde en línea automáticamente*.
+4. 🔔 PASO VITAL: En la barra superior de Cocina, toca una sola vez el botón:
+   "PROBAR SONIDO"
+   (Esto autoriza al navegador a sonar la campana "Ding-Dong" cuando entren comandas).
+5. Toca los 3 puntos de Chrome > "Agregar a pantalla principal" para usarla como App.
 
 ================================================================================
-FASE 9: CONECTAR LOS 4 CELULARES DE LOS MESEROS
+FASE 8: CONECTAR LOS CELULARES DE LOS MESEROS
 ================================================================================
-En cada celular de los meseros:
-1. Conéctalos al Wi-Fi del restaurante (desactivar datos móviles para asegurar que usen Wi-Fi).
-2. Abre Google Chrome y escribe la IP de la PC de la Caja:
-   Ejemplo: http://192.168.1.50:5173
-3. Toca los 3 puntos de Chrome > "Instalar aplicación" (o "Agregar a pantalla principal").
-4. Les quedará el icono de Mr. Burger en su pantalla de inicio como una app normal.
-5. Inicia sesión con el rol de MESERO:
-   - Usuario: mesero1 (o mesero2, mesero3, mesero4)
+En cada celular de mesero (conectado al Wi-Fi del restaurante):
+1. Abre Google Chrome y escribe la IP fija de la PC:
+   Ejemplo: http://192.168.1.150:5173
+2. Inicia sesión con el rol de MESERO:
+   - Usuario: mesero
    - Clave:   mesero123
-*No hay que configurar puertos ni IPs en el celular, conecta solo al instante*.
+3. Toca los 3 puntos de Chrome > "Agregar a pantalla principal".
+4. Verán el icono de Mr. Burger en su pantalla de inicio como una app nativa.
 
 ================================================================================
-FASE 10: LA PRUEBA DE FUEGO (DRY RUN EN VIVO FRENTE AL DUEÑO)
+FASE 9: LA PRUEBA DE FUEGO (SIMULACRO EN VIVO FRENTE AL DUEÑO)
 ================================================================================
 1. Desde el celular de un mesero:
    - Selecciona MESA 1.
    - Pide: 1 Hamburguesa Especial Res + 1 Gaseosa.
-   - Toca el botón verde "ENVIAR A COCINA".
+   - Toca el botón naranja "ENVIAR A COCINA".
 2. En la tablet de Cocina:
-   - Verifica que suene el "Ding-Dong".
+   - Suena el "Ding-Dong".
    - Aparece la tarjeta de MESA 1.
-   - El cocinero toca "Aceptar" y luego "Listo".
+   - El cocinero toca "Preparar" (descuenta insumos) y luego "Listo".
 3. En la pantalla de Caja (PC Windows):
-   - Toca MESA 1 > Cobrar en Efectivo con $50.000 > "COBRAR":
-     * La impresora térmica imprime la factura.
-     * El cajón monedero se abre automáticamente.
-     * La Mesa 1 queda libre y verde otra vez.
+   - Toca MESA 1 > Cobrar Efectivo > Imprime la tirilla y abre el cajón monedero.
+   - La Mesa 1 queda liberada automáticamente.
+4. En la Nube (Remoto / Dueño):
+   - Abre desde cualquier celular con datos móviles: https://mrburger-api.onrender.com/sync/health
+   - El dueño abre el panel de Admin por la web y ya ve reflejado al cajero de ayer,
+     el turno abierto y la venta en tiempo real.
 
 ================================================================================
-FASE 11: LA PRUEBA DE APAGADO Y REINICIO (TRANQUILIDAD TOTAL)
+FASE 10: ACCESO DIRECTO DE 1 CLIC PARA EL CAJERO TODOS LOS DÍAS
 ================================================================================
-1. Reinicia la PC con Windows (Menú Inicio > Reiniciar).
-2. Espera a que Windows cargue el escritorio.
-3. Observa cómo Mr. Burger arranca solito y abre Chrome en la pantalla de cobro
-   sin que toques el teclado ni el ratón.
-   ¡DEMOSTRACIÓN DE AUTOMATIZACIÓN 100% COMPLETADA!
-
-================================================================================
-FASE 12: ¿CÓMO ACTUALIZAR EL LOGO O EL SISTEMA MAÑANA DESDE TU CASA?
-================================================================================
-¡ESTÁ 100% AUTOMATIZADO! NO TIENES QUE VIAJAR AL RESTAURANTE.
-
-1. EN TU PC (EN TU CASA):
-   - Modificas el logo (`frontend/public/logo.png`) o haces cualquier cambio.
-   - Compilas y subes a GitHub con estos 3 comandos:
-     cd "frontend" && npm run build
-     git add .
-     git commit -m "Actualizar logo oficial Mr. Burger"
-     git push origin main
-
-2. EN LA CAJA (PC WINDOWS DEL RESTAURANTE):
-   - ¡NO HACES NADA!
-   - El script `iniciar_windows.bat` revisa GitHub cada vez que arranca la PC
-     y descarga las actualizaciones silenciosamente con `git reset --hard`.
-   - (Opcional: Si quieres que se aplique DE INMEDIATO a mitad del día, puedes
-     conectarte por AnyDesk y hacer doble clic en `actualizar_windows.bat`).
-
-3. ¿Y LOS TELÉFONOS DE MESEROS Y TABLET DE COCINA?:
-   - ¡TAMPOCO TIENES QUE TOCARLOS!
-   - Como la app es una PWA (Progressive Web App), el navegador de los celulares
-     detecta la actualización por la red Wi-Fi y carga el nuevo logo automáticamente.
+1. En la carpeta del proyecto, haz CLIC DERECHO sobre:
+   iniciar_silencioso.vbs
+2. Selecciona "Enviar a" > "Escritorio (crear acceso directo)".
+3. En el Escritorio, cámbiale el nombre a ese acceso directo por: "Mr. Burger POS".
+4. (Opcional auto-arranque al encender la PC):
+   - Presiona Windows + R, escribe: shell:startup  (y da Enter).
+   - Pega un acceso directo de "iniciar_silencioso.vbs" ahí adentro.
 ================================================================================
