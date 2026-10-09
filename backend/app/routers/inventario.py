@@ -142,6 +142,13 @@ def crear_ingrediente(
     registrar(db, usuario, "CREAR_INGREDIENTE", "ingrediente", ing.id, ing.nombre)
     safe_commit(db)
     db.refresh(ing)
+    try:
+        import asyncio
+        from app.services.sync_worker import replicar_admin_a_nube
+        ing_dict = {k: float(v) if isinstance(v, Decimal) else v for k, v in data.model_dump().items()}
+        asyncio.create_task(replicar_admin_a_nube("POST", "/ingredientes", ing_dict))
+    except Exception:
+        pass
     return to_ingrediente_out(ing)
 
 
@@ -194,6 +201,13 @@ async def actualizar_ingrediente(
         )
     safe_commit(db)
     db.refresh(ing)
+    try:
+        import asyncio
+        from app.services.sync_worker import replicar_admin_a_nube
+        cambios_ser = {k: float(v) if isinstance(v, Decimal) else v for k, v in cambios.items()}
+        asyncio.create_task(replicar_admin_a_nube("PUT", f"/ingredientes/{ingrediente_id}", cambios_ser))
+    except Exception:
+        pass
     await ws_manager.broadcast({"evento": "catalogo_actualizado", "data": {"tipo": "stock", "id": ing.id}})
     return to_ingrediente_out(ing)
 
@@ -213,6 +227,12 @@ def desactivar_ingrediente(
     ing.activo = False
     registrar(db, usuario, "DESACTIVAR_INGREDIENTE", "ingrediente", ing.id, ing.nombre)
     safe_commit(db)
+    try:
+        import asyncio
+        from app.services.sync_worker import replicar_admin_a_nube
+        asyncio.create_task(replicar_admin_a_nube("DELETE", f"/ingredientes/{ingrediente_id}"))
+    except Exception:
+        pass
 
 
 # ============================================================

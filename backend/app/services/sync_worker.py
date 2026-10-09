@@ -218,6 +218,33 @@ async def _obtener_token_nube(client: httpx.AsyncClient, cloud_url: str) -> str 
     return None
 
 
+async def replicar_admin_a_nube(metodo: str, endpoint: str, data: dict | list | None = None) -> None:
+    """Si estamos en modo LOCAL con sincronización activa, replica inmediatamente
+    el cambio administrativo (producto, ingrediente, receta, etc.) en Render.
+    """
+    if settings.MODO_CEREBRO == "NUBE" or not settings.CLOUD_SYNC_ENABLED or not settings.CLOUD_SYNC_URL:
+        return
+
+    cloud_url = settings.CLOUD_SYNC_URL.rstrip("/")
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            token = await _obtener_token_nube(client, cloud_url)
+            if not token:
+                return
+            headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+            url = f"{cloud_url}/api{endpoint}"
+            m = metodo.upper()
+            if m == "POST":
+                await client.post(url, json=data, headers=headers)
+            elif m == "PUT":
+                await client.put(url, json=data, headers=headers)
+            elif m == "DELETE":
+                await client.delete(url, headers=headers)
+            logger.info(f"Replicación administrativa a la nube exitosa: {m} {endpoint}")
+    except Exception as e:
+        logger.warning(f"Aviso replicando cambio a la nube ({endpoint}): {e}")
+
+
 async def ejecutar_ciclo_pull() -> dict[str, Any]:
     """Descarga e integra en la BD local cualquier cambio realizado desde la Web/Nube.
     
