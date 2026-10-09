@@ -813,5 +813,45 @@ Los combos agrupan productos hijos y descuentan inventario a través de `compone
 - **Combo Con Papas:** Descuenta 1 *Gaseosa Personal* + 1 *Porción Papas a la Francesa* (150g papa + 20ml aceite) + 1 Empaque C1 si es para llevar.
 - **Combo Con Aros de Cebolla:** Descuenta 1 *Gaseosa Personal* + 1 *Aros de Cebolla (6 unidades)* (6 aros + 20ml aceite + 20ml salsa BBQ) + 1 Empaque C1 si es para llevar.
 
+---
+
+### 21.3 Bitácora de Incidencias Operativas, Pendientes Anotados y Diagnóstico de Sincronización
+
+#### 📋 Registro Consolidado de Puntos Anotados para Resolución
+
+| # | Incidencia / Requerimiento Anotado | Estado / Resolución | Archivo / Componente Involucrado |
+|---|---|---|---|
+| **1** | **Catálogo en Caja:** No salían todos los productos y no filtraba por categorías al crear venta como cajero. | ✅ **Resuelto:** Catálogo completo (24+ ítems) y botones de filtro por categoría reactivos integrados. Política `ADVERTIR_Y_PERMITIR` activa. | [`NuevoPedidoModal.tsx`](file:///C:/Users/jhona/Documents/Default%20Project/frontend/src/components/caja/NuevoPedidoModal.tsx) |
+| **2** | **Configuración de Impresora:** Cajero no veía dónde configurar el ancho de tirilla ni probar el cajón monedero. | ✅ **Resuelto:** Acceso global directo mediante botón `🖨️ Impresora`, calibración 80mm/58mm y pulso automático de cajón RJ11. | [`ConfiguracionImpresoraModal.tsx`](file:///C:/Users/jhona/Documents/Default%20Project/frontend/src/components/common/ConfiguracionImpresoraModal.tsx) |
+| **3** | **Apertura de Caja & Arqueo Z:** Apertura con monto exacto ($521.650) dio error de columna; cierre sin ventas no se veía en Admin. | ✅ **Resuelto:** Columna `turno_laboral.rol` agregada, input acepta decimales y sub-pestaña "Cierres de Caja & Arqueos Z" visible en Admin con botón `📄 Ver Z`. | [`CierresCajaTab.tsx`](file:///C:/Users/jhona/Documents/Default%20Project/frontend/src/components/admin/CierresCajaTab.tsx), [`migraciones.py`](file:///C:/Users/jhona/Documents/Default%20Project/backend/app/services/migraciones.py) |
+| **4** | **Recetas e Insumos:** Matriz oficial de gramajes por hamburguesa, perro, asado, salchipapa, desgranado y alitas. | ✅ **Resuelto:** Documentada en Sección 21.2 y precargada en `seed_recetas.py`. | [`seed_recetas.py`](file:///C:/Users/jhona/Documents/Default%20Project/backend/app/services/seed_recetas.py) |
+| **5** | **Sincronización PC Restaurante ↔ PC Casa:** Nuevo usuario de caja y pedidos creados en el restaurante no aparecen en el PC de casa ("usuario o contraseña incorrectos"). | ⚠️ **En Diagnóstico / Implementación:** Explicación técnica detallada abajo. | [`admin.py`](file:///C:/Users/jhona/Documents/Default%20Project/backend/app/routers/admin.py), [`sync.py`](file:///C:/Users/jhona/Documents/Default%20Project/backend/app/services/sync.py), [`sync_worker.py`](file:///C:/Users/jhona/Documents/Default%20Project/backend/app/services/sync_worker.py) |
+
+---
+
+#### 🔍 Diagnóstico Técnico: ¿Por qué sale "Usuario o contraseña incorrectos" en tu PC de casa?
+
+1. **Aislamiento Físico de Bases de Datos (Local-First):**
+   - El sistema opera bajo una arquitectura **Offline-First**. El computador de caja en el restaurante tiene su propia base de datos **PostgreSQL local** en su propio disco duro (`127.0.0.1:5432`).
+   - El nuevo cajero y los pedidos de prueba que realizaron físicamente en el local quedaron guardados en la base de datos de **ese equipo del restaurante**.
+   - En tu PC de casa, la aplicación web (`localhost:5173`) se comunica con el backend de tu casa (`localhost:8000`), el cual consulta la base de datos de tu casa. En esta base de datos local aún no existe ese usuario; solo existen las cuentas base iniciales (`admin`, `caja`, `mesero`, etc.).
+
+2. **La Creación de Usuarios no tenía Evento de Sincronización:**
+   - En el backend (`backend/app/routers/admin.py`), el endpoint `POST /admin/usuarios` guardaba directamente en la tabla `usuario`, pero **no llamaba a `encolar_sync`**. Por lo tanto, nunca generaba una orden de réplica para subir a la nube.
+
+3. **Advertencia de `sync_worker` en el Restaurante:**
+   - Durante las pruebas en el local, el servicio de sincronización en consola mostró:
+     `warning: sync_worker error al contar registros pendientes / UnicodeDecodeError`
+   - Esto ocurrió por una discrepancia de codificación (UTF-8 vs WIN1252) en la consola de Windows al consultar la tabla `registro_sync`, lo que impidió que el worker en segundo plano despachara los lotes de sincronización hacia el servidor de Render (`https://mrburger-api.onrender.com`).
+
+#### 🛠️ Plan de Acción para Sincronización Total:
+1. **Conectar Usuarios y Contraseñas al Motor de Sincronización:**
+   - Al crear, modificar contraseña o suspender un usuario desde cualquier terminal, generar un `RegistroSync` con entidad `usuario` para réplica inmediata.
+2. **Blindar Codificación en el Worker (`sync_worker.py`):**
+   - Asegurar manejo estricto de excepciones y forzar UTF-8 en todas las transacciones del worker.
+3. **Replicación Descendente (Pull Automático):**
+   - Implementar la asimilación automática de cambios para que cuando un PC o tablet conecte a la nube, descargue los usuarios y configuraciones creadas en otras terminales.
+
+
 
 
