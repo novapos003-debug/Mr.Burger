@@ -166,6 +166,10 @@ async def ejecutar_ciclo_sync() -> dict[str, Any]:
                     for r in records:
                         r.reintentos += 1
                         r.ultimo_error = f"HTTP {push_resp.status_code}: {push_resp.text[:150]}"
+                        if r.reintentos >= 5 and push_resp.status_code >= 500:
+                            # Aislamiento de mensaje tóxico para no bloquear ventas ni la cola
+                            r.estado = "ERROR_SERVIDOR"
+                            logger.error(f"Operación sync id={r.id} ({r.tipo}) aislada tras {r.reintentos} fallos 500.")
                     safe_commit(db)
                     _worker_status["ultimo_error"] = f"Error al sincronizar lote: HTTP {push_resp.status_code}"
                 else:
