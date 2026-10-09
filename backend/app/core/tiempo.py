@@ -1,14 +1,19 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from app.config import settings
 
+_BOGOTA_FALLBACK = timezone(timedelta(hours=-5))
 
-def zona() -> ZoneInfo:
+
+def zona():
     try:
         return ZoneInfo(settings.ZONA_HORARIA)
     except Exception:
-        return ZoneInfo("America/Bogota")
+        try:
+            return ZoneInfo("America/Bogota")
+        except Exception:
+            return _BOGOTA_FALLBACK
 
 
 def ahora_local() -> datetime:
