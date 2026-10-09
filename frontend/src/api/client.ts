@@ -14,6 +14,14 @@ export const setServerIp = (ip: string): void => {
 }
 
 export const getApiBaseUrl = (): string => {
+  // En la propia máquina servidora (localhost / 127.0.0.1), conectar SIEMPRE de forma directa a localhost:8000 (funciona 100% offline)
+  if (
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ) {
+    return 'http://localhost:8000/api'
+  }
+
   const customIp = getServerIp()
   if (customIp) {
     const clean = customIp.trim().replace(/\/api$/, '').replace(/\/$/, '')
@@ -37,7 +45,7 @@ export const getApiBaseUrl = (): string => {
     return '/api'
   }
 
-  // En producción (Termux / LAN con 'serve -s dist -l 5173'), apuntar directamente al backend en el puerto 8000
+  // En producción LAN, conectar directamente al puerto 8000 del host
   if (typeof window !== 'undefined') {
     const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
     const hostname = window.location.hostname || 'localhost'
@@ -48,6 +56,13 @@ export const getApiBaseUrl = (): string => {
 }
 
 export const getWsBaseUrl = (): string => {
+  if (
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ) {
+    return 'ws://localhost:8000/ws/pedidos'
+  }
+
   const customIp = getServerIp()
   if (customIp) {
     const clean = customIp.replace(/^https?:\/\//, '').replace(/\/api$/, '').replace(/\/$/, '')
