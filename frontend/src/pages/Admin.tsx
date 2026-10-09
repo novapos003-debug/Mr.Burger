@@ -35,6 +35,7 @@ import { InventarioTab } from '../components/admin/InventarioTab'
 import { UsuariosTab } from '../components/admin/UsuariosTab'
 import { ConfiguracionTab } from '../components/admin/ConfiguracionTab'
 import { AsistenciaTab } from '../components/admin/AsistenciaTab'
+import { CierresCajaTab } from '../components/admin/CierresCajaTab'
 import { AdicionesManager } from '../components/admin/AdicionesManager'
 import { MovimientosModal } from '../components/caja/MovimientosModal'
 import { FooterCredits } from '../components/common/FooterCredits'
@@ -66,12 +67,14 @@ import {
   Settings,
   Pencil,
   Sliders,
+  ArrowUpRight,
 } from 'lucide-react'
 
 type AdminTab = 'DASHBOARD' | 'PLANILLA' | 'INVENTARIO' | 'RECETAS' | 'COMPRAS' | 'PREPARADOS' | 'USUARIOS' | 'ASISTENCIA' | 'CONFIGURACION' | 'AUDITORIA'
 
 export const Admin: React.FC = () => {
   const [tabActiva, setTabActiva] = useState<AdminTab>('DASHBOARD')
+  const [subTabAsistencia, setSubTabAsistencia] = useState<'CIERRES' | 'RELOJ'>('CIERRES')
 
   // Estado Dashboard
   const [dashData, setDashData] = useState<DashboardOut | null>(null)
@@ -1291,10 +1294,23 @@ export const Admin: React.FC = () => {
               {/* Arqueo de Caja del Día */}
               {dashboardPlanilla && (
                 <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 mb-6">
-                  <h4 className="text-xs font-bold uppercase text-amber-400 mb-2.5 flex items-center gap-1.5">
-                    <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Flujo de Caja Real ({fechaHasta})</span>
-                  </h4>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <h4 className="text-xs font-bold uppercase text-amber-400 flex items-center gap-1.5">
+                      <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Flujo de Caja Real ({fechaHasta})</span>
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTabActiva('ASISTENCIA')
+                        setSubTabAsistencia('CIERRES')
+                      }}
+                      className="text-[11px] font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 hover:underline cursor-pointer"
+                    >
+                      <span>Ver Cierres & Arqueos Z</span>
+                      <ArrowUpRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
                     <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
                       <span className="text-[10px] text-slate-400 block">Ventas en Efectivo:</span>
@@ -2537,8 +2553,37 @@ export const Admin: React.FC = () => {
         {/* PESTAÑA: ASISTENCIA Y TURNOS                             */}
         {/* ======================================================== */}
         {tabActiva === 'ASISTENCIA' && (
-          <div className="animate-fade-in">
-            <AsistenciaTab />
+          <div className="space-y-4 animate-fade-in">
+            {/* Selector de Sub-pestaña: Cierres de Caja Z vs Reloj Laboral */}
+            <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 gap-2 max-w-md">
+              <button
+                type="button"
+                onClick={() => setSubTabAsistencia('CIERRES')}
+                className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs transition cursor-pointer flex items-center justify-center gap-2 ${
+                  subTabAsistencia === 'CIERRES'
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <DollarSign className="w-4 h-4" />
+                <span>Cierres de Caja & Arqueos Z</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSubTabAsistencia('RELOJ')}
+                className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs transition cursor-pointer flex items-center justify-center gap-2 ${
+                  subTabAsistencia === 'RELOJ'
+                    ? 'bg-purple-600 text-white font-black shadow-md'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Clock className="w-4 h-4" />
+                <span>Reloj de Asistencia</span>
+              </button>
+            </div>
+
+            {subTabAsistencia === 'CIERRES' ? <CierresCajaTab /> : <AsistenciaTab />}
           </div>
         )}
 

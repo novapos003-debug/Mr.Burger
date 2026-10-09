@@ -12,6 +12,7 @@ import {
   imprimirViaWebUSB,
   generarBytesEscPos,
   numeroALetras,
+  getPrinterConfig,
   type DatosReciboVenta,
   type DatosValeRetiro,
   type DatosReporteZ
@@ -483,9 +484,9 @@ export const TirillaModal: React.FC<TirillaModalProps> = ({
           <div className="flex items-center gap-2 text-slate-100 font-bold text-sm">
             <Printer className="w-4 h-4 text-orange-400" />
             <span>
-              {tipo === 'RECIBO' && 'Tirilla Térmica 80mm • Recibo de Venta'}
-              {tipo === 'VALE' && 'Tirilla Térmica 80mm • Vale de Caja Menor'}
-              {tipo === 'REPORTE_Z' && 'Tirilla Térmica 80mm • Reporte Z Cierre'}
+              {tipo === 'RECIBO' && `Tirilla Térmica ${getPrinterConfig().tamanoPapel} • Recibo de Venta`}
+              {tipo === 'VALE' && `Tirilla Térmica ${getPrinterConfig().tamanoPapel} • Vale de Caja Menor`}
+              {tipo === 'REPORTE_Z' && `Tirilla Térmica ${getPrinterConfig().tamanoPapel} • Reporte Z Cierre`}
             </span>
           </div>
           <button

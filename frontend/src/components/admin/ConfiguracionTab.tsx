@@ -17,6 +17,7 @@ import {
   Layers,
   Package,
   Users,
+  Printer,
 } from 'lucide-react'
 import {
   getConfiguracionApi,
@@ -26,6 +27,7 @@ import {
 } from '../../api/admin'
 import type { ResetResumenOut } from '../../types/admin'
 import { AdicionesManager } from './AdicionesManager'
+import { ConfiguracionImpresoraModal } from '../common/ConfiguracionImpresoraModal'
 
 export const ConfiguracionTab: React.FC = () => {
   const [loading, setLoading] = useState(true)
@@ -47,9 +49,10 @@ export const ConfiguracionTab: React.FC = () => {
   const [passwordAdminReset, setPasswordAdminReset] = useState('')
   const [ejecutandoReset, setEjecutandoReset] = useState(false)
   const [errorReset, setErrorReset] = useState<string | null>(null)
+  const [modalImpresoraOpen, setModalImpresoraOpen] = useState(false)
 
   // Config variables
-  const [politicaStock, setPoliticaStock] = useState<'BLOQUEAR' | 'ADVERTIR_Y_PERMITIR'>('BLOQUEAR')
+  const [politicaStock, setPoliticaStock] = useState<'BLOQUEAR' | 'ADVERTIR_Y_PERMITIR'>('ADVERTIR_Y_PERMITIR')
   const [nombreLocal, setNombreLocal] = useState('Mr. Burger Cali')
   const [minutosCocina, setMinutosCocina] = useState('28')
   const [ivaPorcentaje, setIvaPorcentaje] = useState('0')
@@ -63,7 +66,7 @@ export const ConfiguracionTab: React.FC = () => {
 
       if (mapa.has('politica_stock_insuficiente')) {
         const val = mapa.get('politica_stock_insuficiente')?.trim().toUpperCase()
-        setPoliticaStock(val === 'ADVERTIR_Y_PERMITIR' ? 'ADVERTIR_Y_PERMITIR' : 'BLOQUEAR')
+        setPoliticaStock(val === 'BLOQUEAR' ? 'BLOQUEAR' : 'ADVERTIR_Y_PERMITIR')
       }
       if (mapa.has('nombre_local')) {
         setNombreLocal(mapa.get('nombre_local') || 'Mr. Burger Cali')
@@ -446,6 +449,33 @@ export const ConfiguracionTab: React.FC = () => {
           </div>
         </div>
 
+        {/* SECCIÓN: IMPRESORA TÉRMICA & GAVETA */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-400 shrink-0">
+                <Printer className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  Impresora Térmica & Gaveta de Dinero RJ11
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Formato de papel (58mm / 80mm), tirillas automáticas y apertura de caja registradora.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setModalImpresoraOpen(true)}
+              className="px-4 py-2.5 bg-sky-600/30 hover:bg-sky-600 text-sky-200 hover:text-white border border-sky-500/40 rounded-xl text-xs font-bold transition cursor-pointer self-start md:self-auto shrink-0 flex items-center gap-2 shadow-lg"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Configurar Impresora & Gaveta</span>
+            </button>
+          </div>
+        </div>
+
         {/* BOTÓN GUARDAR */}
         <div className="flex justify-end">
           <button
@@ -467,6 +497,12 @@ export const ConfiguracionTab: React.FC = () => {
           </button>
         </div>
       </form>
+
+      {/* Modal: Configuración de Impresora */}
+      <ConfiguracionImpresoraModal
+        isOpen={modalImpresoraOpen}
+        onClose={() => setModalImpresoraOpen(false)}
+      />
 
       {/* Modal: Asistente de Puesta en Blanco Granular */}
       {modalResetOpen && (

@@ -18,6 +18,7 @@ import { MovimientosModal } from '../components/caja/MovimientosModal'
 import { ValesModal } from '../components/caja/ValesModal'
 import { NuevoPedidoModal } from '../components/caja/NuevoPedidoModal'
 import { TirillaModal, type TipoTirilla } from '../components/common/TirillaModal'
+import { ConfiguracionImpresoraModal } from '../components/common/ConfiguracionImpresoraModal'
 import { FooterCredits } from '../components/common/FooterCredits'
 import type { DatosReciboVenta, DatosReporteZ } from '../utils/printer'
 import {
@@ -117,6 +118,7 @@ export const Caja: React.FC = () => {
   const [isMovimientosOpen, setIsMovimientosOpen] = useState(false)
   const [isValesOpen, setIsValesOpen] = useState(false)
   const [isNuevoPedidoOpen, setIsNuevoPedidoOpen] = useState(false)
+  const [isConfigImpresoraOpen, setIsConfigImpresoraOpen] = useState(false)
   const [configLocal, setConfigLocal] = useState<Record<string, string>>({})
   const [tirillaConfig, setTirillaConfig] = useState<{
     isOpen: boolean
@@ -406,6 +408,7 @@ export const Caja: React.FC = () => {
         onMovimientosClick={() => requerirTurno(() => setIsMovimientosOpen(true))}
         onValesClick={() => setIsValesOpen(true)}
         onNuevoPedidoClick={() => requerirTurno(() => setIsNuevoPedidoOpen(true))}
+        onConfigImpresoraClick={() => setIsConfigImpresoraOpen(true)}
         onRefresh={() => cargarDatos(true)}
         isRefreshing={isRefreshing}
         totalValesPendientes={valesPendientes}
@@ -757,6 +760,11 @@ export const Caja: React.FC = () => {
         tipo={tirillaConfig.tipo}
         datosRecibo={tirillaConfig.datosRecibo}
         datosReporteZ={tirillaConfig.datosReporteZ}
+      />
+
+      <ConfiguracionImpresoraModal
+        isOpen={isConfigImpresoraOpen}
+        onClose={() => setIsConfigImpresoraOpen(false)}
       />
     </div>
   )

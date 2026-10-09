@@ -63,9 +63,24 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
       setLoading(true)
       Promise.all([getProductosApi(), getCategoriasApi()])
         .then(([prods, cats]) => {
-          setProductos(prods.filter((p: Producto) => p.disponible && p.activo))
-          setCategorias(cats)
-          if (cats.length > 0) setCategoriaSel(cats[0].id)
+          const prodsValidos = prods.filter(
+            (p: Producto) =>
+              p.activo &&
+              p.categoria_id !== 99 &&
+              !p.nombre.toLowerCase().startsWith('empaque') &&
+              !p.nombre.toLowerCase().includes('desechable') &&
+              p.nombre.toLowerCase() !== 'c1' &&
+              p.nombre.toLowerCase() !== 'p1'
+          )
+          const catsValidas = cats.filter(
+            (c) =>
+              c.id !== 99 &&
+              !c.nombre.toUpperCase().includes('SERVICIO') &&
+              !c.nombre.toUpperCase().includes('EMPAQUE')
+          )
+          setProductos(prodsValidos)
+          setCategorias(catsValidas)
+          setCategoriaSel(null) // Ver todo el menú al abrir
         })
         .catch((err) => console.error('Error cargando catálogo:', err))
         .finally(() => setLoading(false))
@@ -155,8 +170,9 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
   const totalCalculado = totalBase + totalEmpaques
 
   const productosFiltrados = productos.filter((p) => {
-    const matchCat = categoriaSel ? p.categoria_id === categoriaSel : true
-    const matchText = p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+    const matchCat = categoriaSel !== null ? Number(p.categoria_id) === Number(categoriaSel) : true
+    const q = busqueda.trim().toLowerCase()
+    const matchText = q === '' ? true : p.nombre.toLowerCase().includes(q)
     return matchCat && matchText
   })
 
@@ -377,28 +393,41 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
                 <button
                   type="button"
                   onClick={() => setCategoriaSel(null)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
                     categoriaSel === null
-                      ? 'bg-amber-500 text-slate-950'
-                      : 'bg-slate-800 text-slate-400'
+                      ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                      : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700'
                   }`}
                 >
-                  Todos
+                  <span>Todos</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
+                    categoriaSel === null ? 'bg-black/20 text-slate-950 font-black' : 'bg-slate-700 text-slate-400'
+                  }`}>
+                    {productos.length}
+                  </span>
                 </button>
-                {categorias.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => setCategoriaSel(c.id)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition cursor-pointer ${
-                      categoriaSel === c.id
-                        ? 'bg-amber-500 text-slate-950'
-                        : 'bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    {c.nombre}
-                  </button>
-                ))}
+                {categorias.map((c) => {
+                  const count = productos.filter((p) => Number(p.categoria_id) === Number(c.id)).length
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setCategoriaSel(c.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+                        categoriaSel === c.id
+                          ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                          : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700'
+                      }`}
+                    >
+                      <span>{c.nombre}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
+                        categoriaSel === c.id ? 'bg-black/20 text-slate-950 font-black' : 'bg-slate-700 text-slate-400'
+                      }`}>
+                        {count}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -409,6 +438,17 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
                   <Loader2 className="w-8 h-8 text-amber-500 animate-spin mb-2" />
                   <span className="text-xs">Cargando catálogo...</span>
                 </div>
+              ) : productosFiltrados.length === 0 ? (
+                <div className="col-span-2 sm:col-span-3 text-center py-12 text-slate-500">
+                  <p className="text-xs">No se encontraron productos en esta categoría o búsqueda.</p>
+                  <button
+                    type="button"
+                    onClick={() => { setCategoriaSel(null); setBusqueda('') }}
+                    className="mt-2 text-xs text-amber-400 hover:underline font-bold"
+                  >
+                    Ver todos los productos
+                  </button>
+                </div>
               ) : (
                 productosFiltrados.map((p) => (
                   <div
@@ -416,9 +456,19 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
                     className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 hover:border-amber-500/60 text-left transition flex flex-col justify-between group"
                   >
                     <div>
-                      <span className="font-bold text-white text-xs line-clamp-2 mb-1 group-hover:text-amber-400 transition">
-                        {p.nombre}
-                      </span>
+                      <div className="flex items-start justify-between gap-1 mb-1">
+                        <span className="font-bold text-white text-xs line-clamp-2 group-hover:text-amber-400 transition">
+                          {p.nombre}
+                        </span>
+                        {!p.disponible && (
+                          <span
+                            className="text-[9px] font-bold text-amber-400 bg-amber-950/80 border border-amber-800/60 px-1 py-0.5 rounded shrink-0"
+                            title="Insumos pendientes de registrar en inventario"
+                          >
+                            Sin stock
+                          </span>
+                        )}
+                      </div>
                       <span className="font-black text-emerald-400 font-mono text-xs block mb-2">
                         ${Number(p.precio).toLocaleString('es-CO')}
                       </span>

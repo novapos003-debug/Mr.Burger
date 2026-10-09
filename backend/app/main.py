@@ -96,6 +96,8 @@ async def lifespan(app: FastAPI):
             conn.execute(text("UPDATE ingrediente SET precio_venta = 300.00 WHERE nombre ILIKE '%Bolsa T25%' AND (precio_venta IS NULL OR precio_venta = 0);"))
             conn.execute(text("UPDATE ingrediente SET precio_venta = 400.00 WHERE nombre ILIKE '%Bolsa T30%' AND (precio_venta IS NULL OR precio_venta = 0);"))
             conn.execute(text("UPDATE ingrediente SET precio_venta = 500.00 WHERE nombre ILIKE '%Bolsa T40%' AND (precio_venta IS NULL OR precio_venta = 0);"))
+            # Asegurar política de stock flexible para no bloquear ventas en el restaurante
+            conn.execute(text("INSERT INTO configuracion (clave, valor, descripcion) VALUES ('politica_stock_insuficiente', 'ADVERTIR_Y_PERMITIR', 'Política ante faltante de stock') ON CONFLICT (clave) DO UPDATE SET valor = 'ADVERTIR_Y_PERMITIR';"))
 
             # Poblar recetas base oficiales para productos que no tengan receta configurada
             try:

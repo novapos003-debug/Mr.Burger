@@ -62,3 +62,9 @@ ALTER TABLE movimiento_caja ADD CONSTRAINT ck_movcaja_categoria CHECK (categoria
 
 CREATE INDEX IF NOT EXISTS idx_movcaja_creado_en ON movimiento_caja (creado_en);
 CREATE INDEX IF NOT EXISTS idx_movcaja_cierre ON movimiento_caja (cierre_id);
+
+-- 6. Política de stock: permitir ventas continuas sin bloqueo en caja
+INSERT INTO configuracion (clave, valor, descripcion)
+VALUES ('politica_stock_insuficiente', 'ADVERTIR_Y_PERMITIR', 'Política ante faltante de stock')
+ON CONFLICT (clave) DO UPDATE SET valor = 'ADVERTIR_Y_PERMITIR';
+

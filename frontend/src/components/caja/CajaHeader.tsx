@@ -10,6 +10,7 @@ import {
   PlusCircle,
   RefreshCw,
   LogOut,
+  Printer,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
@@ -20,6 +21,7 @@ interface Props {
   onMovimientosClick: () => void
   onValesClick: () => void
   onNuevoPedidoClick: () => void
+  onConfigImpresoraClick: () => void
   onRefresh: () => void
   isRefreshing: boolean
   totalValesPendientes: number
@@ -32,6 +34,7 @@ export const CajaHeader: React.FC<Props> = ({
   onMovimientosClick,
   onValesClick,
   onNuevoPedidoClick,
+  onConfigImpresoraClick,
   onRefresh,
   isRefreshing,
   totalValesPendientes,
@@ -132,6 +135,16 @@ export const CajaHeader: React.FC<Props> = ({
               <span>Abrir Turno</span>
             </button>
           )}
+
+          {/* Configurar Impresora & Gaveta */}
+          <button
+            onClick={onConfigImpresoraClick}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 shadow-md transition cursor-pointer"
+            title="Configurar impresora térmica (58mm/80mm) y apertura de gaveta de dinero"
+          >
+            <Printer className="w-4 h-4 text-sky-400" />
+            <span>Impresora</span>
+          </button>
 
           {/* Refrescar */}
           <button

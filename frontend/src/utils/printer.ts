@@ -143,8 +143,47 @@ export function numeroALetras(num: number): string {
   return `${letras.trim()} PESOS M/CTE`
 }
 
-// Envío a impresora del navegador (abre ventana temporal de impresión 80mm)
-export function imprimirHtmlTirilla(htmlContent: string) {
+export interface ConfiguracionImpresora {
+  tamanoPapel: '58mm' | '80mm'
+  modoImpresion: 'NAVEGADOR' | 'WEBUSB'
+  abrirCajonEfectivo: boolean
+  autoImprimirCobro: boolean
+}
+
+export const CONFIG_IMPRESORA_DEFAULT: ConfiguracionImpresora = {
+  tamanoPapel: '80mm',
+  modoImpresion: 'NAVEGADOR',
+  abrirCajonEfectivo: true,
+  autoImprimirCobro: true,
+}
+
+export function getPrinterConfig(): ConfiguracionImpresora {
+  try {
+    const raw = localStorage.getItem('mrburger_printer_config')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      return { ...CONFIG_IMPRESORA_DEFAULT, ...parsed }
+    }
+  } catch {
+    // fallback
+  }
+  return CONFIG_IMPRESORA_DEFAULT
+}
+
+export function savePrinterConfig(cfg: ConfiguracionImpresora): void {
+  try {
+    localStorage.setItem('mrburger_printer_config', JSON.stringify(cfg))
+  } catch (err) {
+    console.error('Error guardando configuración de impresora:', err)
+  }
+}
+
+// Envío a impresora del navegador (soporta 58mm y 80mm continuo)
+export function imprimirHtmlTirilla(htmlContent: string, tamanoPapel?: '58mm' | '80mm') {
+  const config = getPrinterConfig()
+  const papel = tamanoPapel || config.tamanoPapel || '80mm'
+  const is58 = papel === '58mm'
+
   const iframe = document.createElement('iframe')
   iframe.style.position = 'fixed'
   iframe.style.right = '0'
@@ -163,39 +202,40 @@ export function imprimirHtmlTirilla(htmlContent: string) {
     <html>
       <head>
         <meta charset="utf-8">
-        <title>Tirilla Mr. Burger 80mm</title>
+        <title>Tirilla Mr. Burger ${papel}</title>
         <style>
           @page {
-            size: 80mm auto;
+            size: ${is58 ? '58mm' : '80mm'} auto;
             margin: 0;
           }
           body {
             font-family: 'Courier New', Courier, monospace;
-            font-size: 12px;
+            font-size: ${is58 ? '10px' : '12px'};
             color: #000;
             background: #fff;
-            width: 72mm;
+            width: ${is58 ? '48mm' : '72mm'};
             margin: 0 auto;
-            padding: 8px 4px;
+            padding: ${is58 ? '4px 2px' : '8px 4px'};
             line-height: 1.25;
+            word-wrap: break-word;
           }
           .center { text-align: center; }
           .right { text-align: right; }
           .bold { font-weight: bold; }
-          .double { font-size: 15px; font-weight: bold; }
-          .divider { border-top: 1px dashed #000; margin: 6px 0; }
-          .double-divider { border-top: 2px solid #000; margin: 6px 0; }
+          .double { font-size: ${is58 ? '12px' : '15px'}; font-weight: bold; }
+          .divider { border-top: 1px dashed #000; margin: ${is58 ? '4px 0' : '6px 0'}; }
+          .double-divider { border-top: 2px solid #000; margin: ${is58 ? '4px 0' : '6px 0'}; }
           table { width: 100%; border-collapse: collapse; }
-          td, th { padding: 2px 0; font-size: 12px; }
+          td, th { padding: 1px 0; font-size: ${is58 ? '10px' : '12px'}; }
           .firmas-box {
-            margin-top: 24px;
+            margin-top: 20px;
             display: flex;
             justify-content: space-between;
             text-align: center;
-            font-size: 10px;
+            font-size: ${is58 ? '8px' : '10px'};
           }
           .firma-line {
-            width: 30%;
+            width: 38%;
             border-top: 1px solid #000;
             padding-top: 4px;
           }
@@ -208,7 +248,7 @@ export function imprimirHtmlTirilla(htmlContent: string) {
             window.focus();
             window.print();
             setTimeout(function() {
-              window.frameElement.parentNode.removeChild(window.frameElement);
+              window.frameElement?.parentNode?.removeChild(window.frameElement);
             }, 1000);
           };
         </script>
@@ -216,6 +256,54 @@ export function imprimirHtmlTirilla(htmlContent: string) {
     </html>
   `)
   doc.close()
+}
+
+export async function imprimirTicketPrueba(cfg?: ConfiguracionImpresora): Promise<{ success: boolean; message: string }> {
+  const config = cfg || getPrinterConfig()
+  const fechaStr = new Date().toLocaleString('es-CO')
+  const papel = config.tamanoPapel || '80mm'
+  const is58 = papel === '58mm'
+
+  if (config.modoImpresion === 'WEBUSB') {
+    const textoEsc = `
+================================
+           MR. BURGER           
+     PRUEBA DE IMPRESORA POS    
+       Formato: ${papel}       
+  ${fechaStr}
+--------------------------------
+    [OK] IMPRESORA TERMICA      
+   COMUNICACION ESC/POS DIRECTA 
+--------------------------------
+ Gaveta RJ11: ${config.abrirCajonEfectivo ? 'Habilitada' : 'No'}
+ Auto-Ticket: ${config.autoImprimirCobro ? 'Habilitado' : 'No'}
+--------------------------------
+  ¡IMPRESORA LISTA PARA CAJA!   
+================================
+`
+    const bytes = generarBytesEscPos(textoEsc)
+    return imprimirViaWebUSB(bytes)
+  }
+
+  const html = `
+    <div class="center bold double">MR. BURGER</div>
+    <div class="center bold">PRUEBA DE IMPRESORA POS</div>
+    <div class="center" style="font-size: ${is58 ? '9px' : '11px'};">Formato: ${papel}</div>
+    <div class="center" style="font-size: ${is58 ? '9px' : '11px'};">${fechaStr}</div>
+    <div class="divider"></div>
+    <div class="center bold">✓ IMPRESORA CONFIGURADA</div>
+    <div class="divider"></div>
+    <div style="font-size: ${is58 ? '9px' : '11px'};">
+      <div>Método: Navegador Windows</div>
+      <div>Gaveta RJ11: ${config.abrirCajonEfectivo ? 'Habilitada' : 'Deshabilitada'}</div>
+      <div>Auto-Imprimir: ${config.autoImprimirCobro ? 'Habilitado' : 'Deshabilitado'}</div>
+    </div>
+    <div class="divider"></div>
+    <div class="center bold" style="font-size: ${is58 ? '9px' : '11px'};">¡Mr. Burger listo para operar!</div>
+    <br/>
+  `
+  imprimirHtmlTirilla(html, papel)
+  return { success: true, message: 'Ticket de prueba enviado al diálogo de impresión.' }
 }
 
 // Impresión directa ESC/POS mediante WebUSB (para impresoras térmicas conectadas por USB)

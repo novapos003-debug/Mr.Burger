@@ -19,7 +19,7 @@ def disponibilidad_producto(db: Session, producto: Producto) -> tuple[bool, str 
         )
 
     cfg = db.get(Configuracion, "politica_stock_insuficiente")
-    politica = cfg.valor.strip().upper() if cfg and cfg.valor else "BLOQUEAR"
+    politica = cfg.valor.strip().upper() if cfg and cfg.valor else "ADVERTIR_Y_PERMITIR"
     if politica == "ADVERTIR_Y_PERMITIR":
         return True, None
 
@@ -47,7 +47,7 @@ def verificar_lineas(db: Session, lineas) -> None:
         return
 
     cfg = db.get(Configuracion, "politica_stock_insuficiente")
-    politica = cfg.valor.strip().upper() if cfg and cfg.valor else "BLOQUEAR"
+    politica = cfg.valor.strip().upper() if cfg and cfg.valor else "ADVERTIR_Y_PERMITIR"
     if politica == "ADVERTIR_Y_PERMITIR":
         return
 
@@ -96,7 +96,7 @@ def disponibilidad_masiva(db: Session, productos: list[Producto]) -> dict[int, t
         return resultado
 
     cfg = db.get(Configuracion, "politica_stock_insuficiente")
-    politica = cfg.valor.strip().upper() if cfg and cfg.valor else "BLOQUEAR"
+    politica = cfg.valor.strip().upper() if cfg and cfg.valor else "ADVERTIR_Y_PERMITIR"
     if politica == "ADVERTIR_Y_PERMITIR":
         for p in productos:
             if p.manual_disponible is not None:

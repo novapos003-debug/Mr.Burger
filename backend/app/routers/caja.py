@@ -187,13 +187,35 @@ def listar_movimientos(
 # TURNO DE CAJA (apertura + cierre)  /  ENTRADAS-EGRESOS ADMIN
 # ============================================================
 
+def _cierre_to_out(db: Session, c: Cierre) -> CierreOut:
+    out = CierreOut.model_validate(c)
+    if c.usuario:
+        out.usuario_nombre = c.usuario.nombre
+    else:
+        u = db.get(Usuario, c.usuario_id)
+        if u:
+            out.usuario_nombre = u.nombre
+    # Recuperar base inicial de apertura
+    mov_base = (
+        db.query(MovimientoCaja)
+        .filter(MovimientoCaja.cierre_id == c.id, MovimientoCaja.categoria == "CAMBIO_INICIAL")
+        .first()
+    )
+    if mov_base:
+        out.monto_inicial = mov_base.valor
+    return out
+
+
 @router.get("/turno", response_model=CierreOut | None)
 def ver_turno(
     db: Session = Depends(get_db),
     _: Usuario = Depends(cashier_required),
 ):
     """Turno de caja abierto actualmente con métricas acumuladas en vivo (o null si no hay ninguno)."""
-    return obtener_turno_actual_con_metricas(db)
+    c = obtener_turno_actual_con_metricas(db)
+    if not c:
+        return None
+    return _cierre_to_out(db, c)
 
 
 @router.post("/turno/abrir", response_model=CierreOut, status_code=201)
@@ -204,7 +226,8 @@ def abrir_turno_endpoint(
 ):
     """Abre el turno de caja. Solo puede existir un turno abierto a la vez."""
     try:
-        return abrir_turno(db, cajero, data.monto_inicial)
+        c = abrir_turno(db, cajero, data.monto_inicial)
+        return _cierre_to_out(db, c)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
 
@@ -220,7 +243,8 @@ async def cerrar_turno_endpoint(
     if cierre is None:
         raise HTTPException(status_code=409, detail="No hay un turno de caja abierto")
     try:
-        return cerrar_turno(db, cierre, cajero, data.notas if data else None)
+        res = cerrar_turno(db, cierre, cajero, data.notas if data else None)
+        return _cierre_to_out(db, res)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
 
@@ -240,7 +264,8 @@ def listar_cierres(
     db: Session = Depends(get_db),
     _: Usuario = Depends(cashier_required),
 ):
-    return db.query(Cierre).order_by(Cierre.id.desc()).limit(100).all()
+    cierres = db.query(Cierre).options(joinedload(Cierre.usuario)).order_by(Cierre.id.desc()).limit(100).all()
+    return [_cierre_to_out(db, c) for c in cierres]
 
 
 @router.get("/cierres/{cierre_id}", response_model=CierreOut)
@@ -249,7 +274,7 @@ def obtener_cierre(
     db: Session = Depends(get_db),
     _: Usuario = Depends(cashier_required),
 ):
-    cierre = db.get(Cierre, cierre_id)
+    cierre = db.query(Cierre).options(joinedload(Cierre.usuario)).filter(Cierre.id == cierre_id).first()
     if not cierre:
         raise HTTPException(status_code=404, detail="Cierre no encontrado")
-    return cierre
+    return _cierre_to_out(db, cierre)

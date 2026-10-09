@@ -60,6 +60,8 @@ export interface CobroOut {
 export interface CierreOut {
   id: number
   usuario_id: number
+  usuario_nombre?: string | null
+  monto_inicial?: number
   abierto_en: string
   cerrado_en?: string | null
   total_pedidos: number

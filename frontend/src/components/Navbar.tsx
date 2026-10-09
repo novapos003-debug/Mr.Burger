@@ -9,15 +9,18 @@ import {
   Receipt,
   User,
   Settings,
+  Printer,
 } from 'lucide-react'
 import type { UserRole } from '../types/auth'
 import { SyncBadge } from './common/SyncBadge'
 import { ServerConfigModal } from './common/ServerConfigModal'
+import { ConfiguracionImpresoraModal } from './common/ConfiguracionImpresoraModal'
 
 export const Navbar: React.FC<{ title?: string }> = ({ title }) => {
   const { user, logout, cerrarTurnoYSalir, turno } = useAuth()
   const [hora, setHora] = useState<string>('')
   const [showServerModal, setShowServerModal] = useState(false)
+  const [showPrinterModal, setShowPrinterModal] = useState(false)
   const [logoError, setLogoError] = useState(false)
 
   useEffect(() => {
@@ -126,6 +129,14 @@ export const Navbar: React.FC<{ title?: string }> = ({ title }) => {
             </div>
 
             <button
+              onClick={() => setShowPrinterModal(true)}
+              title="Configuración de Impresora Térmica & Gaveta"
+              className="flex items-center text-sky-400 hover:text-white bg-slate-950 hover:bg-slate-800 border border-slate-800 p-1.5 rounded-md text-xs transition cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5" />
+            </button>
+
+            <button
               onClick={() => setShowServerModal(true)}
               title="Configuración de Servidor"
               className="flex items-center text-slate-400 hover:text-white bg-slate-950 hover:bg-slate-800 border border-slate-800 p-1.5 rounded-md text-xs transition cursor-pointer"
@@ -163,6 +174,11 @@ export const Navbar: React.FC<{ title?: string }> = ({ title }) => {
       <ServerConfigModal
         isOpen={showServerModal}
         onClose={() => setShowServerModal(false)}
+      />
+
+      <ConfiguracionImpresoraModal
+        isOpen={showPrinterModal}
+        onClose={() => setShowPrinterModal(false)}
       />
     </header>
   )

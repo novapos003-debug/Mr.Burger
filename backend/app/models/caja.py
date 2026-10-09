@@ -33,6 +33,7 @@ class Cierre(Base):
 
     id = Column(Integer, primary_key=True)
     usuario_id = Column(Integer, ForeignKey("usuario.id"), nullable=False)
+    usuario = relationship("Usuario")
     abierto_en = Column(DateTime(timezone=True), nullable=False, index=True)
     cerrado_en = Column(DateTime(timezone=True))  # NULL mientras el turno está abierto
     total_pedidos = Column(Integer, nullable=False, default=0)

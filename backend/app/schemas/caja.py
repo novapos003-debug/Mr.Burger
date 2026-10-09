@@ -100,6 +100,8 @@ class TurnoAperturaIn(BaseModel):
 class CierreOut(BaseModel):
     id: int
     usuario_id: int
+    usuario_nombre: str | None = None
+    monto_inicial: Decimal = Decimal("0")
     abierto_en: datetime
     cerrado_en: datetime | None
     total_pedidos: int
