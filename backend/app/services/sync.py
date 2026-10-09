@@ -118,10 +118,14 @@ def asimilar_operacion(db: Session, op) -> None:
         elif tipo in ("ABRIR_TURNO", "CIERRE_TURNO"):
             c_id = payload.get("id")
             cierre = db.get(Cierre, c_id) if c_id else None
+            abierto_en_val = payload.get("abierto_en") or func.now()
+            cerrado_en_val = func.now() if payload.get("cerrado_en") == "now()" else payload.get("cerrado_en")
             if not cierre:
                 cierre = Cierre(
                     id=c_id,
                     usuario_id=payload.get("usuario_id", 1),
+                    abierto_en=abierto_en_val,
+                    cerrado_en=cerrado_en_val,
                     total_ventas=Decimal(str(payload.get("total_ventas", 0))),
                     total_efectivo=Decimal(str(payload.get("total_efectivo", 0))),
                     total_tarjeta=Decimal(str(payload.get("total_tarjeta", 0))),
@@ -135,8 +139,10 @@ def asimilar_operacion(db: Session, op) -> None:
                 )
                 db.add(cierre)
             else:
+                if payload.get("cerrado_en"):
+                    cierre.cerrado_en = cerrado_en_val
                 for k, v in payload.items():
-                    if hasattr(cierre, k) and v is not None and k != "id":
+                    if hasattr(cierre, k) and v is not None and k not in ("id", "abierto_en", "cerrado_en"):
                         try:
                             setattr(cierre, k, Decimal(str(v)) if isinstance(v, (int, float)) else v)
                         except Exception:

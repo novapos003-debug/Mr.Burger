@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     SUCURSAL_ID: str = "SUC-01"  # Identificador único de sucursal
     CLOUD_SYNC_ENABLED: bool = True
     CLOUD_SYNC_URL: str = "https://mrburger-api.onrender.com"  # URL del servidor en la nube (Render)
-    CLOUD_SYNC_TOKEN: str = "YJpvcSarkUZl3j8oL7iOFXBI1P2EGDmy"  # Token criptográfico de sincronización
+    CLOUD_SYNC_TOKEN: str = "mrburger_sync_secret_token_2026"  # Token criptográfico de sincronización
     SYNC_INTERVAL_SECONDS: int = 10  # Intervalo de sondeo/envío en segundos
 
     class Config:

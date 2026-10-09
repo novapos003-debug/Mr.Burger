@@ -10,6 +10,7 @@ echo.
 :: 1. Buscar psql.exe en rutas de instalacion de Windows
 where psql >nul 2>nul
 if %errorlevel% neq 0 (
+    if exist "C:\Program Files\PostgreSQL\18\bin\psql.exe" set "PATH=C:\Program Files\PostgreSQL\18\bin;%PATH%"
     if exist "C:\Program Files\PostgreSQL\17\bin\psql.exe" set "PATH=C:\Program Files\PostgreSQL\17\bin;%PATH%"
     if exist "C:\Program Files\PostgreSQL\16\bin\psql.exe" set "PATH=C:\Program Files\PostgreSQL\16\bin;%PATH%"
     if exist "C:\Program Files\PostgreSQL\15\bin\psql.exe" set "PATH=C:\Program Files\PostgreSQL\15\bin;%PATH%"

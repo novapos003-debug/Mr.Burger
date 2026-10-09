@@ -10,14 +10,14 @@ echo.
 :: 0. Auto-actualización silenciosa si hay conexión a internet y Git
 if exist ".git" (
     echo [0/3] Verificando actualizaciones en GitHub...
-    git fetch origin main --quiet 2>nul
-    git reset --hard origin/main --quiet 2>nul
+    git pull origin main --quiet 2>nul
 )
 
 :: Asegurar que el servicio de PostgreSQL esté iniciado
 net start postgresql-x64-15 >nul 2>nul
 net start postgresql-x64-16 >nul 2>nul
 net start postgresql-x64-17 >nul 2>nul
+net start postgresql-x64-18 >nul 2>nul
 net start postgresql-15 >nul 2>nul
 net start postgresql-16 >nul 2>nul
 
