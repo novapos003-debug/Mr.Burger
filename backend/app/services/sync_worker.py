@@ -10,9 +10,15 @@ from sqlalchemy import func
 
 from app.config import settings
 from app.database import SessionLocal, safe_commit
-from app.models import Producto, Usuario
-from app.models.configuracion import Configuracion
-from app.models.sync import RegistroSync
+from app.models import (
+    CategoriaInsumo,
+    Configuracion,
+    DetalleReceta,
+    Ingrediente,
+    Producto,
+    RegistroSync,
+    Usuario,
+)
 
 logger = logging.getLogger("sync_worker")
 
@@ -442,6 +448,86 @@ async def ejecutar_ciclo_pull() -> dict[str, Any]:
                         db.close()
             except Exception as e:
                 logger.warning(f"Aviso al sincronizar configuración de la nube: {e}")
+
+            # 4. Sincronizar Insumos / Materias Primas creados o modificados en la Nube
+            try:
+                i_resp = await client.get(f"{cloud_url}/api/ingredientes", headers=auth_headers)
+                if i_resp.status_code == 200:
+                    cloud_ings = i_resp.json()
+                    db = SessionLocal()
+                    try:
+                        hubo_cambio_ing = False
+                        for ci in cloud_ings:
+                            iid = ci.get("id")
+                            ling = db.get(Ingrediente, iid)
+                            costo = Decimal(str(ci.get("costo_unitario") or 0))
+                            p_venta = Decimal(str(ci.get("precio_venta") or 0))
+                            if not ling:
+                                nuevo_ing = Ingrediente(
+                                    id=iid,
+                                    categoria_insumo_id=ci.get("categoria_insumo_id"),
+                                    nombre=ci.get("nombre", ""),
+                                    unidad_base=ci.get("unidad_base", "UNIDAD"),
+                                    costo_unitario=costo,
+                                    tipo_articulo=ci.get("tipo_articulo", "INSUMO_RECETA"),
+                                    precio_venta=p_venta,
+                                    stock_actual=Decimal(str(ci.get("stock_actual") or 0)),
+                                    stock_minimo=Decimal(str(ci.get("stock_minimo") or 0)),
+                                    activo=ci.get("activo", True),
+                                )
+                                db.add(nuevo_ing)
+                                actualizaciones["ingredientes"] = actualizaciones.get("ingredientes", 0) + 1
+                                hubo_cambio_ing = True
+                            else:
+                                mod_ing = False
+                                if ling.nombre != ci.get("nombre"):
+                                    ling.nombre = ci.get("nombre")
+                                    mod_ing = True
+                                if abs(ling.costo_unitario - costo) > Decimal("0.01"):
+                                    ling.costo_unitario = costo
+                                    mod_ing = True
+                                if abs(ling.precio_venta - p_venta) > Decimal("0.01"):
+                                    ling.precio_venta = p_venta
+                                    mod_ing = True
+                                if ling.activo != ci.get("activo", True):
+                                    ling.activo = ci.get("activo", True)
+                                    mod_ing = True
+                                if mod_ing:
+                                    actualizaciones["ingredientes"] = actualizaciones.get("ingredientes", 0) + 1
+                                    hubo_cambio_ing = True
+                        if hubo_cambio_ing:
+                            safe_commit(db)
+                    finally:
+                        db.close()
+            except Exception as e:
+                logger.warning(f"Aviso al sincronizar insumos de la nube: {e}")
+
+            # 5. Sincronizar Recetas de Productos creados o modificados
+            if cambio_catalogo:
+                try:
+                    for cp in cloud_prods:
+                        pid = cp.get("id")
+                        rec_resp = await client.get(f"{cloud_url}/api/ingredientes/productos/{pid}/receta", headers=auth_headers)
+                        if rec_resp.status_code == 200:
+                            lineas_cloud = rec_resp.json()
+                            db = SessionLocal()
+                            try:
+                                db.query(DetalleReceta).filter(DetalleReceta.product_id == pid).delete()
+                                for lc in lineas_cloud:
+                                    db.add(
+                                        DetalleReceta(
+                                            product_id=pid,
+                                            ingrediente_id=lc.get("ingrediente_id"),
+                                            cantidad=Decimal(str(lc.get("cantidad", 1))),
+                                            unidad=lc.get("unidad", "UNIDAD"),
+                                            solo_llevar=lc.get("solo_llevar", False),
+                                        )
+                                    )
+                                safe_commit(db)
+                            finally:
+                                db.close()
+                except Exception as e:
+                    logger.warning(f"Aviso al sincronizar recetas de productos: {e}")
 
     except Exception as e:
         logger.warning(f"Fallo en ciclo de descarga (pull) desde la nube: {e}")
