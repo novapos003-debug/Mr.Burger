@@ -77,6 +77,61 @@ CONTEO: list[tuple[tuple[str, ...], str, str]] = [
 ]
 
 
+# Insumos que se usan "a ojo": salen de las recetas y pasan a gasto operativo (decisión del 10/10/2026)
+CLAVE_GASTOS = "migracion_gastos_operativos_20261010"
+PASAN_A_GASTO = ("aceite", "mantequilla", "vinagreta")
+
+
+def pasar_a_gasto_operativo(conn) -> None:
+    """Quita de las recetas los insumos de PASAN_A_GASTO y los marca como gasto operativo.
+    Se ejecuta una sola vez y solo en la caja. Deja anotado en el informe qué líneas quitó,
+    con su cantidad, por si hay que volver a ponerlas."""
+    if not _una_sola_vez(conn, CLAVE_GASTOS, "Aceite, mantequilla y vinagreta pasan a gasto operativo"):
+        return
+
+    replicar = replicacion.captura_activa()
+    informe = ["", "Insumos que pasan a GASTO OPERATIVO (ya no descuentan por receta):"]
+    activos = [(f.id, f.nombre, _normalizar(f.nombre)) for f in conn.execute(text("SELECT id, nombre FROM ingrediente WHERE activo"))]
+
+    for alias in PASAN_A_GASTO:
+        candidatos = [a for a in activos if a[2] == alias]
+        if len(candidatos) != 1:
+            motivo = "no existe un insumo activo con ese nombre" if not candidatos else "hay varios con ese nombre"
+            informe.append(f"  OMITIDO   {alias}: {motivo}.")
+            continue
+        ing_id, nombre, _ = candidatos[0]
+        lineas = conn.execute(
+            text(
+                "SELECT d.id, p.nombre, d.cantidad, d.unidad FROM detalle_receta d "
+                "JOIN producto p ON p.id = d.product_id WHERE d.ingrediente_id = :i ORDER BY p.nombre"
+            ),
+            {"i": ing_id},
+        ).all()
+        for linea in lineas:
+            conn.execute(text("DELETE FROM detalle_receta WHERE id = :d"), {"d": linea.id})
+            if replicar:
+                replicacion.encolar_borrado(conn, "detalle_receta", {"id": linea.id})
+            informe.append(f"      quitado de la receta de {linea.nombre}: {Decimal(str(linea.cantidad)).normalize():f} {linea.unidad}")
+        conn.execute(
+            text(
+                "UPDATE ingrediente SET tipo_articulo = 'GASTO_OPERATIVO', "
+                "categoria_insumo_id = COALESCE((SELECT id FROM categoria_insumo WHERE id = 10), categoria_insumo_id) "
+                "WHERE id = :i"
+            ),
+            {"i": ing_id},
+        )
+        if replicar:
+            replicacion.encolar_fila(conn, "ingrediente", {"id": ing_id})
+        informe.append(f"  GASTO     {nombre}: salió de {len(lineas)} receta(s).")
+
+    logger.warning("Insumos pasados a gasto operativo: %s", ", ".join(PASAN_A_GASTO))
+    try:
+        with _INFORME.open("a", encoding="utf-8") as f:
+            f.write("\n".join(informe) + "\n")
+    except OSError:
+        pass
+
+
 def _normalizar(nombre: str) -> str:
     sin_tildes = "".join(c for c in unicodedata.normalize("NFD", nombre or "") if unicodedata.category(c) != "Mn")
     return " ".join(sin_tildes.lower().split())

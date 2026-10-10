@@ -203,13 +203,15 @@ estado_sistema.bat, tomale foto a la ventana y enviamela.
 PASO 8.  INVENTARIO DE DON FELIX  (se carga solo, una sola vez)
 ------------------------------------------------------------------
 
-Al instalar (Paso 1) el sistema hace SOLO estas dos cosas, una vez:
+Al instalar (Paso 1) el sistema hace SOLO estas tres cosas, una vez:
 
  a) Pone en $0 el COSTO de todos los insumos, para que el dueno los
     cargue desde el panel web. No toca el precio de venta de los
     empaques (C1, P1, bolsas) ni los precios del menu.
  b) Ajusta las existencias de 39 insumos con el conteo del cierre del
     9 de octubre. Cada ajuste queda anotado en el historial (kardex).
+ c) Pasa ACEITE, MANTEQUILLA y VINAGRETA a "gasto operativo" y los
+    quita de las recetas (ver "INSUMO O GASTO" mas abajo).
 
 Lo que hizo queda escrito en el archivo
      inventario_inicial_resultado.txt
@@ -258,19 +260,82 @@ RECOMENDACION DE UNIDADES (regla simple):
      3. MAZORCA / MAICITOS: si desgranan la mazorca, crear "Maicitos"
         en GRAMOS y usar ese en las recetas, no la mazorca entera.
 
-QUE DEJAR COMO GASTO (se compra y se anota, pero NO va en recetas):
-   Es lo que se usa "a ojo" y no vale la pena medir por plato:
-     Aceite, Sal, Azucar, Mantequilla, Vinagreta, Papel aluminio,
-     Papel hamburguesa, Servilletas, Pitillos, Guantes,
-     Rollos de impresora y de datafono, y todo el aseo (jabon,
-     Axion, limpido, Fabuloso, esponjas, papel de bano).
-   Hoy Aceite (1 receta), Mantequilla (5 recetas) y Vinagreta
-   (1 receta) SI estan en recetas. Si el dueno esta de acuerdo, se
-   quitan de esas recetas y se marcan como "Gasto operativo".
-   Los gastos van por UNIDAD de compra: 1 tarro, 1 rollo, 1 paquete.
-   SI deben quedarse en receta (son plata y se pueden contar):
-     carnes, pollo, salchichas, panes, quesos, tocineta, papa, salsas
-     de la casa, y los empaques C1 y P1.
+..................................................................
+INSUMO O GASTO:  COMO QUEDA CADA COSA
+..................................................................
+
+El sistema maneja 4 tipos de articulo. La diferencia es SI DESCUENTA
+SOLO AL VENDER o no:
+
+ 1) INSUMO DE RECETA
+    Va dentro de la receta de un plato. Cada vez que se vende el
+    plato, el sistema lo descuenta solo del inventario.
+    Sirve para lo que cuesta plata y se puede medir por plato.
+
+      Carnes .... Carne Angus, Carne de res, Baby Beef, Churrasco,
+                  Costilla, Pollo, Alitas, Tocineta ......... GRAMOS
+                  (Alitas va por UNIDAD)
+      Salchichas  Ideal, Ranchera, Suiza, Americana ......... UNIDAD
+      Panes ..... Hamburguesa, Perro, Brillo, Arepas ........ UNIDAD
+      Quesos .... Tajado, Americano (por LONJA),
+                  Vitafilado (GRAMOS), Cheddar (hoy LONJA;
+                  recomendado pasarlo a GRAMOS)
+      Papa ...... Papa a la francesa, Ripio de papa ......... GRAMOS
+      Verduras .. Cebolla cabezona y morada, Lechuga ........ GRAMOS
+                  Tomate (hoy UNIDAD; recomendado GRAMOS)
+                  Mazorcas, Limones, Aros de cebolla ........ UNIDAD
+      Salsas .... Mr Burger, Chimichurry, Pina Dieffer, BBQ,
+                  Salsa de tomate, Mostaza, Picante ..... MILILITROS
+
+ 2) VENTA DIRECTA
+    Se vende tal cual, sin cocinar: gaseosas, Coca Cola, agua,
+    cerveza. Va por UNIDAD.
+    OJO: hoy 11 bebidas NO tienen receta, o sea que al venderlas NO
+    baja el inventario. Para que baje, a cada bebida del menu hay
+    que ponerle de receta "1 unidad" de su insumo.
+
+ 3) DESECHABLE / EMPAQUE
+    C1, P1, Porta perro, bolsas T20-T40, vasos, copas y tapas,
+    servilletas, pitillos. Van por UNIDAD.
+    - C1 y P1 SI estan en las recetas como "solo para llevar":
+      se descuentan solos cuando el pedido es para llevar o domicilio.
+    - Los demas (vasos, servilletas, pitillos, bolsas) NO se
+      descuentan solos: se controlan con el conteo.
+
+ 4) GASTO OPERATIVO
+    Se compra y se registra la compra (para saber cuanta plata se
+    fue), pero NO va en ninguna receta y NO se descuenta al vender.
+    Es para lo que se usa "a ojo" y no vale la pena medir por plato.
+    Se controla contando de vez en cuando.
+
+      YA QUEDAN COMO GASTO con esta instalacion (antes estaban en
+      recetas y se quitaron):
+        Aceite ....... salia de: Papas a la Francesa (20 ml)
+        Mantequilla .. salia de: Desgranado Mixto, de Pollo, Ranchero
+                       y de Res, y Mazorca Americana (20 g c/u)
+        Vinagreta .... salia de: Asado Baby (5 ml)
+      (Si algun dia quieren volver a medirlos, se agregan otra vez a
+      esas recetas desde Administracion.)
+
+      YA ERAN GASTO:
+        Axion, Jabon en polvo, Limpido, Fabuloso, Esponjas,
+        Papel de bano, Papel de cocina, Rollos de impresora,
+        Guantes, Tapabocas.
+
+      RECOMENDADO CREAR COMO GASTO (no existen todavia):
+        Sal, Azucar, Rollo de datafono, Papel hamburguesa.
+        Y pasar a gasto: Papel aluminio (hoy esta como desechable
+        en GRAMOS; mejor por UNIDAD = 1 rollo).
+
+    Unidad de los gastos: la de COMPRA (1 tarro, 1 rollo, 1 paquete,
+    1 bolsa). No hace falta gramos ni mililitros.
+    El aceite se quedo en mililitros porque asi estaba y don Felix lo
+    conto en litros (15 litros = 15000 ml).
+
+EN CASO DE DUDA con un articulo nuevo, preguntense:
+   "Se puede decir cuanto lleva UN plato, y vale la pena?"
+      SI  -> insumo de receta (gramos, ml o unidad).
+      NO  -> gasto operativo (por unidad de compra).
 
 
 ------------------------------------------------------------------

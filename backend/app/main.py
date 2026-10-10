@@ -147,10 +147,12 @@ async def lifespan(app: FastAPI):
     # Conteo físico inicial: solo en la caja y una sola vez. A la nube llega por la sincronización.
     if settings.MODO_CEREBRO != "NUBE":
         try:
-            from app.services.inventario_inicial import aplicar_conteo_inicial
+            from app.services.inventario_inicial import aplicar_conteo_inicial, pasar_a_gasto_operativo
 
             with engine.begin() as conn_inv:
                 aplicar_conteo_inicial(conn_inv)
+            with engine.begin() as conn_gas:
+                pasar_a_gasto_operativo(conn_gas)
         except Exception as e_inv:
             import logging
             logging.error("No se pudo aplicar el conteo inicial de inventario: %s", e_inv)
