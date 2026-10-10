@@ -114,6 +114,8 @@ export const Admin: React.FC = () => {
   const [isNuevaCompraOpen, setIsNuevaCompraOpen] = useState(false)
   const [compraProveedor, setCompraProveedor] = useState('')
   const [compraDescripcion, setCompraDescripcion] = useState('')
+  const [compraAplicaIva, setCompraAplicaIva] = useState(true)
+  const [compraIvaTasa, setCompraIvaTasa] = useState(19)
   const [compraLineas, setCompraLineas] = useState<Array<{ ingrediente_id: number; cantidad: number; costo_unitario: number }>>([
     { ingrediente_id: 1, cantidad: 10, costo_unitario: 2500 },
   ])
@@ -646,8 +648,26 @@ export const Admin: React.FC = () => {
 
     setGuardandoCompra(true)
     try {
+      const subtotalCalc = compraLineas.reduce(
+        (acc, l) => acc + (Number(l.cantidad) || 0) * (Number(l.costo_unitario) || 0),
+        0
+      )
+      const factorIva = compraAplicaIva ? compraIvaTasa / 100 : 0
+      const ivaCalc = subtotalCalc * factorIva
+      const totalCalc = subtotalCalc + ivaCalc
+
+      const textoDetalle = [
+        compraProveedor ? `Proveedor: ${compraProveedor}` : '',
+        compraDescripcion ? `#Factura: ${compraDescripcion}` : '',
+        compraAplicaIva
+          ? `Subtotal: $${subtotalCalc.toLocaleString('es-CO')} | IVA (${compraIvaTasa}%): $${ivaCalc.toLocaleString('es-CO')} | Total a Pagar: $${totalCalc.toLocaleString('es-CO')}`
+          : `Total a Pagar: $${subtotalCalc.toLocaleString('es-CO')}`,
+      ]
+        .filter(Boolean)
+        .join('. ')
+
       await crearCompraApi({
-        descripcion: `${compraProveedor ? `Proveedor: ${compraProveedor}. ` : ''}${compraDescripcion}`.trim(),
+        descripcion: textoDetalle,
         detalles: compraLineas.map((l) => ({
           ingrediente_id: Number(l.ingrediente_id),
           cantidad: Number(l.cantidad),
@@ -851,11 +871,14 @@ export const Admin: React.FC = () => {
             <button
               onClick={() => {
                 if (tabActiva === 'DASHBOARD') cargarDashboard()
-                if (tabActiva === 'PLANILLA') cargarReporte()
-                if (tabActiva === 'COMPRAS') cargarCompras()
-                if (tabActiva === 'RECETAS') cargarProductosYRecetas()
-                if (tabActiva === 'AUDITORIA') cargarAuditoria()
-                if (tabActiva === 'PREPARADOS') cargarPreparados()
+                else if (tabActiva === 'PLANILLA') cargarReporte()
+                else if (tabActiva === 'COMPRAS') cargarCompras()
+                else if (tabActiva === 'RECETAS') cargarProductosYRecetas()
+                else if (tabActiva === 'AUDITORIA') cargarAuditoria()
+                else if (tabActiva === 'PREPARADOS') cargarPreparados()
+                else {
+                  window.location.reload()
+                }
               }}
               className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-200 transition cursor-pointer"
             >
@@ -1482,8 +1505,8 @@ export const Admin: React.FC = () => {
                                 <label className="block text-[10px] text-slate-500 mb-0.5 sm:hidden">Cantidad</label>
                                 <input
                                   type="number"
-                                  min="0.1"
-                                  step="0.1"
+                                  min="0.0001"
+                                  step="any"
                                   value={linea.cantidad}
                                   onChange={(e) => {
                                     const n = [...compraLineas]
@@ -1500,6 +1523,7 @@ export const Admin: React.FC = () => {
                                 <input
                                   type="number"
                                   min="0"
+                                  step="any"
                                   value={linea.costo_unitario}
                                   onChange={(e) => {
                                     const n = [...compraLineas]
@@ -1528,12 +1552,62 @@ export const Admin: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between font-bold text-sm">
-                      <span className="text-slate-400">Total Factura:</span>
-                      <span className="text-emerald-400 font-mono">
-                        ${compraLineas.reduce((acc, l) => acc + l.cantidad * l.costo_unitario, 0).toLocaleString('es-CO')} COP
-                      </span>
-                    </div>
+                    {/* Tarjeta de Cálculo de Subtotal, IVA 19% y Total Factura */}
+                    {(() => {
+                      const subtotal = compraLineas.reduce(
+                        (acc, l) => acc + (Number(l.cantidad) || 0) * (Number(l.costo_unitario) || 0),
+                        0
+                      )
+                      const factorIva = compraAplicaIva ? compraIvaTasa / 100 : 0
+                      const iva = subtotal * factorIva
+                      const totalFinal = subtotal + iva
+
+                      return (
+                        <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-2.5">
+                          <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
+                            <label className="flex items-center gap-2 cursor-pointer text-slate-200 font-bold text-xs select-none">
+                              <input
+                                type="checkbox"
+                                checked={compraAplicaIva}
+                                onChange={(e) => setCompraAplicaIva(e.target.checked)}
+                                className="w-4 h-4 rounded text-purple-600 bg-slate-900 border-slate-700 focus:ring-purple-500 cursor-pointer"
+                              />
+                              <span>Aplicar IVA 19% a esta Factura</span>
+                            </label>
+                            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                              compraAplicaIva
+                                ? 'bg-purple-950/80 border-purple-700 text-purple-300'
+                                : 'bg-slate-900 border-slate-700 text-slate-400'
+                            }`}>
+                              {compraAplicaIva ? 'IVA Régimen Común (19%)' : 'Exento / Sin IVA (0%)'}
+                            </span>
+                          </div>
+
+                          <div className="flex justify-between items-center text-xs text-slate-400">
+                            <span>Subtotal Insumos (Antes de IVA):</span>
+                            <span className="font-mono text-slate-200 font-medium">
+                              ${subtotal.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP
+                            </span>
+                          </div>
+
+                          {compraAplicaIva && (
+                            <div className="flex justify-between items-center text-xs text-purple-300">
+                              <span className="font-semibold">IVA Factura (19%):</span>
+                              <span className="font-mono font-bold">
+                                +${iva.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="flex justify-between items-center font-bold text-sm pt-2 border-t border-slate-800">
+                            <span className="text-white uppercase tracking-wide text-xs">Total Real a Pagar:</span>
+                            <span className="text-emerald-400 font-mono text-base font-black">
+                              ${totalFinal.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })()}
 
                     <div className="flex justify-end gap-2 pt-2">
                       <button
