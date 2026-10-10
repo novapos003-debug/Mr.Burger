@@ -11,6 +11,7 @@ from app.database import safe_commit
 from app.models import (
     Cierre,
     DetallePedido,
+    DetalleReceta,
     Ingrediente,
     Mesa,
     MovimientoCaja,
@@ -232,6 +233,22 @@ def asimilar_operacion(db: Session, op) -> None:
             u = db.get(Usuario, u_id) if u_id else None
             if u and payload.get("nueva_password_hash"):
                 u.password_hash = payload["nueva_password_hash"]
+
+        elif tipo == "MODIFICAR_RECETA":
+            p_id = payload.get("producto_id")
+            lineas = payload.get("lineas", [])
+            if p_id and isinstance(lineas, list):
+                db.query(DetalleReceta).filter(DetalleReceta.product_id == p_id).delete()
+                for l in lineas:
+                    db.add(
+                        DetalleReceta(
+                            product_id=p_id,
+                            ingrediente_id=l.get("ingrediente_id"),
+                            cantidad=Decimal(str(l.get("cantidad", 1))),
+                            unidad=l.get("unidad", "UNIDAD"),
+                            solo_llevar=l.get("solo_llevar", False),
+                        )
+                    )
     except Exception as e:
         # Antes se tragaba el error y dejaba la sesión inutilizable (-> HTTP 500 para TODO el lote).
         logger.warning("No se pudo asimilar la operación sync %s: %s", tipo, str(e).splitlines()[0][:300])

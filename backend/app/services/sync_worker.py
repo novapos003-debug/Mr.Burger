@@ -510,22 +510,23 @@ async def ejecutar_ciclo_pull() -> dict[str, Any]:
                         rec_resp = await client.get(f"{cloud_url}/api/ingredientes/productos/{pid}/receta", headers=auth_headers)
                         if rec_resp.status_code == 200:
                             lineas_cloud = rec_resp.json()
-                            db = SessionLocal()
-                            try:
-                                db.query(DetalleReceta).filter(DetalleReceta.product_id == pid).delete()
-                                for lc in lineas_cloud:
-                                    db.add(
-                                        DetalleReceta(
-                                            product_id=pid,
-                                            ingrediente_id=lc.get("ingrediente_id"),
-                                            cantidad=Decimal(str(lc.get("cantidad", 1))),
-                                            unidad=lc.get("unidad", "UNIDAD"),
-                                            solo_llevar=lc.get("solo_llevar", False),
+                            if lineas_cloud:
+                                db = SessionLocal()
+                                try:
+                                    db.query(DetalleReceta).filter(DetalleReceta.product_id == pid).delete()
+                                    for lc in lineas_cloud:
+                                        db.add(
+                                            DetalleReceta(
+                                                product_id=pid,
+                                                ingrediente_id=lc.get("ingrediente_id"),
+                                                cantidad=Decimal(str(lc.get("cantidad", 1))),
+                                                unidad=lc.get("unidad", "UNIDAD"),
+                                                solo_llevar=lc.get("solo_llevar", False),
+                                            )
                                         )
-                                    )
-                                safe_commit(db)
-                            finally:
-                                db.close()
+                                    safe_commit(db)
+                                finally:
+                                    db.close()
                 except Exception as e:
                     logger.warning(f"Aviso al sincronizar recetas de productos: {e}")
 

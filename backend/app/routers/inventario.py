@@ -13,6 +13,7 @@ from app.models import (
     Ingrediente,
     MovimientoInventario,
     Producto,
+    RegistroSync,
     Usuario,
 )
 from app.schemas import (
@@ -376,6 +377,33 @@ def reemplazar_receta(
         db, usuario, "MODIFICAR_RECETA", "producto", producto_id,
         f"lineas={len(lineas)}",
     )
+    from app.config import settings
+    if settings.MODO_CEREBRO == "LOCAL":
+        import uuid
+        try:
+            lineas_payload = [
+                {
+                    "ingrediente_id": l.ingrediente_id,
+                    "cantidad": float(l.cantidad),
+                    "unidad": l.unidad,
+                    "solo_llevar": l.solo_llevar,
+                }
+                for l in lineas
+            ]
+            op_sync = RegistroSync(
+                op_id=str(uuid.uuid4()),
+                sucursal_id=1,
+                dispositivo_id=f"USER_{usuario.id if usuario else 1}",
+                tipo="MODIFICAR_RECETA",
+                entidad="producto",
+                entidad_id=producto_id,
+                payload={"producto_id": producto_id, "lineas": lineas_payload},
+                origen="LOCAL",
+                estado="PENDIENTE",
+            )
+            db.add(op_sync)
+        except Exception:
+            pass
     safe_commit(db)
     return ver_receta(producto_id, db=db, _=None)
 
