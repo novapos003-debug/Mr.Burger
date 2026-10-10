@@ -47,7 +47,7 @@ async def _post_push(client: httpx.AsyncClient, cloud_url: str, operaciones: lis
     return await client.post(
         f"{cloud_url}/sync/push",
         headers={"X-Sync-Token": settings.CLOUD_SYNC_TOKEN, "Content-Type": "application/json"},
-        json={"dispositivo_id": settings.SUCURSAL_ID, "operaciones": operaciones},
+        json={"dispositivo_id": str(settings.SUCURSAL_ID or "SUC-01"), "operaciones": operaciones},
     )
 
 
@@ -114,7 +114,7 @@ async def ejecutar_ciclo_sync() -> dict[str, Any]:
     # 2. Verificar conectividad con la nube
     cloud_url = settings.CLOUD_SYNC_URL.rstrip("/")
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=20.0) as client:
             resp = await client.get(f"{cloud_url}/sync/health")
             if resp.status_code == 200:
                 _worker_status["online"] = True
@@ -145,13 +145,13 @@ async def ejecutar_ciclo_sync() -> dict[str, Any]:
                 pendientes_ids = [r.id for r in pendientes]
                 pendientes_data = [
                     {
-                        "op_id": r.op_id,
-                        "sucursal_id": r.sucursal_id,
-                        "dispositivo_id": r.dispositivo_id,
-                        "tipo": r.tipo,
-                        "entidad": r.entidad,
+                        "op_id": str(r.op_id),
+                        "sucursal_id": str(r.sucursal_id or "SUC-01"),
+                        "dispositivo_id": str(r.dispositivo_id or "CAJA_1"),
+                        "tipo": str(r.tipo),
+                        "entidad": str(r.entidad),
                         "entidad_id": r.entidad_id,
-                        "entidad_uuid": r.entidad_uuid,
+                        "entidad_uuid": str(r.entidad_uuid) if r.entidad_uuid else None,
                         "payload": r.payload,
                         "origen": "LOCAL",
                     }
@@ -255,7 +255,7 @@ async def _obtener_token_nube(client: httpx.AsyncClient, cloud_url: str) -> str 
             resp = await client.post(
                 f"{cloud_url}/api/auth/login",
                 data={"username": usr, "password": pwd},
-                timeout=6.0,
+                timeout=25.0,
             )
             if resp.status_code == 200:
                 data = resp.json()
@@ -276,7 +276,7 @@ async def replicar_admin_a_nube(metodo: str, endpoint: str, data: dict | list | 
 
     cloud_url = settings.CLOUD_SYNC_URL.rstrip("/")
     try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
+        async with httpx.AsyncClient(timeout=25.0) as client:
             token = await _obtener_token_nube(client, cloud_url)
             if not token:
                 return
@@ -308,7 +308,7 @@ async def ejecutar_ciclo_pull() -> dict[str, Any]:
     actualizaciones = {"productos": 0, "usuarios": 0, "configuracion": 0}
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             token = await _obtener_token_nube(client, cloud_url)
             if not token:
                 return actualizaciones

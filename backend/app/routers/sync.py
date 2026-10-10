@@ -97,7 +97,7 @@ def sincronizar_pull(
     origen: str | None = Query(default=None, pattern="^(LOCAL|NUBE)$"),
     limit: int = Query(default=100, le=500),
     db: Session = Depends(get_db),
-    _: Usuario = Depends(staff_required),
+    _: Usuario = Depends(sync_or_staff_required),
 ):
     """Descarga operaciones generadas para poner al día el terminal o el espejo en la nube."""
     return obtener_pull(db, since, origen, limit)
@@ -106,7 +106,7 @@ def sincronizar_pull(
 @router.get("/estado", response_model=SyncEstadoOut)
 def ver_estado_sync(
     db: Session = Depends(get_db),
-    _: Usuario = Depends(staff_required),
+    _: Usuario = Depends(sync_or_staff_required),
 ):
     """Consulta el estado del motor de sincronización y total de operaciones procesadas."""
     return obtener_estado_sync(db, modo=settings.MODO_CEREBRO)
@@ -114,7 +114,7 @@ def ver_estado_sync(
 
 @router.post("/forzar")
 async def forzar_sincronizacion_endpoint(
-    _: Usuario = Depends(staff_required),
+    _: Usuario = Depends(sync_or_staff_required),
 ):
     """Dispara inmediatamente un ciclo de sincronización manual sin esperar el temporizador."""
     resultado = await ejecutar_ciclo_sync()
