@@ -54,24 +54,31 @@ def aplicar_valores_iniciales(conn) -> None:
     if not _una_sola_vez(conn, "migracion_valores_iniciales_v1", "Valores iniciales de catálogo y empaques"):
         return
 
+    # La nube es un espejo: su catálogo llega de la caja. Si aplicara estos valores por su cuenta
+    # (por ejemplo al reiniciarse) quedaría distinta de la caja y el cambio no bajaría.
+    from app.config import settings
+
+    if settings.MODO_CEREBRO == "NUBE":
+        return
+
     # Productos e insumos de demostración del esquema base
     conn.execute(text("UPDATE producto SET activo = FALSE WHERE id IN (1, 2, 3, 4, 5, 6, 999);"))
     conn.execute(text("UPDATE ingrediente SET activo = FALSE WHERE id IN (1, 2, 3, 4, 5, 6, 7, 8, 9);"))
 
     # Empaques C1 y P1: se identifican por su id o por el prefijo del nombre. El patrón anterior
     # ('%porta perro%') también renombraba el insumo "Porta Perro" y creaba un P1 duplicado.
-    for patron, id_base, nombre, costo, precio in (
-        ("c1%", 61, "C1 (Empaque Térmico)", 500, 1500),
-        ("p1%", 68, "P1 (Porta Perro Caliente)", 350, 500),
+    # El costo no se rellena: un costo en $0 puede ser una decisión del dueño.
+    for patron, id_base, nombre, precio in (
+        ("c1%", 61, "C1 (Empaque Térmico)", 1500),
+        ("p1%", 68, "P1 (Porta Perro Caliente)", 500),
     ):
         conn.execute(
             text(
                 "UPDATE ingrediente SET nombre = :n, tipo_articulo = 'DESECHABLE_SERVICIO', activo = TRUE, "
-                "costo_unitario = CASE WHEN COALESCE(costo_unitario, 0) = 0 THEN :c ELSE costo_unitario END, "
                 "precio_venta = CASE WHEN COALESCE(precio_venta, 0) = 0 THEN :p ELSE precio_venta END "
                 "WHERE id = (SELECT id FROM ingrediente WHERE id = :i OR nombre ILIKE :pat ORDER BY (id = :i) DESC, id LIMIT 1)"
             ),
-            {"n": nombre, "c": costo, "p": precio, "i": id_base, "pat": patron},
+            {"n": nombre, "p": precio, "i": id_base, "pat": patron},
         )
 
     for bolsa, precio in (("Bolsa T20", 200), ("Bolsa T25", 300), ("Bolsa T30", 400), ("Bolsa T40", 500)):

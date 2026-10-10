@@ -200,17 +200,92 @@ estado_sistema.bat, tomale foto a la ventana y enviamela.
 
 
 ------------------------------------------------------------------
-PASO 8.  REVISAR CON EL DUENO (cuando ya este vendiendo)
+PASO 8.  INVENTARIO DE DON FELIX  (se carga solo, una sola vez)
+------------------------------------------------------------------
+
+Al instalar (Paso 1) el sistema hace SOLO estas dos cosas, una vez:
+
+ a) Pone en $0 el COSTO de todos los insumos, para que el dueno los
+    cargue desde el panel web. No toca el precio de venta de los
+    empaques (C1, P1, bolsas) ni los precios del menu.
+ b) Ajusta las existencias de 39 insumos con el conteo del cierre del
+    9 de octubre. Cada ajuste queda anotado en el historial (kardex).
+
+Lo que hizo queda escrito en el archivo
+     inventario_inicial_resultado.txt
+dentro de la carpeta del sistema. Abrelo y revisalo: dice AJUSTADO u
+OMITIDO por cada insumo. Un insumo se omite si en la caja no existe
+con ese nombre o tiene otra unidad; no inventa ni duplica nada.
+
+PRUEBA CON EL DUENO: que entre al panel web, edite el costo de un
+insumo y miren que en segundos aparece en la caja.
+
+NO SE CARGARON porque falta un dato. Hay que medir/contar y ponerlo
+a mano en la caja (Administracion > Inventario):
+
+   Carne Angus .......... pesar el rollo -> en GRAMOS
+   Pollo (27) ........... 27 que? pesar -> en GRAMOS
+   Queso vitafilado (6).. 6 paquetes? ver gramos del paquete -> GRAMOS
+   Cebolla cabezona (19). estan contadas por unidad -> pesar, GRAMOS
+   Lechuga batavia (7)... igual -> pesar, GRAMOS
+   Mantequilla (1 bloque) ver peso en la etiqueta -> GRAMOS
+   Vinagreta (1 tarro)... ver ml en la etiqueta -> MILILITROS
+   Queso cheddar (750 g). en el sistema esta por LONJA (ver abajo)
+   Bolsas T20/T25/T30 ... 1, 3 y 3: son bolsas sueltas o paquetes?
+   Pitillos ............. contar el medio paquete -> UNIDADES
+   Papel aluminio, guantes, jabon en polvo, Axion: ver abajo (gastos)
+
+NO EXISTEN en el sistema (hay que crearlos si se quieren controlar):
+   Desgranado de res (3), Desgranado de pollo (9), Chuzo de res (1),
+   Pepinos, Maicitos, Lulo (4), Bolsa 8x12 (2), Tapa vaso grande (50),
+   Papel hamburguesa, Rollo datafono (12), Azucar, Sal.
+
+RECOMENDACION DE UNIDADES (regla simple):
+   - Lo que se PESA al porcionar  -> GRAMOS
+     carnes, pollo, tocineta, papa, ripio, quesos en bloque,
+     verduras (tomate, cebolla, lechuga), mantequilla, maicitos.
+   - Lo LIQUIDO                   -> MILILITROS
+     salsas, chimichurry, vinagreta.
+   - Lo que se CUENTA             -> UNIDAD
+     panes, salchichas, gaseosas, agua, empaques, vasos, tapas,
+     bolsas, limones, chuzos, mazorcas.
+   Tres cambios que recomiendo conversar con el dueno:
+     1. TOMATE: hoy esta por unidad. Mejor en GRAMOS (una tajada no
+        es "un tomate"). Hay que cambiar las 5 recetas que lo usan.
+     2. QUESO CHEDDAR: lo compran por gramos (750 g) pero la receta
+        dice "lonjas". Pasarlo a GRAMOS y poner cuantos gramos lleva
+        cada plato.
+     3. MAZORCA / MAICITOS: si desgranan la mazorca, crear "Maicitos"
+        en GRAMOS y usar ese en las recetas, no la mazorca entera.
+
+QUE DEJAR COMO GASTO (se compra y se anota, pero NO va en recetas):
+   Es lo que se usa "a ojo" y no vale la pena medir por plato:
+     Aceite, Sal, Azucar, Mantequilla, Vinagreta, Papel aluminio,
+     Papel hamburguesa, Servilletas, Pitillos, Guantes,
+     Rollos de impresora y de datafono, y todo el aseo (jabon,
+     Axion, limpido, Fabuloso, esponjas, papel de bano).
+   Hoy Aceite (1 receta), Mantequilla (5 recetas) y Vinagreta
+   (1 receta) SI estan en recetas. Si el dueno esta de acuerdo, se
+   quitan de esas recetas y se marcan como "Gasto operativo".
+   Los gastos van por UNIDAD de compra: 1 tarro, 1 rollo, 1 paquete.
+   SI deben quedarse en receta (son plata y se pueden contar):
+     carnes, pollo, salchichas, panes, quesos, tocineta, papa, salsas
+     de la casa, y los empaques C1 y P1.
+
+
+------------------------------------------------------------------
+PASO 9.  REVISAR CON EL DUENO (cuando ya este vendiendo)
 ------------------------------------------------------------------
 
 No impiden vender, pero danan los reportes de costos e inventario:
 
- - "Porcion Ensalda" cuesta $1.000 por gramo (debe ser un error).
  - 11 bebidas no tienen receta: al venderlas no baja el inventario.
- - Salsas y alitas con costo $0.
- - 7 insumos con existencias negativas: hacer un conteo inicial.
- - "Porta Perro" esta dos veces.
- - Tomate, Queso Cheddar y empaque C1: revisar costo y precio.
+ - Todos los costos quedaron en $0 (Paso 8): hasta que el dueno los
+   cargue, los reportes de ganancia por plato salen sin costo.
+ - "Porcion Ensalda": decidir unidad y costo (antes decia $1.000/g).
+ - "P1" y "Porta Perro" son dos insumos distintos? (don Felix conto
+   90 y 100). Si son lo mismo, dejar uno solo.
+ - Empaque C1: revisar el precio que se le cobra al cliente.
 
 
 ==================================================================

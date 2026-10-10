@@ -123,6 +123,23 @@ def diferencias():
     return dif
 
 
+def detalle_diferencias(limite=6):
+    """Para diagnosticar un fallo: qué filas y columnas difieren entre la caja y la nube."""
+    partes = []
+    for tabla in diferencias():
+        if tabla == "configuracion":
+            continue
+        a = dict(q("prueba", f'select t.id, to_jsonb(t) from "{tabla}" t'))
+        b = dict(q("nube", f'select t.id, to_jsonb(t) from "{tabla}" t'))
+        for i in sorted(set(a) | set(b)):
+            if a.get(i) != b.get(i) and len(partes) < limite:
+                if i not in a or i not in b:
+                    partes.append(f"{tabla}#{i} solo en {'caja' if i in a else 'nube'}")
+                else:
+                    partes.append(f"{tabla}#{i} " + str({k: (a[i][k], b[i].get(k)) for k in a[i] if a[i][k] != b[i].get(k)}))
+    return "; ".join(partes)
+
+
 def pendientes_local():
     return q("prueba", "select count(*) from registro_sync where estado='PENDIENTE' and origen='LOCAL'")[0][0]
 
@@ -174,7 +191,7 @@ def main():
 
     print("\n[A] Copia inicial completa al espejo")
     listo, t = esperar_iguales(120)
-    ok("A1. tras el primer arranque la nube queda idéntica a la caja", listo, f"{t:.1f}s; difieren: {diferencias()}")
+    ok("A1. tras el primer arranque la nube queda idéntica a la caja", listo, f"{t:.1f}s; difieren: {diferencias()} {detalle_diferencias()}")
     ok("A2. no quedan operaciones con error", q("prueba", "select count(*) from registro_sync where estado like 'ERROR%'")[0][0] == 0)
     ok("A3. el dueño puede entrar al panel web con su usuario", login(URL_N, "admin") is not None)
 
@@ -203,7 +220,7 @@ def main():
     total = L.req("GET", f"/pedidos/{p['id']}", "admin").json()["total"]
     L.req("POST", f"/caja/pedidos/{p['id']}/cobrar", "caja", json={"pagos": [{"metodo": "EFECTIVO", "monto": total, "recibido": total}]})
     listo, t = esperar_iguales()
-    ok("B5. cobro, inventario, auditoría y base de caja: todo idéntico en la nube", listo, f"{t:.1f}s; difieren: {diferencias()}")
+    ok("B5. cobro, inventario, auditoría y base de caja: todo idéntico en la nube", listo, f"{t:.1f}s; difieren: {diferencias()} {detalle_diferencias()}")
     ok("B6. la base inicial de caja está en la nube", q("nube", "select count(*) from movimiento_caja where categoria='CAMBIO_INICIAL'")[0][0] >= 1)
     dash_l = L.req("GET", "/admin/dashboard", "admin").json()
     dash_n = N.req("GET", "/admin/dashboard", "admin").json()
@@ -217,7 +234,7 @@ def main():
     pid3 = L.req("POST", "/pedidos", "caja", json={"canal": "MOSTRADOR", "lineas": [{"producto_id": GASEOSA, "cantidad": 1}]}).json()["id"]
     L.req("POST", f"/caja/pedidos/{pid3}/cobrar", "caja", json={"pagos": [{"metodo": "VALE", "monto": "5500", "vale_cliente_nombre": "Vecino"}]})
     listo, t = esperar_iguales()
-    ok("C1. todo queda idéntico tras cancelar y fiar", listo, f"{t:.1f}s; difieren: {diferencias()}")
+    ok("C1. todo queda idéntico tras cancelar y fiar", listo, f"{t:.1f}s; difieren: {diferencias()} {detalle_diferencias()}")
     ok("C2. la nube ve el pedido cancelado y su pago devuelto",
        q("nube", "select estado from pedido where id=%s", pid)[0][0] == "CANCELADO" and q("nube", "select estado from pago where id=%s", pago)[0][0] == "DEVUELTO")
     ok("C3. la nube ve el vale pendiente", q("nube", "select count(*) from vale where estado='PENDIENTE'")[0][0] == 1)
@@ -240,7 +257,7 @@ def main():
     ok("E2. la caja informa que está sin conexión", est["online"] is False, str(est.get("ultimo_error")))
     lanzar("nube", 8901, "nube", "NUBE")
     listo, t = esperar_iguales(90)
-    ok("E3. al volver la nube todo se entrega solo", listo, f"{t:.1f}s; difieren: {diferencias()}")
+    ok("E3. al volver la nube todo se entrega solo", listo, f"{t:.1f}s; difieren: {diferencias()} {detalle_diferencias()}")
     ok("E4. el precio cambiado sin internet se conserva en la caja y llega a la nube",
        q("prueba", "select precio from producto where id=%s", PAPAS)[0][0] == 12500 == q("nube", "select precio from producto where id=%s", PAPAS)[0][0])
     ok("E5. la venta hecha sin internet conserva su hora real",
@@ -282,7 +299,7 @@ def main():
     ok("F10. un cambio de contraseña hecho en la web llega a la caja", visto, f"{lat:.1f}s")
 
     listo, t = esperar_iguales()
-    ok("F11. después de todo, caja y nube siguen idénticas", listo, f"{t:.1f}s; difieren: {diferencias()}")
+    ok("F11. después de todo, caja y nube siguen idénticas", listo, f"{t:.1f}s; difieren: {diferencias()} {detalle_diferencias()}")
 
     print("\n[G] Protecciones")
     op = {"op_id": "prueba-intruso-0001", "dispositivo_id": "otra-caja", "tipo": "FILA", "entidad": "usuario", "payload": {"pk": {"id": 1}, "fila": {"id": 1, "activo": False}}}
@@ -347,7 +364,7 @@ def main():
     r = httpx.post(URL_N + "/sync/reiniciar-espejo", headers={"X-Sync-Token": TOKEN}, json={"confirmar": "REINICIAR ESPEJO"}, timeout=60)
     ok("H2. con la frase, el espejo se vacía", r.status_code == 200 and q("nube", "select count(*) from pedido")[0][0] == 0, f"HTTP {r.status_code}")
     listo, t = esperar_iguales(120)
-    ok("H3. la caja lo detecta sola y vuelve a copiar todo", listo, f"{t:.1f}s; difieren: {diferencias()}")
+    ok("H3. la caja lo detecta sola y vuelve a copiar todo", listo, f"{t:.1f}s; difieren: {diferencias()} {detalle_diferencias()}")
     ok("H4. los datos de la caja no se tocaron", q("prueba", "select count(*) from pedido")[0][0] >= 8)
     archivo = q("nube", "select count(*) from information_schema.tables where table_schema='archivo' and table_name like 'pedido\\_\\_%'")[0][0]
     archivados = q("nube", "select coalesce(sum((xpath('/row/c/text()', query_to_xml('select count(*) as c from archivo.'||quote_ident(table_name), false, true, '')))[1]::text::int), 0) "

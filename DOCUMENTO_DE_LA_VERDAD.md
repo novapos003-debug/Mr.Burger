@@ -56,6 +56,14 @@ Qué pasó con cada riesgo de la [sección 14](#14-discrepancias-y-riesgos-detec
 - `scripts/verificar_token.py`: comprueba el token contra la nube (solo lectura). Si el `.env` del restaurante conserva el token viejo, lo detecta y pide el nuevo.
 - Detección de Python ejecutándolo de verdad: en algunos Windows `python` es un acceso a la Tienda que no funciona.
 
+**Conteo físico inicial (`backend/app/services/inventario_inicial.py`):** al arrancar por primera
+vez esta versión, la caja (nunca la nube) deja en $0 el costo de todos los insumos —el dueño los
+cargará desde el panel web— y ajusta las existencias de los insumos contados el 9 de octubre, con
+su movimiento `AJUSTE` en el kardex. Se ejecuta una sola vez (bandera
+`migracion_inventario_20261009`), busca cada insumo por nombre y omite lo que no exista o tenga
+otra unidad. Deja el detalle en `inventario_inicial_resultado.txt`. De paso se corrigió que la nube,
+al reiniciarse, le devolvía el costo de fábrica al C1 y al P1 cuando estaban en $0.
+
 ### Datos que hay que revisar con el dueño
 
 Encontrados al analizar el respaldo; **no se modificaron** porque son decisiones del negocio.

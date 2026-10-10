@@ -35,3 +35,6 @@ media_data/
 *.log
 # Archivos temporales de la CLI de Supabase
 supabase/
+
+# Informe que deja el conteo inicial de inventario en la caja
+inventario_inicial_resultado.txt
