@@ -29,7 +29,9 @@ class Settings(BaseSettings):
     SYNC_INTERVAL_SECONDS: int = 5  # Intervalo máximo entre ciclos; los cambios nuevos se envían al instante
 
     class Config:
-        env_file = (str(_ENV_PATH), ".env")
+        # El último archivo de la lista manda: el .env de la raíz del proyecto (el que escribe
+        # configurar_sincronizacion_windows.bat) le gana a un backend/.env de una instalación vieja.
+        env_file = (".env", str(_ENV_PATH))
         extra = "ignore"
 
 

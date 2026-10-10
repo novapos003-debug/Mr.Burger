@@ -21,6 +21,18 @@ taskkill /F /FI "WINDOWTITLE eq MrBurger-Backend*" >nul 2>nul
 taskkill /F /FI "WINDOWTITLE eq MrBurger-Frontend*" >nul 2>nul
 %PY_CMD% liberar_puertos.py >nul 2>nul
 
+:: La sincronizacion se toma SIEMPRE del archivo .env de esta carpeta y se le entrega al
+:: backend de forma explicita. Asi no puede ganarle un valor viejo que haya quedado en una
+:: variable de Windows o en otro archivo .env de una instalacion anterior.
+set "CLOUD_SYNC_TOKEN="
+set "CLOUD_SYNC_URL="
+set "CLOUD_SYNC_ENABLED="
+if exist ".env" for /f "usebackq eol=# tokens=1,* delims==" %%A in (".env") do (
+    if /i "%%A"=="CLOUD_SYNC_TOKEN" set "CLOUD_SYNC_TOKEN=%%B"
+    if /i "%%A"=="CLOUD_SYNC_URL" set "CLOUD_SYNC_URL=%%B"
+    if /i "%%A"=="CLOUD_SYNC_ENABLED" set "CLOUD_SYNC_ENABLED=%%B"
+)
+
 :: 1. Backend. La base es siempre la local de este computador; la clave de sesiones la
 ::    genera el propio backend (backend\.secret_key) y el token de la nube sale de .env
 echo [1/3] Iniciando Cerebro Backend (Puerto 8000)...
