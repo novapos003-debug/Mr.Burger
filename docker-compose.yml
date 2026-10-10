@@ -36,14 +36,14 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-restaurante}:${POSTGRES_PASSWORD:-restaurante_dev}@db:5432/${POSTGRES_DB:-restaurante}
-      SECRET_KEY: ${SECRET_KEY:-dev_secret_cambiar_en_produccion}
+      SECRET_KEY: ${SECRET_KEY:-}   # vacio = el backend genera una propia (backend/.secret_key)
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-720}
       TZ: ${TZ:-America/Bogota}
       ZONA_HORARIA: ${ZONA_HORARIA:-America/Bogota}
       CLOUD_SYNC_ENABLED: ${CLOUD_SYNC_ENABLED:-true}
       CLOUD_SYNC_URL: ${CLOUD_SYNC_URL:-https://mrburger-api.onrender.com}
-      CLOUD_SYNC_TOKEN: ${CLOUD_SYNC_TOKEN:-mrburger_sync_secret_token_2026}
-      SYNC_INTERVAL_SECONDS: ${SYNC_INTERVAL_SECONDS:-10}
+      CLOUD_SYNC_TOKEN: ${CLOUD_SYNC_TOKEN:-}   # obligatorio para sincronizar; definir en .env
+      SYNC_INTERVAL_SECONDS: ${SYNC_INTERVAL_SECONDS:-5}
     ports:
       - "8000:8000"
     volumes:

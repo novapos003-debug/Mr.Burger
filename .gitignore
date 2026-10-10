@@ -11,6 +11,10 @@ ENV/
 .env
 .env.local
 .env.cloud
+.env.tmp
+pruebas/log_*.txt
+.secret_key
+backend/.secret_key
 
 # Node y Frontend
 node_modules/
@@ -29,3 +33,5 @@ media_data/
 .idea/
 .DS_Store
 *.log
+# Archivos temporales de la CLI de Supabase
+supabase/

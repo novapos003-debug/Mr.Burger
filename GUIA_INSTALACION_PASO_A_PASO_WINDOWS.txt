@@ -93,7 +93,7 @@ FASE 5: ABRIR EL FIREWALL DE WINDOWS (1 CLIC COMO ADMINISTRADOR)
 FASE 6: CONFIGURAR LA IMPRESORA TÉRMICA Y GAVETA EN LA CAJA
 ================================================================================
 1. En la app abierta de Mr. Burger en la PC (http://localhost:5173), inicia sesión:
-   - Usuario: El cajero que creaste ayer (o admin / admin123)
+   - Usuario: El cajero que creaste ayer (o con el administrador y la clave que definiste al instalar)
 2. Haz clic en "ABRIR TURNO":
    - Ingresa el monto de base inicial en efectivo (ej. $150.000).
    - Confirma la apertura (se registra contablemente como CAMBIO_INICIAL).
@@ -110,7 +110,7 @@ FASE 7: CONECTAR LA TABLET DE COCINA (KDS)
    Ejemplo: http://192.168.1.150:5173
 3. Inicia sesión con el rol de COCINA:
    - Usuario: cocina
-   - Clave:   cocina123
+   - Clave:   la que definiste para cocina al instalar
 4. 🔔 PASO VITAL: En la barra superior de Cocina, toca una sola vez el botón:
    "PROBAR SONIDO"
    (Esto autoriza al navegador a sonar la campana "Ding-Dong" cuando entren comandas).
@@ -124,7 +124,7 @@ En cada celular de mesero (conectado al Wi-Fi del restaurante):
    Ejemplo: http://192.168.1.150:5173
 2. Inicia sesión con el rol de MESERO:
    - Usuario: mesero
-   - Clave:   mesero123
+   - Clave:   la que definiste para el mesero al instalar
 3. Toca los 3 puntos de Chrome > "Agregar a pantalla principal".
 4. Verán el icono de Mr. Burger en su pantalla de inicio como una app nativa.
 

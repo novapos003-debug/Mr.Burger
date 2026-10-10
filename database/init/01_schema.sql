@@ -215,10 +215,12 @@ CREATE TABLE detalle_pedido (
     preparado_en        TIMESTAMPTZ,                    -- cuando cocina ACEPTA -> momento de descuento de insumos
     listo_en            TIMESTAMPTZ,
     entregado_en        TIMESTAMPTZ,
-    cancelado_en        TIMESTAMPTZ
+    cancelado_en        TIMESTAMPTZ,
+    clave_idempotencia  VARCHAR(100)                    -- evita duplicar una ronda si el celular reintenta
 );
 
 CREATE INDEX idx_detalle_pedido ON detalle_pedido (pedido_id);
+CREATE INDEX ix_detalle_pedido_clave_idempotencia ON detalle_pedido (clave_idempotencia);
 CREATE INDEX idx_detalle_estado ON detalle_pedido (estado);
 
 -- ============================================================
@@ -252,7 +254,8 @@ CREATE TABLE vale (
     cliente_cedula    VARCHAR(20),
     cliente_telefono  VARCHAR(30),
     monto             NUMERIC(12,2) NOT NULL,
-    estado            VARCHAR(15) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE','COBRADO')),
+    estado            VARCHAR(15) NOT NULL DEFAULT 'PENDIENTE'
+                      CONSTRAINT ck_vale_estado CHECK (estado IN ('PENDIENTE','COBRADO','ANULADO')),
     cobrado_por       INT REFERENCES usuario(id),
     cobrado_en        TIMESTAMPTZ,
     creado_en         TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -266,7 +269,8 @@ CREATE TABLE movimiento_caja (
     usuario_id   INT NOT NULL REFERENCES usuario(id),    -- administrador
     tipo         VARCHAR(10) NOT NULL CHECK (tipo IN ('ENTRADA','SALIDA')),
     categoria    VARCHAR(20) NOT NULL
-                 CHECK (categoria IN ('PAGO_TURNO','PRESTAMO','ADELANTO','PROVEEDOR','DEVOLUCION','COBRO_VALE','CAMBIO_INICIAL','OTRO')),
+                 CONSTRAINT ck_movcaja_categoria
+                 CHECK (categoria IN ('PAGO_TURNO','PRESTAMO','ADELANTO','PROVEEDOR','DEVOLUCION','COBRO_VALE','CAMBIO_INICIAL','GASTO_OPERATIVO','OTRO')),
     concepto     VARCHAR(100) NOT NULL,
     descripcion  TEXT NOT NULL,                          -- OBLIGATORIA (regla del dueño)
     valor        NUMERIC(12,2) NOT NULL,                 -- SIEMPRE positivo; el signo lo da tipo

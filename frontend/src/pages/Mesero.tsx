@@ -142,10 +142,19 @@ export const Mesero: React.FC = () => {
   // Sincronización automática de pedidos pendientes por microcortes Wi-Fi
   useEffect(() => {
     const handleSync = async () => {
-      const res = await syncPendingOrders((_, msg) => {
-        setSuccessBanner(`¡Sincronizado! ${msg}`)
-        cargarDatos()
-      })
+      const res = await syncPendingOrders(
+        (_, msg) => {
+          setSuccessBanner(`¡Sincronizado! ${msg}`)
+          cargarDatos()
+        },
+        (orden, motivo) => {
+          // Una comanda guardada que el servidor rechaza no puede perderse en silencio
+          setErrorBanner(
+            `⚠️ La comanda guardada de la Mesa #${orden.mesaNumero || '?'} NO se pudo enviar: ${motivo}. Vuelve a tomarla.`
+          )
+          cargarDatos()
+        }
+      )
       setOfflineCount(res.pendientes)
     }
 
@@ -295,6 +304,7 @@ export const Mesero: React.FC = () => {
         await agregarRondaApi(pedidoActivo.id, {
           ronda: nextRonda,
           tipo_consumo: tipoConsumo,
+          idempotency_key: idempotencyKey,
           lineas: lineasConsolidadas,
         })
 
@@ -340,6 +350,8 @@ export const Mesero: React.FC = () => {
             payloadRonda: {
               ronda: nextRonda,
               tipo_consumo: tipoConsumo,
+              // misma clave del intento original: si aquel sí llegó, el servidor no la duplica
+              idempotency_key: idempotencyKey,
               lineas: cartItems.map((item) => ({
                 producto_id: item.producto.id,
                 cantidad: item.cantidad,

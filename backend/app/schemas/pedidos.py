@@ -30,6 +30,7 @@ class RondaIn(BaseModel):
     ronda: int = Field(gt=0)
     lineas: list[DetallePedidoIn] = Field(min_length=1)
     tipo_consumo: str | None = Field(default=None, pattern="^(LOCAL|LLEVAR)$")
+    idempotency_key: str | None = Field(default=None, max_length=100)
 
 
 class DetallePedidoOut(BaseModel):

@@ -20,6 +20,7 @@ from app.models.usuario import Rol, Usuario
 from app.models.asistencia import TurnoLaboral
 
 import app.core.demo  # noqa: E402,F401  (registra los listeners de trazabilidad demo)
+import app.core.replicacion  # noqa: E402,F401  (registra la captura de cambios para la sincronización)
 
 __all__ = [
     "Categoria",

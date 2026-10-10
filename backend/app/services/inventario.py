@@ -202,10 +202,15 @@ def descontar_insumos_de_producto(
     pedido_id: int | None = None,
     referencia_base: str = "",
     es_llevar: bool = False,
+    tipo: str = "VENTA",
+    permitir_negativo: bool = False,
 ) -> list[MovimientoInventario]:
     """Descuenta atómicamente del inventario los insumos requeridos para producir
     `cantidad` del producto `producto_id`, dejando saldo anterior, saldo nuevo
     y el movimiento de auditoría correspondiente.
+
+    `tipo` es el tipo de movimiento (VENTA o MERMA). `permitir_negativo` ignora la política
+    BLOQUEAR: una merma registra algo que YA se perdió, no se puede rechazar por falta de stock.
     """
     if cantidad <= Decimal("0"):
         return []
@@ -242,7 +247,7 @@ def descontar_insumos_de_producto(
         saldo_ant = ing.stock_actual or Decimal("0")
         saldo_nuevo = saldo_ant - cant_consumo
 
-        if politica == "BLOQUEAR" and saldo_nuevo < Decimal("0"):
+        if politica == "BLOQUEAR" and saldo_nuevo < Decimal("0") and not permitir_negativo:
             raise ValueError(
                 f"Stock insuficiente para {ing.nombre}: disponible {saldo_ant} {ing.unidad_base}, requerido {cant_consumo} {ing.unidad_base}"
             )
@@ -260,35 +265,11 @@ def descontar_insumos_de_producto(
             saldo_anterior=saldo_ant,
             saldo_nuevo=saldo_nuevo,
             costo_unitario_momento=costo_unit,
-            tipo="VENTA",
+            tipo=tipo,
             referencia=referencia_base or f"Venta {int(cantidad)}x {info['nombre']}",
         )
         db.add(mov)
         db.flush()
         movimientos.append(mov)
-
-        # Encolar en registro_sync (Patrón Outbox) para sincronización con la nube
-        from app.services.sync import encolar_sync
-
-        encolar_sync(
-            db,
-            tipo="DESCUENTO_STOCK",
-            entidad="movimiento_inventario",
-            payload={
-                "id": mov.id,
-                "ingrediente_id": ing.id,
-                "ingrediente_nombre": info.get("nombre", ing.nombre),
-                "pedido_id": pedido_id,
-                "cantidad": float(mov.cantidad),
-                "unidad": mov.unidad,
-                "saldo_anterior": float(mov.saldo_anterior) if mov.saldo_anterior is not None else None,
-                "saldo_nuevo": float(mov.saldo_nuevo) if mov.saldo_nuevo is not None else None,
-                "stock_actual_checkpoint": float(ing.stock_actual) if ing.stock_actual is not None else None,
-                "tipo": "VENTA",
-                "referencia": mov.referencia,
-            },
-            entidad_id=mov.id,
-            dispositivo_id=f"USER_{usuario_id}",
-        )
 
     return movimientos

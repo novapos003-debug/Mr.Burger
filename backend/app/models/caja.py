@@ -22,6 +22,7 @@ CATEGORIAS_CAJA = (
     "DEVOLUCION",
     "COBRO_VALE",
     "CAMBIO_INICIAL",
+    "GASTO_OPERATIVO",
     "OTRO",
 )
 
@@ -95,7 +96,8 @@ class Pago(Base):
 
 
 class Vale(Base):
-    """Pagaré de persona de confianza: queda PENDIENTE hasta que se cobra en caja."""
+    """Pagaré de persona de confianza: queda PENDIENTE hasta que se cobra en caja.
+    ANULADO = la venta se devolvió o canceló; el pagaré ya no es una deuda."""
 
     __tablename__ = "vale"
 
@@ -115,7 +117,7 @@ class Vale(Base):
     usuario = relationship("Usuario", foreign_keys=[cobrado_por])
 
     __table_args__ = (
-        CheckConstraint("estado IN ('PENDIENTE','COBRADO')", name="ck_vale_estado"),
+        CheckConstraint("estado IN ('PENDIENTE','COBRADO','ANULADO')", name="ck_vale_estado"),
     )
 
 

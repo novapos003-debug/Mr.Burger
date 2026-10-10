@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Navbar } from '../components/Navbar'
+import { useCocinaWebSocket } from '../hooks/useCocinaWebSocket'
 import {
   getDashboardApi,
   getReporteVentasApi,
@@ -628,6 +629,52 @@ export const Admin: React.FC = () => {
     }).catch(() => {})
   }, [])
 
+  // ---- Actualización en vivo ----
+  // El panel escucha los mismos eventos que caja y cocina. Cada venta, cobro o cambio que
+  // ocurra en el restaurante (o que llegue sincronizado a la web) refresca los datos sin
+  // tocar nada. Se refresca en silencio: no muestra el indicador de carga ni borra lo escrito.
+  const tabActivaRef = useRef(tabActiva)
+  tabActivaRef.current = tabActiva
+  const filtroAccionRef = useRef(filtroAccion)
+  filtroAccionRef.current = filtroAccion
+  const refrescoPendienteRef = useRef<number | null>(null)
+  const [ultimaActualizacion, setUltimaActualizacion] = useState<Date | null>(null)
+
+  const refrescarEnVivo = useCallback(() => {
+    if (refrescoPendienteRef.current !== null) return // agrupa ráfagas de eventos en un solo refresco
+    refrescoPendienteRef.current = window.setTimeout(async () => {
+      refrescoPendienteRef.current = null
+      try {
+        setDashData(await getDashboardApi())
+        setDashError(null)
+        setUltimaActualizacion(new Date())
+      } catch {
+        // sin conexión momentánea: el próximo evento o el temporizador lo reintenta
+      }
+      const tab = tabActivaRef.current
+      if (tab === 'COMPRAS') getComprasApi().then(setCompras).catch(() => {})
+      if (tab === 'PREPARADOS') getPreparadosApi('DISPONIBLE').then(setPreparados).catch(() => {})
+      if (tab === 'AUDITORIA') {
+        getAuditoriaApi({ accion: filtroAccionRef.current || undefined, limit: 100 }).then(setAuditoria).catch(() => {})
+      }
+    }, 700)
+  }, [])
+
+  const { status: wsStatus } = useCocinaWebSocket({
+    onNewOrder: refrescarEnVivo,
+    onOrderUpdate: refrescarEnVivo,
+    onCatalogUpdate: refrescarEnVivo,
+  })
+
+  useEffect(() => {
+    // Respaldo por si la conexión en vivo se cae: refresco cada 30 segundos
+    const timer = window.setInterval(refrescarEnVivo, 30000)
+    return () => {
+      window.clearInterval(timer)
+      if (refrescoPendienteRef.current !== null) window.clearTimeout(refrescoPendienteRef.current)
+    }
+  }, [refrescarEnVivo])
+
   useEffect(() => {
     getParametrosConfiguracion().then((cfg) => {
       if (cfg.iva_porcentaje !== undefined) {
@@ -859,6 +906,22 @@ export const Admin: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            <span
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold ${
+                wsStatus === 'conectado'
+                  ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300'
+                  : 'bg-amber-950/60 border-amber-800 text-amber-300'
+              }`}
+              title={
+                ultimaActualizacion
+                  ? `Última actualización automática: ${ultimaActualizacion.toLocaleTimeString('es-CO')}`
+                  : 'Los datos se actualizan solos cuando hay movimientos'
+              }
+            >
+              <span className={`w-2 h-2 rounded-full ${wsStatus === 'conectado' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              <span>{wsStatus === 'conectado' ? 'En vivo' : 'Reconectando…'}</span>
+            </span>
+
             <button
               onClick={() => setIsGastosModalOpen(true)}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-700/80 text-xs font-black text-rose-200 transition cursor-pointer shadow-lg shadow-rose-950/40"

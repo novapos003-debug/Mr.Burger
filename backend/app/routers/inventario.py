@@ -143,13 +143,6 @@ def crear_ingrediente(
     registrar(db, usuario, "CREAR_INGREDIENTE", "ingrediente", ing.id, ing.nombre)
     safe_commit(db)
     db.refresh(ing)
-    try:
-        import asyncio
-        from app.services.sync_worker import replicar_admin_a_nube
-        ing_dict = {k: float(v) if isinstance(v, Decimal) else v for k, v in data.model_dump().items()}
-        asyncio.create_task(replicar_admin_a_nube("POST", "/ingredientes", ing_dict))
-    except Exception:
-        pass
     return to_ingrediente_out(ing)
 
 
@@ -202,13 +195,6 @@ async def actualizar_ingrediente(
         )
     safe_commit(db)
     db.refresh(ing)
-    try:
-        import asyncio
-        from app.services.sync_worker import replicar_admin_a_nube
-        cambios_ser = {k: float(v) if isinstance(v, Decimal) else v for k, v in cambios.items()}
-        asyncio.create_task(replicar_admin_a_nube("PUT", f"/ingredientes/{ingrediente_id}", cambios_ser))
-    except Exception:
-        pass
     await ws_manager.broadcast({"evento": "catalogo_actualizado", "data": {"tipo": "stock", "id": ing.id}})
     return to_ingrediente_out(ing)
 
@@ -228,12 +214,6 @@ def desactivar_ingrediente(
     ing.activo = False
     registrar(db, usuario, "DESACTIVAR_INGREDIENTE", "ingrediente", ing.id, ing.nombre)
     safe_commit(db)
-    try:
-        import asyncio
-        from app.services.sync_worker import replicar_admin_a_nube
-        asyncio.create_task(replicar_admin_a_nube("DELETE", f"/ingredientes/{ingrediente_id}"))
-    except Exception:
-        pass
 
 
 # ============================================================
@@ -377,37 +357,6 @@ def reemplazar_receta(
         db, usuario, "MODIFICAR_RECETA", "producto", producto_id,
         f"lineas={len(lineas)}",
     )
-    from app.config import settings
-    if settings.MODO_CEREBRO == "LOCAL":
-        import uuid
-        try:
-            lineas_payload = [
-                {
-                    "ingrediente_id": l.ingrediente_id,
-                    "cantidad": float(l.cantidad),
-                    "unidad": l.unidad,
-                    "solo_llevar": l.solo_llevar,
-                }
-                for l in lineas
-            ]
-            op_sync = RegistroSync(
-                op_id=str(uuid.uuid4()),
-                sucursal_id=1,
-                dispositivo_id=f"USER_{usuario.id if usuario else 1}",
-                tipo="MODIFICAR_RECETA",
-                entidad="producto",
-                entidad_id=producto_id,
-                payload={"producto_id": producto_id, "lineas": lineas_payload},
-                origen="LOCAL",
-                estado="PENDIENTE",
-            )
-            db.add(op_sync)
-
-            import asyncio
-            from app.services.sync_worker import replicar_admin_a_nube
-            asyncio.create_task(replicar_admin_a_nube("PUT", f"/ingredientes/productos/{producto_id}/receta", lineas_payload))
-        except Exception:
-            pass
     safe_commit(db)
     return ver_receta(producto_id, db=db, _=None)
 
@@ -516,8 +465,8 @@ async def registrar_merma(
         if not ing:
             raise HTTPException(status_code=404, detail="Ingrediente no encontrado")
 
-        saldo_ant = ing.stock_actual
-        ing.stock_actual -= data.cantidad
+        saldo_ant = ing.stock_actual or Decimal("0")
+        ing.stock_actual = saldo_ant - data.cantidad
 
         mov = MovimientoInventario(
             ingrediente_id=ing.id,
@@ -543,76 +492,40 @@ async def registrar_merma(
             f"insumo={ing.nombre} cant={data.cantidad} {ing.unidad_base} motivo={motivo_limpio}",
         )
 
-        from app.services.sync import encolar_sync
-        encolar_sync(
-            db,
-            tipo="DESCUENTO_STOCK",
-            entidad="ingrediente",
-            payload={
-                "ingrediente_id": ing.id,
-                "nombre": ing.nombre,
-                "cantidad_descontada": float(data.cantidad),
-                "stock_actual_checkpoint": float(ing.stock_actual),
-                "tipo_movimiento": "MERMA",
-                "referencia": motivo_limpio,
-            },
-            entidad_id=ing.id,
-            dispositivo_id=f"MERMA_{usuario.id}",
-        )
 
     elif data.producto_id:
-        prod = (
-            db.query(Producto)
-            .options(joinedload(Producto.recetas).joinedload(DetalleReceta.ingrediente))
-            .filter(Producto.id == data.producto_id)
-            .first()
-        )
+        prod = db.get(Producto, data.producto_id)
         if not prod:
             raise HTTPException(status_code=404, detail="Producto no encontrado")
-        if not prod.recetas:
-            raise HTTPException(status_code=422, detail=f"El producto '{prod.nombre}' no tiene receta configurada para descontar")
 
-        for r in prod.recetas:
-            ing = r.ingrediente
-            cant_a_descontar = r.cantidad * data.cantidad
-            saldo_ant = ing.stock_actual
-            ing.stock_actual -= cant_a_descontar
+        # Misma expansión que una venta: convierte unidades y resuelve combos. Los empaques
+        # "solo llevar" no cuentan (el plato dañado no se empacó) y nunca se rechaza por falta
+        # de stock: la merma registra algo que ya se perdió.
+        from app.services.inventario import descontar_insumos_de_producto
 
-            mov = MovimientoInventario(
-                ingrediente_id=ing.id,
-                usuario_id=usuario.id,
-                cantidad=-cant_a_descontar,
-                unidad=r.unidad or ing.unidad_base,
-                saldo_anterior=saldo_ant,
-                saldo_nuevo=ing.stock_actual,
-                costo_unitario_momento=ing.costo_unitario,
-                tipo="MERMA",
-                referencia=f"Merma plato: {prod.nombre} x{data.cantidad} - {motivo_limpio}",
+        movimientos = descontar_insumos_de_producto(
+            db=db,
+            producto_id=prod.id,
+            cantidad=data.cantidad,
+            usuario_id=usuario.id,
+            referencia_base=f"Merma plato: {prod.nombre} x{data.cantidad} - {motivo_limpio}",
+            es_llevar=False,
+            tipo="MERMA",
+            permitir_negativo=True,
+        )
+        if not movimientos:
+            raise HTTPException(
+                status_code=422,
+                detail=f"El producto '{prod.nombre}' no tiene receta configurada para descontar",
             )
-            db.add(mov)
+        for mov in movimientos:
+            ing = db.get(Ingrediente, mov.ingrediente_id)
             descontados.append({
-                "ingrediente": ing.nombre,
-                "cantidad": float(cant_a_descontar),
-                "unidad": r.unidad or ing.unidad_base,
-                "stock_restante": float(ing.stock_actual),
+                "ingrediente": ing.nombre if ing else str(mov.ingrediente_id),
+                "cantidad": float(-mov.cantidad),
+                "unidad": mov.unidad,
+                "stock_restante": float(mov.saldo_nuevo),
             })
-
-            from app.services.sync import encolar_sync
-            encolar_sync(
-                db,
-                tipo="DESCUENTO_STOCK",
-                entidad="ingrediente",
-                payload={
-                    "ingrediente_id": ing.id,
-                    "nombre": ing.nombre,
-                    "cantidad_descontada": float(cant_a_descontar),
-                    "stock_actual_checkpoint": float(ing.stock_actual),
-                    "tipo_movimiento": "MERMA",
-                    "referencia": f"{prod.nombre} x{data.cantidad}: {motivo_limpio}",
-                },
-                entidad_id=ing.id,
-                dispositivo_id=f"MERMA_{usuario.id}",
-            )
 
         registrar(
             db, usuario, "REGISTRAR_MERMA", "producto", prod.id,

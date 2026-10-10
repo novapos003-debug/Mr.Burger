@@ -99,6 +99,8 @@ class DetallePedido(Base):
     listo_en = Column(DateTime(timezone=True))
     entregado_en = Column(DateTime(timezone=True))
     cancelado_en = Column(DateTime(timezone=True))
+    # Identifica el envío de una ronda: si el celular reintenta por Wi-Fi inestable, no se duplica
+    clave_idempotencia = Column(String(100), index=True)
 
     pedido = relationship("Pedido", back_populates="detalles")
     producto = relationship("Producto")

@@ -6,8 +6,8 @@ class SyncOpIn(BaseModel):
     op_id: str = Field(min_length=8, max_length=64, description="UUID idempotente generado por el terminal")
     sucursal_id: str = Field(default="SUC-01", max_length=20)
     dispositivo_id: str = Field(min_length=2, max_length=50)
-    tipo: str = Field(description="CREAR_PEDIDO, AGREGAR_RONDA, COBRO, CANCELAR, MODIFICAR_PRECIO...")
-    entidad: str = Field(description="pedido, detalle_pedido, pago, producto, etc.")
+    tipo: str = Field(max_length=50, description="FILA (insertar o actualizar la fila) | BORRAR")
+    entidad: str = Field(max_length=50, description="Nombre de la tabla")
     entidad_id: int | None = None
     entidad_uuid: str | None = None
     payload: dict
@@ -36,8 +36,8 @@ class SyncOpOut(BaseModel):
 
 
 class SyncPushIn(BaseModel):
-    dispositivo_id: str
-    operaciones: list[SyncOpIn] = Field(min_length=1)
+    dispositivo_id: str = Field(min_length=2, max_length=50, description="Identificador de la instalación (caja) que envía")
+    operaciones: list[SyncOpIn] = Field(min_length=1, max_length=500)
 
 
 class SyncOpResultado(BaseModel):
@@ -55,6 +55,21 @@ class SyncPushOut(BaseModel):
     errores: int = 0
     operaciones: list[SyncOpOut]
     resultados: list[SyncOpResultado] = []
+
+
+class SyncCambiosOut(BaseModel):
+    """Cambios del panel web pendientes de aplicar en la caja."""
+
+    espejo_id: str
+    operaciones: list[SyncOpOut]
+
+
+class SyncConfirmarIn(BaseModel):
+    hasta_id: int = Field(ge=0)
+
+
+class SyncReiniciarIn(BaseModel):
+    confirmar: str
 
 
 class SyncEstadoOut(BaseModel):

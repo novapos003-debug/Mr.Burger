@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 import time
 from collections import defaultdict
 
+from app.config import settings
 from app.core.deps import get_current_user
 from app.core.security import create_access_token, verify_password
 from app.database import get_db, safe_commit
@@ -16,6 +17,10 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 FAILED_LOGINS = defaultdict(list)
 MAX_ATTEMPTS = 5
 LOCKOUT_SECONDS = 300  # 5 minutos
+
+# Contraseñas que estuvieron publicadas: las iniciales del esquema base
+# (database/init/01_schema.sql) y la que figuraba en una versión anterior del código.
+CLAVES_DE_FABRICA = {"admin123", "caja123", "mesero123", "cocina123", "omarvelandia123"}
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -71,6 +76,14 @@ def login(
 
     if not user.activo:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario inactivo")
+
+    # Las contraseñas con que nace una instalación son públicas (están en el esquema base).
+    # En la red local sirven para el primer ingreso; en internet no se aceptan.
+    if settings.MODO_CEREBRO == "NUBE" and form_data.password in CLAVES_DE_FABRICA:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Esta cuenta todavía usa la contraseña de fábrica. Cámbiela en la caja del restaurante para poder entrar por la web.",
+        )
 
     # Reset en exito para liberar memoria
     if key in FAILED_LOGINS:

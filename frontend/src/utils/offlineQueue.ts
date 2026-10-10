@@ -50,7 +50,8 @@ export const removePendingOrder = (id: string): void => {
  * Intenta procesar todos los pedidos en cola acumulados durante caídas temporales de Wi-Fi
  */
 export const syncPendingOrders = async (
-  onSuccessOrder?: (order: PendingOrder, detalle: string) => void
+  onSuccessOrder?: (order: PendingOrder, detalle: string) => void,
+  onRejectedOrder?: (order: PendingOrder, motivo: string) => void
 ): Promise<{ exitosos: number; pendientes: number }> => {
   const queue = getPendingOrders()
   if (queue.length === 0) return { exitosos: 0, pendientes: 0 }
@@ -67,6 +68,7 @@ export const syncPendingOrders = async (
         exitosos++
         onSuccessOrder?.(order, `Comanda de Mesa #${order.mesaNumero || ''} enviada a cocina`)
       } else if (order.tipo === 'RONDA' && order.pedidoId && order.payloadRonda) {
+        if (!order.payloadRonda.idempotency_key) order.payloadRonda.idempotency_key = order.id
         await agregarRondaApi(order.pedidoId, order.payloadRonda)
         exitosos++
         onSuccessOrder?.(order, `Ronda #${order.payloadRonda.ronda} de Mesa #${order.mesaNumero || ''} enviada a cocina`)
@@ -76,8 +78,11 @@ export const syncPendingOrders = async (
       if (!err.response || err.code === 'ERR_NETWORK' || (err.response.status >= 500 && err.response.status <= 599)) {
         remaining.push({ ...order, reintentos: order.reintentos + 1 })
       } else {
-        // Si fue error 4xx de validación, registrarlo y descartar para no bloquear la cola
+        // Error 4xx (mesa ya ocupada, producto inactivo, pedido ya cobrado...): no tiene sentido
+        // reintentar, pero el mesero DEBE enterarse para volver a tomar el pedido.
         console.error('Error permanente al procesar pedido offline:', err)
+        const detalle = err.response?.data?.detail
+        onRejectedOrder?.(order, typeof detalle === 'string' ? detalle : `error ${err.response?.status}`)
       }
     }
   }

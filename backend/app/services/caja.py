@@ -44,6 +44,37 @@ def liberar_mesa(db: Session, pedido: Pedido) -> None:
         pedido.mesa.estado = "DISPONIBLE"
 
 
+def cerrar_lineas_sin_cocina(db: Session, pedido: Pedido, usuario) -> None:
+    """Deducción universal: da por entregadas las líneas del pedido y descuenta del inventario
+    las que nunca fueron aceptadas por cocina (así ningún producto vendido queda sin descontar).
+    Los preparados reutilizados no descuentan: su insumo ya se consumió."""
+    for detalle in pedido.detalles:
+        if detalle.estado != "CANCELADO" and detalle.preparado_en is None:
+            es_prep = detalle.variacion_snapshot and (
+                detalle.variacion_snapshot.get("es_preparado")
+                or detalle.variacion_snapshot.get("preparado_id")
+            )
+            if not es_prep:
+                nombre_prod = detalle.producto.nombre if detalle.producto else f"Item {detalle.producto_id}"
+                descontar_insumos_de_producto(
+                    db=db,
+                    producto_id=detalle.producto_id,
+                    cantidad=detalle.cantidad,
+                    usuario_id=usuario.id,
+                    pedido_id=pedido.id,
+                    referencia_base=f"Cobro en Caja Pedido #{pedido.consecutivo} - {nombre_prod}",
+                    es_llevar=bool(getattr(pedido, "tipo_consumo", "LOCAL") == "LLEVAR"),
+                )
+            detalle.preparado_en = func.now()
+            detalle.listo_en = detalle.listo_en or func.now()
+            detalle.entregado_en = detalle.entregado_en or func.now()
+            detalle.estado = "ENTREGADO"
+        elif detalle.estado in ("PREPARANDO", "LISTO"):
+            detalle.listo_en = detalle.listo_en or func.now()
+            detalle.entregado_en = detalle.entregado_en or func.now()
+            detalle.estado = "ENTREGADO"
+
+
 def cobrar_pedido(db: Session, pedido: Pedido, cobro: CobroIn, cajero) -> dict:
     """Registra los pagos de un pedido. Reglas del dueño:
     - Debe existir un turno de caja abierto con la base de efectivo inicial.
@@ -73,37 +104,20 @@ def cobrar_pedido(db: Session, pedido: Pedido, cobro: CobroIn, cajero) -> dict:
         if item.metodo == "VALE":
             vales.append(_crear_vale(db, pedido, item, cajero))
 
-    # Deducción universal en caja: descontar insumos de ítems que no pasaron por cocina
-    for detalle in pedido.detalles:
-        if detalle.estado != "CANCELADO" and detalle.preparado_en is None:
-            es_prep = detalle.variacion_snapshot and (
-                detalle.variacion_snapshot.get("es_preparado")
-                or detalle.variacion_snapshot.get("preparado_id")
-            )
-            if not es_prep:
-                nombre_prod = detalle.producto.nombre if detalle.producto else f"Item {detalle.producto_id}"
-                ref = f"Cobro en Caja Pedido #{pedido.consecutivo} - {nombre_prod}"
-                es_llevar = bool(getattr(pedido, "tipo_consumo", "LOCAL") == "LLEVAR")
-                descontar_insumos_de_producto(
-                    db=db,
-                    producto_id=detalle.producto_id,
-                    cantidad=detalle.cantidad,
-                    usuario_id=cajero.id,
-                    pedido_id=pedido.id,
-                    referencia_base=ref,
-                    es_llevar=es_llevar,
-                )
-            detalle.preparado_en = func.now()
-            detalle.listo_en = detalle.listo_en or func.now()
-            detalle.entregado_en = detalle.entregado_en or func.now()
-            detalle.estado = "ENTREGADO"
-        elif detalle.estado in ("PREPARANDO", "LISTO"):
-            detalle.listo_en = detalle.listo_en or func.now()
-            detalle.entregado_en = detalle.entregado_en or func.now()
-            detalle.estado = "ENTREGADO"
+    # Cobro adelantado: si el pedido está en la cola de cocina, la caja NO toca sus líneas.
+    # El ticket sigue visible para el cocinero, el inventario se descuenta cuando cocina
+    # acepta y el pedido pasa a PAGADO al marcar LISTO la última línea (routers/cocina.py).
+    en_cocina = pedido.estado in ("ENVIADO_A_COCINA", "EN_PREPARACION") and any(
+        d.estado in ("ENVIADO", "PREPARANDO") for d in pedido.detalles
+    )
+
+    if not en_cocina:
+        cerrar_lineas_sin_cocina(db, pedido, cajero)
 
     pedido.pagado_en = func.now()
-    if pedido.estado in ("FINALIZADO", "ENTREGADO"):
+    if en_cocina:
+        pass  # conserva su estado de cocina; ya quedó marcado como pagado con pagado_en
+    elif pedido.estado in ("FINALIZADO", "ENTREGADO"):
         pedido.estado = "PAGADO"
         liberar_mesa(db, pedido)
     elif pedido.canal in ("MOSTRADOR", "DOMICILIO", "DIDI"):
@@ -211,6 +225,32 @@ def _crear_vale(db: Session, pedido: Pedido, item: PagoIn, cajero) -> Vale:
     return vale
 
 
+def anular_vales_pendientes(db: Session, pedido_id: int, monto: Decimal | None = None) -> int:
+    """Anula los pagarés PENDIENTES de un pedido (devolución o cancelación) para que no quede
+    una deuda viva por una venta que ya no existe. Con `monto` anula solo el vale de ese pago."""
+    q = db.query(Vale).filter(Vale.pedido_id == pedido_id, Vale.estado == "PENDIENTE").order_by(Vale.id)
+    vales = q.all()
+    if monto is not None:
+        coincidente = next((v for v in vales if _monto(v.monto) == monto), None)
+        vales = [coincidente] if coincidente else vales[:1]
+    for v in vales:
+        v.estado = "ANULADO"
+    return len(vales)
+
+
+def efectivo_esperado(pagos: list[Pago], entradas: Decimal, salidas: Decimal) -> Decimal:
+    """Efectivo que debe haber en la gaveta.
+
+    Cuenta TODO el efectivo que entró por ventas, incluso el de pagos luego devueltos, porque
+    cada devolución en efectivo ya resta como movimiento SALIDA. Si además se excluyera el pago
+    devuelto, la misma plata se restaría dos veces y el arqueo saldría descuadrado.
+    """
+    ingresado = sum(
+        (_monto(p.monto) for p in pagos if p.metodo in ("EFECTIVO", "DIDI_EFECTIVO")), Decimal("0")
+    )
+    return ingresado + entradas - salidas
+
+
 def cobrar_vale(db: Session, vale: Vale, cajero, descripcion: str | None = None) -> None:
     """El cliente paga su pagaré: queda COBRADO y entra el dinero a caja."""
     if turno_abierto(db) is None:
@@ -284,11 +324,7 @@ def devolver_pago(db: Session, pago: Pago, motivo: str, usuario) -> Pago:
             )
         )
     elif pago.metodo == "VALE":
-        # Cancelar el pagaré para que no quede deuda pendiente activa
-        vales = db.query(Vale).filter(Vale.pedido_id == pedido.id, Vale.estado == "PENDIENTE").all()
-        for v in vales:
-            v.estado = "CANCELADO"
-            v.notas = f"Cancelado por devolución: {motivo}"
+        anular_vales_pendientes(db, pedido.id, monto=_monto(pago.monto))
     db.flush()
     if total_cobrado(db, pedido) < _monto(pedido.total):
         pedido.pagado_en = None
@@ -336,15 +372,15 @@ def obtener_turno_actual_con_metricas(db: Session) -> Cierre | None:
         return None
 
     # Métricas en vivo del turno en curso (sin cerrar en base de datos)
-    pagos = (
+    pagos_turno = (
         db.query(Pago)
         .filter(
             or_(Pago.cierre_id == cierre.id, Pago.cierre_id.is_(None)),
             Pago.pagado_en >= cierre.abierto_en,
-            Pago.estado == "VALIDO",
         )
         .all()
     )
+    pagos = [p for p in pagos_turno if p.estado == "VALIDO"]
     movimientos = (
         db.query(MovimientoCaja)
         .filter(
@@ -368,7 +404,9 @@ def obtener_turno_actual_con_metricas(db: Session) -> Cierre | None:
     cierre.total_ventas = sum((_monto(p.monto) for p in pagos), Decimal("0"))
     cierre.total_entradas_caja = sum((_monto(m.valor) for m in movimientos if m.tipo == "ENTRADA"), Decimal("0"))
     cierre.total_salidas_caja = sum((_monto(m.valor) for m in movimientos if m.tipo == "SALIDA"), Decimal("0"))
-    cierre.total_efectivo_final = cierre.total_entradas_caja + cierre.total_efectivo - cierre.total_salidas_caja
+    cierre.total_efectivo_final = efectivo_esperado(
+        pagos_turno, cierre.total_entradas_caja, cierre.total_salidas_caja
+    )
     return cierre
 
 
@@ -572,9 +610,7 @@ def cerrar_turno(db: Session, cierre: Cierre, usuario, notas: str | None = None)
     cierre.preparados_reutilizados = int(reutilizados)
     cierre.preparados_descartados = int(descartados)
     cierre.total_ventas = total_ventas
-    cierre.total_efectivo_final = (
-        total_efectivo + total_didi_efectivo + entradas - salidas
-    )
+    cierre.total_efectivo_final = efectivo_esperado(pagos, entradas, salidas)
     cierre.total_por_cobrar = (
         por_metodo.get("DIDI_TARJETA", Decimal("0"))
         + sum((_monto(v.monto) for v in vales_pendientes), Decimal("0"))

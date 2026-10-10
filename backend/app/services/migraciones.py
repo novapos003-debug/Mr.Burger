@@ -36,6 +36,55 @@ def _una_sola_vez(conn, clave: str, descripcion: str) -> bool:
     return res.rowcount == 1
 
 
+def aplicar_valores_iniciales(conn) -> None:
+    """Datos de arranque que el administrador puede modificar luego desde el panel.
+
+    Se ejecutan una sola vez por base de datos. En una base que ya venía funcionando (el
+    restaurante, la nube) esta primera pasada no pisa nada: solo completa lo que esté vacío.
+    """
+    # La política de stock nunca se sobrescribe: si el dueño eligió BLOQUEAR, se respeta.
+    conn.execute(
+        text(
+            "INSERT INTO configuracion (clave, valor, descripcion) VALUES "
+            "('politica_stock_insuficiente', 'ADVERTIR_Y_PERMITIR', 'Política ante faltante de stock') "
+            "ON CONFLICT (clave) DO NOTHING"
+        )
+    )
+
+    if not _una_sola_vez(conn, "migracion_valores_iniciales_v1", "Valores iniciales de catálogo y empaques"):
+        return
+
+    # Productos e insumos de demostración del esquema base
+    conn.execute(text("UPDATE producto SET activo = FALSE WHERE id IN (1, 2, 3, 4, 5, 6, 999);"))
+    conn.execute(text("UPDATE ingrediente SET activo = FALSE WHERE id IN (1, 2, 3, 4, 5, 6, 7, 8, 9);"))
+
+    # Empaques C1 y P1: se identifican por su id o por el prefijo del nombre. El patrón anterior
+    # ('%porta perro%') también renombraba el insumo "Porta Perro" y creaba un P1 duplicado.
+    for patron, id_base, nombre, costo, precio in (
+        ("c1%", 61, "C1 (Empaque Térmico)", 500, 1500),
+        ("p1%", 68, "P1 (Porta Perro Caliente)", 350, 500),
+    ):
+        conn.execute(
+            text(
+                "UPDATE ingrediente SET nombre = :n, tipo_articulo = 'DESECHABLE_SERVICIO', activo = TRUE, "
+                "costo_unitario = CASE WHEN COALESCE(costo_unitario, 0) = 0 THEN :c ELSE costo_unitario END, "
+                "precio_venta = CASE WHEN COALESCE(precio_venta, 0) = 0 THEN :p ELSE precio_venta END "
+                "WHERE id = (SELECT id FROM ingrediente WHERE id = :i OR nombre ILIKE :pat ORDER BY (id = :i) DESC, id LIMIT 1)"
+            ),
+            {"n": nombre, "c": costo, "p": precio, "i": id_base, "pat": patron},
+        )
+
+    for bolsa, precio in (("Bolsa T20", 200), ("Bolsa T25", 300), ("Bolsa T30", 400), ("Bolsa T40", 500)):
+        conn.execute(
+            text(
+                "UPDATE ingrediente SET precio_venta = :p "
+                "WHERE nombre ILIKE :b AND (precio_venta IS NULL OR precio_venta = 0)"
+            ),
+            {"p": precio, "b": f"%{bolsa}%"},
+        )
+    logger.info("Valores iniciales de catálogo aplicados")
+
+
 def migrar_demo_y_fijados(conn) -> None:
     conn.execute(text("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS fijado BOOLEAN NOT NULL DEFAULT FALSE;"))
     conn.execute(text("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS es_demo BOOLEAN NOT NULL DEFAULT FALSE;"))

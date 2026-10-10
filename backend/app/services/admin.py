@@ -260,7 +260,8 @@ def registrar_compra(db: Session, data: CompraIn, admin: Usuario) -> Compra:
         costo_total_compra += costo_linea
 
         # Actualizar stock del ingrediente
-        ing.stock_actual = (ing.stock_actual or Decimal("0")) + det.cantidad
+        saldo_anterior = ing.stock_actual or Decimal("0")
+        ing.stock_actual = saldo_anterior + det.cantidad
         if det.costo_unitario > 0:
             ing.costo_unitario = det.costo_unitario
 
@@ -281,6 +282,11 @@ def registrar_compra(db: Session, data: CompraIn, admin: Usuario) -> Compra:
                 compra_id=compra.id,
                 usuario_id=admin.id,
                 cantidad=det.cantidad,
+                # El kardex necesita unidad, saldos y costo para poder cuadrarse
+                unidad=ing.unidad_base,
+                saldo_anterior=saldo_anterior,
+                saldo_nuevo=ing.stock_actual,
+                costo_unitario_momento=det.costo_unitario,
                 tipo="COMPRA",
                 referencia=f"Compra #{compra.id} - {ing.nombre}",
             )

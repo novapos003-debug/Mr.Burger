@@ -20,7 +20,8 @@ from app.schemas import (
 )
 from app.services.disponibilidad import verificar_lineas
 from app.services.historial import registrar
-from app.services.pedidos import calcular_totales, siguiente_consecutivo
+from app.services.caja import cerrar_lineas_sin_cocina, liberar_mesa
+from app.services.pedidos import calcular_totales, recalcular_totales_pedido, siguiente_consecutivo
 from app.services.preparados import cancelar_pedido
 from app.services.websocket import ws_manager
 
@@ -441,20 +442,10 @@ async def cambiar_tipo_consumo(
     if pedido.estado in ("CERRADO", "CANCELADO", "PAGADO") or pedido.pagado_en is not None:
         raise HTTPException(status_code=409, detail="El pedido ya fue cobrado, cerrado o cancelado")
 
-    activos = [d for d in pedido.detalles if d.estado != "CANCELADO"]
-    totales = calcular_totales(db, activos)
-
-    recargo_empaque = Decimal("0")
-    if data.tipo_consumo == "LLEVAR":
-        from app.services.inventario import calcular_recargo_empaque
-        recargo_empaque, _ = calcular_recargo_empaque(db, activos)
-
     anterior = pedido.tipo_consumo
     pedido.tipo_consumo = data.tipo_consumo
-    pedido.recargo_empaque = recargo_empaque
-    pedido.subtotal = totales["subtotal"]
-    pedido.iva = totales["iva"]
-    pedido.total = totales["total"] + recargo_empaque
+    recalcular_totales_pedido(db, pedido)
+    recargo_empaque = pedido.recargo_empaque
 
     registrar(
         db, usuario, "CAMBIAR_TIPO_CONSUMO", "pedido", pedido.id,
@@ -489,25 +480,27 @@ async def agregar_ronda(
     )
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    # Reintento del mismo envío (el celular no recibió la respuesta): no se duplica la ronda
+    if data.idempotency_key and (
+        db.query(DetallePedido.id)
+        .filter(DetallePedido.pedido_id == pedido.id, DetallePedido.clave_idempotencia == data.idempotency_key)
+        .first()
+    ):
+        return pedido_out(db, pedido, usuario)
+
     if pedido.estado in ("CERRADO", "CANCELADO", "PAGADO") or pedido.pagado_en is not None:
         raise HTTPException(status_code=409, detail="El pedido ya fue cobrado, cerrado o cancelado; no admite más rondas")
 
     _validar_lineas(db, data.lineas)
     detalles = _crear_detalles(db, pedido, data.lineas, ronda=data.ronda, usuario=usuario)
-    totales = calcular_totales(db, pedido.detalles + detalles)
+    for d in detalles:
+        d.clave_idempotencia = data.idempotency_key
 
     if data.tipo_consumo:
         pedido.tipo_consumo = data.tipo_consumo
 
-    recargo_empaque = Decimal("0")
-    if getattr(pedido, "tipo_consumo", "LOCAL") == "LLEVAR":
-        from app.services.inventario import calcular_recargo_empaque
-        recargo_empaque, _ = calcular_recargo_empaque(db, pedido.detalles + detalles)
-
-    pedido.recargo_empaque = recargo_empaque
-    pedido.subtotal = totales["subtotal"]
-    pedido.iva = totales["iva"]
-    pedido.total = totales["total"] + recargo_empaque
+    # Las líneas canceladas no vuelven a entrar al total al agregar una ronda
+    recalcular_totales_pedido(db, pedido, nuevos=detalles)
 
     # Regla del dueño: cada ronda es un ticket PROPIO para cocina. Si la cocina ya
     # había terminado/entregado el pedido, la ronda nueva lo reactiva como ticket
@@ -644,15 +637,17 @@ async def entregar_pedido_endpoint(
     if pedido.estado in ("CANCELADO", "CERRADO"):
         raise HTTPException(status_code=409, detail=f"No se puede entregar un pedido en estado {pedido.estado}")
 
-    for d in pedido.detalles:
-        if d.estado != "CANCELADO":
-            d.estado = "ENTREGADO"
-            d.entregado_en = d.entregado_en or func.now()
-
-    if pedido.estado == "PAGADO":
-        if pedido.canal == "MESA" and pedido.mesa:
-            liberar_mesa(db, pedido)
+    if pedido.estado == "PAGADO" or pedido.pagado_en is not None:
+        # Ya está cobrado (incluye cobro adelantado que cocina nunca marcó): se cierra el ciclo
+        # aquí, descontando lo que no pasó por cocina, y la mesa queda libre.
+        cerrar_lineas_sin_cocina(db, pedido, usuario)
+        pedido.estado = "PAGADO"
+        liberar_mesa(db, pedido)
     else:
+        for d in pedido.detalles:
+            if d.estado != "CANCELADO":
+                d.estado = "ENTREGADO"
+                d.entregado_en = d.entregado_en or func.now()
         pedido.estado = "ENTREGADO"
 
     registrar(db, usuario, "ENTREGAR_PEDIDO", "pedido", pedido.id, f"pedido={pedido.consecutivo}")

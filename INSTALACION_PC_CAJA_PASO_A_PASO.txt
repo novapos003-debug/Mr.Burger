@@ -75,7 +75,7 @@ PASO 4: ABRIR EL FIREWALL DE WINDOWS (1 CLIC COMO ADMINISTRADOR)
 PASO 5: CONFIGURAR IMPRESORA TÉRMICA Y APERTURA DE CAJA
 ================================================================================
 1. En la pantalla de Chrome abierta en la PC (http://localhost:5173):
-   - Inicia sesión con el usuario cajero que creaste ayer (o con admin / admin123).
+   - Inicia sesión con el usuario cajero que creaste ayer (o con el administrador y la clave que definiste al instalar).
 2. Haz clic en "ABRIR TURNO":
    - Ingresa el monto de apertura (base inicial en efectivo, ej. $150.000).
    - Confirma la apertura. Quedará registrada contablemente como Entrada de Cambio Inicial.
@@ -93,7 +93,7 @@ PASO 6: CONECTAR LA TABLET DE COCINA (KDS)
    http://[IP_FIJA]:5173    (ejemplo: http://192.168.1.150:5173)
 3. Inicia sesión:
    - Usuario: cocina
-   - Clave:   cocina123
+   - Clave:   la que definiste para cocina al instalar
 4. 🔔 PASO VITAL: En la barra superior de Cocina, toca una sola vez el botón:
    "PROBAR SONIDO"
    (Esto autoriza al navegador a sonar la campana "Ding-Dong" cuando entren comandas).
@@ -107,7 +107,7 @@ En cada celular de mesero (conectado al Wi-Fi del restaurante):
    http://[IP_FIJA]:5173    (ejemplo: http://192.168.1.150:5173)
 2. Inicia sesión:
    - Usuario: mesero
-   - Clave:   mesero123
+   - Clave:   la que definiste para el mesero al instalar
 3. Toca los tres puntos de Chrome > "Agregar a la pantalla principal".
 4. Verán el icono de Mr. Burger en su pantalla de inicio como una aplicación nativa.
 

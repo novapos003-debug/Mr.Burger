@@ -1,27 +1,18 @@
+"""Servicio de sincronización: recepción de operaciones, estado y utilidades del espejo.
+
+La réplica en sí (captura y aplicación de filas) vive en `app.core.replicacion`.
+"""
 import logging
-import re
-from datetime import date, datetime, timezone
-from decimal import Decimal
+import uuid
+from datetime import datetime
 
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
-from app.core.tiempo import fecha_local
-from app.database import safe_commit
-from app.models import (
-    Cierre,
-    DetallePedido,
-    DetalleReceta,
-    Ingrediente,
-    Mesa,
-    MovimientoCaja,
-    MovimientoInventario,
-    Pago,
-    Pedido,
-    RegistroSync,
-    Usuario,
-    Vale,
-)
+from app.config import settings
+from app.core import replicacion
+from app.database import Base, safe_commit
+from app.models import RegistroSync, Usuario
 from app.schemas.sync import (
     SyncEstadoOut,
     SyncOpIn,
@@ -30,403 +21,273 @@ from app.schemas.sync import (
     SyncPushIn,
     SyncPushOut,
 )
-from app.services.historial import registrar
 
 logger = logging.getLogger("sync")
 
-
-def _resolver_usuario_id(db: Session, op, payload: dict) -> int:
-    """Pedido.usuario_id es obligatorio en la nube.
-
-    Las operaciones encoladas antes de este arreglo no lo traen en el payload, pero sí
-    viajan con dispositivo_id = 'USER_<id>' / 'CAJA_<id>'. Orden de búsqueda:
-    payload -> sufijo numérico del dispositivo -> usuario 'admin' -> primer usuario.
-    """
-    candidatos = [payload.get("usuario_id")]
-    m = re.search(r"(\d+)$", getattr(op, "dispositivo_id", "") or "")
-    if m:
-        candidatos.append(m.group(1))
-    for c in candidatos:
-        try:
-            uid = int(c)
-        except (TypeError, ValueError):
-            continue
-        if db.get(Usuario, uid):
-            return uid
-    fallback = (
-        db.query(Usuario).filter(Usuario.usuario == "admin").first()
-        or db.query(Usuario).order_by(Usuario.id.asc()).first()
-    )
-    if not fallback:
-        raise ValueError("No hay usuarios en la nube a quienes asignar el pedido")
-    return fallback.id
+# Tablas cuyo cambio obliga a los dispositivos a recargar el catálogo
+TABLAS_CATALOGO = {
+    "tipo_categoria", "categoria", "producto", "componente_combo", "detalle_receta",
+    "categoria_insumo", "ingrediente", "configuracion",
+}
 
 
-def _fecha(valor) -> date:
-    if isinstance(valor, date):
+def encolar_sync(*_args, **_kwargs) -> None:
+    """Obsoleta. La réplica por filas (`app.core.replicacion`) registra sola cada cambio
+    confirmado, con todos sus campos. Se conserva la función para no romper llamadas antiguas."""
+    return None
+
+
+def instalacion_id(conn) -> str:
+    """Identificador único de ESTA base de datos. Permite a la nube distinguir la numeración
+    de operaciones de una instalación nueva frente a la de una anterior."""
+    valor = conn.execute(text("SELECT valor FROM configuracion WHERE clave = 'sync_instalacion_id'")).scalar()
+    if valor:
         return valor
-    if isinstance(valor, str) and valor[:10]:
-        return date.fromisoformat(valor[:10])
-    return fecha_local()
+    valor = str(uuid.uuid4())
+    conn.execute(
+        text(
+            "INSERT INTO configuracion (clave, valor, descripcion) VALUES "
+            "('sync_instalacion_id', :v, 'Identificador de esta instalación para la sincronización') "
+            "ON CONFLICT (clave) DO NOTHING"
+        ),
+        {"v": valor},
+    )
+    return conn.execute(text("SELECT valor FROM configuracion WHERE clave = 'sync_instalacion_id'")).scalar()
 
 
-def asimilar_operacion(db: Session, op) -> None:
-    """Asimila materialmente una operación en las tablas de negocio de la Nube (Render).
+def espejo_id(conn) -> str:
+    """Identificador del espejo (nube). Cambia cada vez que el espejo se reinicia; la caja lo
+    compara con el que tiene guardado para saber si debe enviar la base completa de nuevo."""
+    valor = conn.execute(text("SELECT valor FROM configuracion WHERE clave = 'sync_espejo_id'")).scalar()
+    if valor:
+        return valor
+    conn.execute(
+        text(
+            "INSERT INTO configuracion (clave, valor, descripcion) VALUES "
+            "('sync_espejo_id', :v, 'Identificador de este espejo en la nube') ON CONFLICT (clave) DO NOTHING"
+        ),
+        {"v": str(uuid.uuid4())},
+    )
+    return conn.execute(text("SELECT valor FROM configuracion WHERE clave = 'sync_espejo_id'")).scalar()
 
-    Si la operación no se puede aplicar lanza una excepción: `procesar_push` la ejecuta dentro
-    de un SAVEPOINT, así un fallo solo descarta esa operación y no el lote completo.
+
+def _archivar_datos_de_negocio(conn) -> str | None:
+    """Antes de vaciar el espejo, guarda una copia de todo lo que tenga en el esquema `archivo`.
+
+    Regla del negocio: nada se borra. Recetas, precios, ventas e insumos que estuvieran en la
+    nube quedan consultables (tablas `archivo."<tabla>__<fecha>"`) aunque el espejo se reemplace.
+    Devuelve el sufijo usado, o None si no había nada que guardar.
     """
-    tipo = op.tipo
-    payload = op.payload
-    if not payload or not isinstance(payload, dict):
+    sufijo = conn.execute(text("SELECT to_char(now() AT TIME ZONE 'UTC', 'YYYYMMDD_HH24MISS')")).scalar()
+    guardadas = 0
+    for tabla in Base.metadata.sorted_tables:
+        if not conn.execute(text(f'SELECT EXISTS (SELECT 1 FROM "{tabla.name}")')).scalar():
+            continue
+        if guardadas == 0:
+            conn.execute(text("CREATE SCHEMA IF NOT EXISTS archivo"))
+        conn.execute(text(f'CREATE TABLE archivo."{tabla.name}__{sufijo}" AS SELECT * FROM "{tabla.name}"'))
+        guardadas += 1
+    if not guardadas:
+        return None
+    # El archivo no debe quedar expuesto por la API pública de Supabase
+    conn.execute(
+        text(
+            """
+            DO $$
+            DECLARE r text;
+            BEGIN
+                FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+                    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+                        EXECUTE format('REVOKE ALL ON SCHEMA archivo FROM %I', r);
+                        EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA archivo FROM %I', r);
+                    END IF;
+                END LOOP;
+            END $$;
+            """
+        )
+    )
+    logger.warning("Datos del espejo archivados en el esquema 'archivo' con sufijo %s (%s tablas)", sufijo, guardadas)
+    return sufijo
+
+
+def _vaciar_datos_de_negocio(conn) -> int:
+    """Deja el espejo sin datos de negocio, conservando sus banderas internas.
+    Siempre archiva primero lo que hubiera: vaciar el espejo nunca destruye información."""
+    _archivar_datos_de_negocio(conn)
+    tablas = [t.name for t in Base.metadata.sorted_tables if t.name != "configuracion"]
+    conn.execute(text("TRUNCATE TABLE " + ", ".join(f'"{t}"' for t in tablas) + " RESTART IDENTITY CASCADE"))
+    filtro = " AND ".join(f"clave NOT LIKE '{p}%'" for p in replicacion.PREFIJOS_CONFIG_INTERNOS)
+    conn.execute(text(f"DELETE FROM configuracion WHERE {filtro}"))
+    replicacion.reservar_rango_nube(conn)
+    return len(tablas)
+
+
+def verificar_vinculo(conn, instalacion: str) -> None:
+    """Un espejo recibe datos de UNA sola caja. La primera que sube queda vinculada; cualquier
+    otra (por ejemplo un PC de desarrollo apuntando por error a producción) es rechazada, porque
+    mezclar dos bases con la misma numeración corrompe el espejo.
+
+    Al vincularse por primera vez el espejo se vacía: lo que tuviera (datos de prueba, restos
+    de una versión anterior) no proviene de esa caja y chocaría con su copia completa."""
+    actual = conn.execute(
+        text("SELECT valor FROM configuracion WHERE clave = 'sync_instalacion_vinculada'")
+    ).scalar()
+    if not actual:
+        _vaciar_datos_de_negocio(conn)
+        logger.warning("Espejo vinculado a la caja %s: datos anteriores eliminados para recibir su copia", instalacion)
+        conn.execute(
+            text(
+                "INSERT INTO configuracion (clave, valor, descripcion) VALUES "
+                "('sync_instalacion_vinculada', :v, 'Caja autorizada a subir datos a este espejo') "
+                "ON CONFLICT (clave) DO NOTHING"
+            ),
+            {"v": instalacion},
+        )
         return
+    if actual != instalacion:
+        raise PermissionError(
+            "Este espejo ya está vinculado a otra caja. Para vincular una nueva hay que reiniciar el espejo."
+        )
 
+
+# ------------------------------------------------------------------ recepción (nube)
+def _es_obsoleta(db: Session, op: SyncOpIn) -> bool:
+    """True si ya se aplicó un estado MÁS NUEVO de la misma fila enviado por la misma instalación.
+    Protege contra reintentos tardíos que pisarían un dato reciente con uno viejo."""
+    seq = op.payload.get("_seq")
+    inst = op.payload.get("_inst")
+    if seq is None or not inst:
+        return False
+    fila = db.execute(
+        text(
+            "SELECT 1 FROM registro_sync WHERE entidad = :e AND entidad_uuid = :u AND origen = 'LOCAL' "
+            "AND estado = 'APLICADO' AND payload->>'_inst' = :i AND (payload->>'_seq')::bigint > :s LIMIT 1"
+        ),
+        {"e": op.entidad, "u": op.entidad_uuid or replicacion.pk_texto(op.payload.get("pk") or {}), "i": inst, "s": int(seq)},
+    ).first()
+    return fila is not None
+
+
+def procesar_push(db: Session, data: SyncPushIn) -> tuple[SyncPushOut, set[str]]:
+    """Aplica un lote de operaciones enviadas por la caja. Devuelve el resultado y las tablas tocadas.
+
+    - Idempotente: una operación ya recibida (mismo `op_id`) se responde como DUPLICADO.
+    - Cada operación va en su propio SAVEPOINT: si una falla, las demás se aplican igual.
+    """
+    procesadas = duplicadas = errores = 0
+    resultados: list[SyncOpResultado] = []
+    tablas: set[str] = set()
+
+    # Solo una caja con el motor de réplica por filas puede vincularse al espejo. Un envío de una
+    # versión anterior (operaciones "heredadas") se registra sin aplicar y NO vincula ni vacía nada.
+    es_replica = any(
+        op.tipo in replicacion.TIPOS_REPLICA and op.payload.get("_inst") == data.dispositivo_id
+        for op in data.operaciones
+    )
+    if es_replica:
+        verificar_vinculo(db.connection(), data.dispositivo_id)
+    elif any(op.tipo in replicacion.TIPOS_REPLICA for op in data.operaciones):
+        raise PermissionError("Lote de réplica sin identificador de instalación válido")
+
+    # Lo que se aplica aquí viene de la caja: no debe registrarse como cambio propio de la nube.
+    db.info["_replicacion_omitir"] = True
     try:
-        if tipo in ("CREAR_PEDIDO", "AGREGAR_RONDA"):
-            # AGREGAR_RONDA identifica el pedido con 'pedido_id' (no con 'id')
-            pid = payload.get("id") or payload.get("pedido_id")
-            pedido = db.get(Pedido, pid) if pid else None
-            if not pedido:
-                if tipo == "AGREGAR_RONDA":
-                    raise ValueError(f"AGREGAR_RONDA: el pedido {pid} todavía no existe en la nube")
-                mesa_id = payload.get("mesa_id")
-                if mesa_id and not db.get(Mesa, mesa_id):
-                    mesa_id = None
-                pedido = Pedido(
-                    id=pid,
-                    consecutivo=payload.get("consecutivo", 1),
-                    fecha_dia=_fecha(payload.get("fecha_dia")),
-                    canal=payload.get("canal") or "MOSTRADOR",
-                    tipo_consumo=payload.get("tipo_consumo") or "LOCAL",
-                    mesa_id=mesa_id,
-                    usuario_id=_resolver_usuario_id(db, op, payload),
-                    cliente=payload.get("cliente"),
-                    subtotal=Decimal(str(payload.get("subtotal") or 0)),
-                    iva=Decimal(str(payload.get("iva") or 0)),
-                    total=Decimal(str(payload.get("total") or 0)),
-                    estado=payload.get("estado") or "ENVIADO_A_COCINA",
-                )
-                db.add(pedido)
-                db.flush()
-            else:
-                pedido.estado = payload.get("estado") or pedido.estado
-                total = payload.get("total", payload.get("nuevo_total"))
-                if total is not None:
-                    pedido.total = Decimal(str(total))
+        for op in data.operaciones:
+            if db.query(RegistroSync.id).filter(RegistroSync.op_id == op.op_id).first():
+                duplicadas += 1
+                resultados.append(SyncOpResultado(op_id=op.op_id, estado="DUPLICADO"))
+                continue
 
-            for d in payload.get("detalles", []):
-                prod_id = d.get("producto_id")
-                det_existente = (
-                    db.query(DetallePedido)
-                    .filter(
-                        DetallePedido.pedido_id == pedido.id,
-                        DetallePedido.producto_id == prod_id,
-                        DetallePedido.ronda == d.get("ronda", 1),
-                    )
-                    .first()
-                )
-                if not det_existente:
-                    nuevo_d = DetallePedido(
-                        pedido_id=pedido.id,
-                        producto_id=prod_id,
-                        cantidad=Decimal(str(d.get("cantidad", 1))),
-                        precio_unitario=Decimal(str(d.get("precio_unitario", 0))),
-                        ronda=d.get("ronda", 1),
-                        # el payload local manda "estado": null -> columna NOT NULL
-                        estado=d.get("estado") or "ENVIADO",
-                    )
-                    db.add(nuevo_d)
+            nota = None
+            try:
+                with db.begin_nested():
+                    pk = op.payload.get("pk") or {}
+                    if op.tipo in replicacion.TIPOS_REPLICA:
+                        if _es_obsoleta(db, op):
+                            nota = "Omitida: ya se aplicó un estado más reciente de esta fila"
+                        else:
+                            replicacion.aplicar_operacion(
+                                db.connection(), op.tipo, op.entidad, op.payload, origen_op="LOCAL"
+                            )
+                            tablas.add(op.entidad)
+                        # En la nube no se guarda la fila completa otra vez: solo su rastro.
+                        guardado = {"pk": pk, "_seq": op.payload.get("_seq"), "_inst": op.payload.get("_inst")}
+                    else:
+                        nota = "Tipo de operación de una versión anterior: registrada sin aplicar"
+                        guardado = {"tipo_heredado": op.tipo}
 
-        elif tipo == "COBRO_PEDIDO":
-            pago_id = payload.get("id")
-            pago = db.get(Pago, pago_id) if pago_id else None
-            if not pago:
-                pago = Pago(
-                    id=pago_id,
-                    pedido_id=payload.get("pedido_id"),
-                    metodo=payload.get("metodo", "EFECTIVO"),
-                    monto=Decimal(str(payload.get("monto", 0))),
-                    recibido=Decimal(str(payload.get("recibido", 0))) if payload.get("recibido") is not None else None,
-                    cambio=Decimal(str(payload.get("cambio", 0))) if payload.get("cambio") is not None else None,
-                    didi_orden_id=payload.get("didi_orden_id"),
-                    estado="VALIDO",
-                )
-                db.add(pago)
-            ped = db.get(Pedido, payload.get("pedido_id"))
-            if ped:
-                ped.estado = "PAGADO"
-                ped.pagado_en = ped.pagado_en or func.now()
-
-        elif tipo == "MOVIMIENTO_CAJA":
-            m_id = payload.get("id")
-            mov = db.get(MovimientoCaja, m_id) if m_id else None
-            if not mov:
-                mov = MovimientoCaja(
-                    id=m_id,
-                    usuario_id=payload.get("usuario_id", 1),
-                    tipo=payload.get("tipo", "SALIDA"),
-                    categoria=payload.get("categoria", "OTRO"),
-                    concepto=payload.get("concepto", "Movimiento sincronizado"),
-                    descripcion=payload.get("descripcion", ""),
-                    valor=Decimal(str(payload.get("valor", 0))),
-                    cierre_id=payload.get("cierre_id"),
-                )
-                db.add(mov)
-
-        elif tipo in ("ABRIR_TURNO", "CIERRE_TURNO"):
-            c_id = payload.get("id")
-            cierre = db.get(Cierre, c_id) if c_id else None
-            abierto_en_val = payload.get("abierto_en") or func.now()
-            cerrado_en_val = func.now() if payload.get("cerrado_en") == "now()" else payload.get("cerrado_en")
-            if not cierre:
-                cierre = Cierre(
-                    id=c_id,
-                    usuario_id=payload.get("usuario_id", 1),
-                    abierto_en=abierto_en_val,
-                    cerrado_en=cerrado_en_val,
-                    total_ventas=Decimal(str(payload.get("total_ventas", 0))),
-                    total_efectivo=Decimal(str(payload.get("total_efectivo", 0))),
-                    total_tarjeta=Decimal(str(payload.get("total_tarjeta", 0))),
-                    total_transferencia=Decimal(str(payload.get("total_transferencia", 0))),
-                    total_didi_efectivo=Decimal(str(payload.get("total_didi_efectivo", 0))),
-                    total_didi_tarjeta=Decimal(str(payload.get("total_didi_tarjeta", 0))),
-                    total_entradas_caja=Decimal(str(payload.get("total_entradas_caja", 0))),
-                    total_salidas_caja=Decimal(str(payload.get("total_salidas_caja", 0))),
-                    total_efectivo_final=Decimal(str(payload.get("total_efectivo_final", 0))),
-                    notas=payload.get("notas"),
-                )
-                db.add(cierre)
-            else:
-                if payload.get("cerrado_en"):
-                    cierre.cerrado_en = cerrado_en_val
-                for k, v in payload.items():
-                    if hasattr(cierre, k) and v is not None and k not in ("id", "abierto_en", "cerrado_en"):
-                        try:
-                            setattr(cierre, k, Decimal(str(v)) if isinstance(v, (int, float)) else v)
-                        except Exception:
-                            pass
-
-        elif tipo == "DESCUENTO_STOCK":
-            ing_id = payload.get("ingrediente_id")
-            ing = db.get(Ingrediente, ing_id) if ing_id else None
-            if ing and payload.get("stock_actual_checkpoint") is not None:
-                ing.stock_actual = Decimal(str(payload["stock_actual_checkpoint"]))
-
-        elif tipo in ("CREAR_USUARIO", "USUARIO_CREADO"):
-            u_id = payload.get("id")
-            u = db.get(Usuario, u_id) if u_id else None
-            if not u:
-                u = Usuario(
-                    id=u_id,
-                    nombre=payload.get("nombre", ""),
-                    usuario=payload.get("usuario", ""),
-                    rol_id=payload.get("rol_id", 2),
-                    password_hash=payload.get("password_hash", ""),
-                    activo=payload.get("activo", True),
-                    fijado=payload.get("fijado", False),
-                    es_demo=payload.get("es_demo", False),
-                )
-                db.add(u)
-
-        elif tipo == "MODIFICAR_PASSWORD":
-            u_id = payload.get("usuario_id")
-            u = db.get(Usuario, u_id) if u_id else None
-            if u and payload.get("nueva_password_hash"):
-                u.password_hash = payload["nueva_password_hash"]
-
-        elif tipo == "MODIFICAR_RECETA":
-            p_id = payload.get("producto_id")
-            lineas = payload.get("lineas", [])
-            if p_id and isinstance(lineas, list):
-                db.query(DetalleReceta).filter(DetalleReceta.product_id == p_id).delete()
-                for l in lineas:
                     db.add(
-                        DetalleReceta(
-                            product_id=p_id,
-                            ingrediente_id=l.get("ingrediente_id"),
-                            cantidad=Decimal(str(l.get("cantidad", 1))),
-                            unidad=l.get("unidad", "UNIDAD"),
-                            solo_llevar=l.get("solo_llevar", False),
+                        RegistroSync(
+                            op_id=op.op_id,
+                            sucursal_id=op.sucursal_id,
+                            dispositivo_id=op.dispositivo_id,
+                            tipo=op.tipo,
+                            entidad=op.entidad,
+                            entidad_id=op.entidad_id,
+                            entidad_uuid=op.entidad_uuid or replicacion.pk_texto(pk),
+                            payload=guardado,
+                            origen="LOCAL",
+                            estado="APLICADO",
+                            resolucion_nota=nota,
+                            sincronizado_en=func.now(),
                         )
                     )
-    except Exception as e:
-        # Antes se tragaba el error y dejaba la sesión inutilizable (-> HTTP 500 para TODO el lote).
-        logger.warning("No se pudo asimilar la operación sync %s: %s", tipo, str(e).splitlines()[0][:300])
-        raise
+                    db.flush()
+            except Exception as e:
+                errores += 1
+                detalle = (str(e).splitlines() or [""])[0][:300] or type(e).__name__
+                logger.warning("Operación %s %s rechazada: %s", op.tipo, op.entidad, detalle)
+                resultados.append(SyncOpResultado(op_id=op.op_id, estado="ERROR", error=detalle))
+                continue
 
-
-def procesar_push(db: Session, data: SyncPushIn, usuario: Usuario) -> SyncPushOut:
-    """Procesa un lote de operaciones offline enviadas con UUID único.
-    
-    Reglas del Documento Maestro (Sección 3):
-    1. Idempotencia absoluta: si op_id ya existe, se ignora como duplicado.
-    2. Autoridad:
-       - Lo que vende (pedidos, rondas, pagos) manda el LOCAL.
-       - Lo que configura (precios, productos, recetas) manda la NUBE.
-    """
-    procesadas = 0
-    duplicadas = 0
-    conflictos = 0
-    errores = 0
-    resultado_ops: list[RegistroSync] = []
-    resultados: list[SyncOpResultado] = []
-
-    for op in data.operaciones:
-        # Chequeo de idempotencia por UUID
-        existente = db.query(RegistroSync).filter(RegistroSync.op_id == op.op_id).first()
-        if existente:
-            duplicadas += 1
-            resultado_ops.append(existente)
-            resultados.append(SyncOpResultado(op_id=op.op_id, estado="DUPLICADO"))
-            continue
-
-        estado = "APLICADO"
-        nota_resolucion = None
-
-        # Evaluación de regla de autoridad
-        if op.origen == "NUBE" and op.entidad in ("pedido", "pago", "detalle_pedido"):
-            # Conflicto: la nube intentó sobreescribir ventas locales
-            estado = "CONFLICTO"
-            nota_resolucion = "Rechazado: Las transacciones locales de venta tienen autoridad absoluta"
-
-        try:
-            # SAVEPOINT por operación: si una venta falla, solo se descarta ESA operación.
-            # Antes un solo fallo dejaba la sesión inutilizable y tumbaba el lote completo
-            # (HTTP 500/409), con lo cual la cola local quedaba atascada para siempre.
-            with db.begin_nested():
-                registro = RegistroSync(
-                    op_id=op.op_id,
-                    sucursal_id=getattr(op, "sucursal_id", "SUC-01"),
-                    dispositivo_id=op.dispositivo_id,
-                    tipo=op.tipo,
-                    entidad=op.entidad,
-                    entidad_id=op.entidad_id,
-                    entidad_uuid=getattr(op, "entidad_uuid", None),
-                    payload=op.payload,
-                    origen=op.origen,
-                    estado=estado,
-                    resolucion_nota=nota_resolucion,
-                    sincronizado_en=func.now() if estado == "APLICADO" else None,
-                )
-                db.add(registro)
-                db.flush()
-
-                # Asimilar materialmente en tablas de dominio en la nube
-                if estado == "APLICADO":
-                    asimilar_operacion(db, op)
-
-                registrar(
-                    db,
-                    usuario,
-                    "SYNC_PUSH",
-                    "registro_sync",
-                    registro.id,
-                    f"op_id={op.op_id} tipo={op.tipo} estado={estado} disp={op.dispositivo_id}",
-                )
-        except Exception as e:
-            errores += 1
-            detalle = (str(e).splitlines() or [""])[0][:300] or type(e).__name__
-            resultados.append(SyncOpResultado(op_id=op.op_id, estado="ERROR", error=detalle))
-            continue
-
-        if estado == "CONFLICTO":
-            conflictos += 1
-        else:
             procesadas += 1
-        resultado_ops.append(registro)
-        resultados.append(SyncOpResultado(op_id=op.op_id, estado=estado))
+            resultados.append(SyncOpResultado(op_id=op.op_id, estado="APLICADO"))
 
-    safe_commit(db)
-    for r in resultado_ops:
-        db.refresh(r)
-
-    return SyncPushOut(
-        procesadas=procesadas,
-        duplicadas=duplicadas,
-        conflictos=conflictos,
-        errores=errores,
-        operaciones=[SyncOpOut.model_validate(r) for r in resultado_ops],
-        resultados=resultados,
-    )
-
-
-def encolar_sync(
-    db: Session,
-    tipo: str,
-    entidad: str,
-    payload: dict,
-    entidad_id: int | None = None,
-    entidad_uuid: str | None = None,
-    dispositivo_id: str = "CAJA-LOCAL",
-    sucursal_id: str = "SUC-01",
-) -> RegistroSync:
-    """Encola una operación en registro_sync (Patrón Outbox) para sincronización automática con la nube."""
-    import uuid
-    from app.config import settings
-
-    op_id = str(uuid.uuid4())
-    registro = RegistroSync(
-        op_id=op_id,
-        sucursal_id=sucursal_id or getattr(settings, "SUCURSAL_ID", "SUC-01"),
-        dispositivo_id=dispositivo_id,
-        tipo=tipo,
-        entidad=entidad,
-        entidad_id=entidad_id,
-        entidad_uuid=entidad_uuid or str(uuid.uuid4()),
-        payload=payload,
-        origen="LOCAL",
-        estado="PENDIENTE",
-    )
-    db.add(registro)
-    return registro
-
-
-def reconciliar_usuarios_locales(db: Session) -> int:
-    """Inspecciona y encola automáticamente usuarios locales creados previamente que no estén en la nube."""
-    from app.models.usuario import Usuario
-
-    SEEDS_SISTEMA = {"admin", "caja", "mesero", "cocina"}
-    usuarios_activos = db.query(Usuario).filter(Usuario.activo == True).all()
-    encolados = 0
-
-    for u in usuarios_activos:
-        if u.usuario in SEEDS_SISTEMA:
-            continue
-
-        ya_en_sync = (
-            db.query(RegistroSync)
-            .filter(
-                RegistroSync.tipo == "CREAR_USUARIO",
-                RegistroSync.entidad_id == u.id,
-            )
-            .first()
-        )
-        if not ya_en_sync:
-            encolar_sync(
-                db,
-                tipo="CREAR_USUARIO",
-                entidad="usuario",
-                payload={
-                    "id": u.id,
-                    "nombre": u.nombre,
-                    "usuario": u.usuario,
-                    "rol_id": u.rol_id,
-                    "password_hash": u.password_hash,
-                    "activo": u.activo,
-                    "fijado": u.fijado,
-                    "es_demo": u.es_demo,
-                },
-                entidad_id=u.id,
-                dispositivo_id="SISTEMA_RECONCILIACION",
-            )
-            encolados += 1
-
-    if encolados > 0:
         safe_commit(db)
-        import logging
-        logging.info("Reconciliación: %d usuario(s) local(es) encolados para sincronización en la nube", encolados)
+    finally:
+        db.info.pop("_replicacion_omitir", None)
 
-    return encolados
+    return (
+        SyncPushOut(
+            procesadas=procesadas, duplicadas=duplicadas, conflictos=0, errores=errores,
+            operaciones=[], resultados=resultados,
+        ),
+        tablas,
+    )
+
+
+# ------------------------------------------------------------------ bajada (nube -> caja)
+def obtener_cambios_nube(db: Session, despues_de: int, limite: int = 200) -> list[SyncOpOut]:
+    """Cambios hechos en el panel web que la caja todavía no ha descargado, en orden."""
+    ops = (
+        db.query(RegistroSync)
+        .filter(
+            RegistroSync.origen == "NUBE",
+            RegistroSync.tipo.in_(replicacion.TIPOS_REPLICA),
+            RegistroSync.id > despues_de,
+        )
+        .order_by(RegistroSync.id.asc())
+        .limit(limite)
+        .all()
+    )
+    return [SyncOpOut.model_validate(o) for o in ops]
+
+
+def confirmar_bajada(db: Session, hasta_id: int) -> int:
+    """La caja avisa hasta qué operación de la nube ya aplicó."""
+    n = db.execute(
+        text(
+            "UPDATE registro_sync SET estado = 'APLICADO', sincronizado_en = now() "
+            "WHERE origen = 'NUBE' AND estado = 'PENDIENTE' AND id <= :h"
+        ),
+        {"h": hasta_id},
+    ).rowcount
+    # Limpieza: el rastro de operaciones viejas ya aplicadas no hace falta conservarlo
+    db.execute(
+        text("DELETE FROM registro_sync WHERE estado = 'APLICADO' AND sincronizado_en < now() - interval '30 days'")
+    )
+    db.commit()
+    return n or 0
 
 
 def obtener_pull(
@@ -435,30 +296,53 @@ def obtener_pull(
     origen_filtro: str | None = None,
     limit: int = 100,
 ) -> list[SyncOpOut]:
-    """Obtiene operaciones registradas desde una fecha/hora para sincronizar terminales."""
+    """Consulta el registro de operaciones (diagnóstico)."""
     q = db.query(RegistroSync).order_by(RegistroSync.creado_en.asc())
     if since:
         q = q.filter(RegistroSync.creado_en > since)
     if origen_filtro:
         q = q.filter(RegistroSync.origen == origen_filtro)
-
-    ops = q.limit(limit).all()
-    return [SyncOpOut.model_validate(o) for o in ops]
+    return [SyncOpOut.model_validate(o) for o in q.limit(limit).all()]
 
 
+# ------------------------------------------------------------------ reinicio del espejo
+def reiniciar_espejo(db: Session) -> dict:
+    """SOLO NUBE. Vacía los datos de negocio del espejo para reconstruirlo desde la caja.
+
+    Se usa una vez al instalar (o reinstalar) la caja: garantiza que la nube quede idéntica al
+    restaurante, sin restos de pruebas ni identificadores que choquen.
+    """
+    if settings.MODO_CEREBRO != "NUBE":
+        raise ValueError("El espejo solo se reinicia en el servidor de la nube")
+    conn = db.connection()
+    vaciadas = _vaciar_datos_de_negocio(conn)
+    # Espejo nuevo: otro identificador (la caja reenviará todo) y sin caja vinculada
+    conn.execute(text("DELETE FROM configuracion WHERE clave IN ('sync_espejo_id', 'sync_instalacion_vinculada')"))
+    nuevo = espejo_id(conn)
+    db.commit()
+    return {"tablas_vaciadas": vaciadas, "espejo_id": nuevo}
+
+
+# ------------------------------------------------------------------ estado
 def obtener_estado_sync(db: Session, modo: str = "LOCAL") -> SyncEstadoOut:
-    """Métricas del motor de sincronización."""
-    from app.config import settings
+    """Métricas del motor de sincronización.
+
+    `pendientes` cuenta lo que este servidor todavía tiene por entregar al otro lado:
+    en la caja, lo que falta subir; en la nube, lo que la caja aún no ha descargado.
+    """
     from app.services.sync_worker import get_worker_status
 
-    total = db.query(func.count(RegistroSync.id)).scalar() or 0
-    pendientes = db.query(func.count(RegistroSync.id)).filter(RegistroSync.estado == "PENDIENTE").scalar() or 0
-    aplicadas = db.query(func.count(RegistroSync.id)).filter(RegistroSync.estado == "APLICADO").scalar() or 0
-    conflictos = db.query(func.count(RegistroSync.id)).filter(RegistroSync.estado == "CONFLICTO").scalar() or 0
+    propio = replicacion.origen_propio()
+    base = db.query(func.count(RegistroSync.id))
+    total = base.scalar() or 0
+    pendientes = base.filter(RegistroSync.estado == "PENDIENTE", RegistroSync.origen == propio).scalar() or 0
+    aplicadas = base.filter(RegistroSync.estado == "APLICADO").scalar() or 0
+    conflictos = (
+        base.filter(RegistroSync.estado.in_(("CONFLICTO", "ERROR", "ERROR_SERVIDOR"))).scalar() or 0
+    )
     ultima = db.query(func.max(RegistroSync.sincronizado_en)).scalar()
 
     worker_st = get_worker_status()
-
     return SyncEstadoOut(
         cerebro_modo=modo,
         total_operaciones=int(total),

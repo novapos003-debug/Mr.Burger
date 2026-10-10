@@ -3,9 +3,13 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
-raw_db_url = os.getenv(
-    "DATABASE_URL",
-    "postgresql://restaurante:restaurante_dev@127.0.0.1:5432/restaurante"
+from app.config import settings
+
+# Orden: variable de entorno -> archivo .env -> base local por defecto de la caja
+raw_db_url = (
+    os.getenv("DATABASE_URL")
+    or settings.DATABASE_URL
+    or "postgresql://restaurante:restaurante_dev@127.0.0.1:5432/restaurante"
 )
 # Elimina cualquier salto de línea, retorno de carro o espacio accidental introducido al copiar/pegar
 DATABASE_URL = "".join(raw_db_url.split())
@@ -41,10 +45,13 @@ logger = logging.getLogger(__name__)
 engine_kwargs = {
     "pool_pre_ping": True,
 }
+en_nube_gestionada = any(h in DATABASE_URL for h in ("supabase", "neon", "render", "aws"))
 if not is_sqlite:
     engine_kwargs.update({
-        "pool_size": 15,
-        "max_overflow": 10,
+        # El pooler de Supabase admite pocas conexiones por cliente en el plan gratuito: si se
+        # piden de más responde "max clients reached". En la caja (PostgreSQL propio) no hay ese límite.
+        "pool_size": 5 if en_nube_gestionada else 15,
+        "max_overflow": 5 if en_nube_gestionada else 10,
         "pool_timeout": 30,
         "pool_recycle": 1800,
     })

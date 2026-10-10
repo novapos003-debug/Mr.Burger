@@ -259,13 +259,6 @@ async def crear_producto(
     safe_commit(db)
     db.refresh(prod)
     disponible, _ = disponibilidad_producto(db, prod)
-    try:
-        import asyncio
-        from app.services.sync_worker import replicar_admin_a_nube
-        prod_dict = {k: float(v) if isinstance(v, Decimal) else v for k, v in data.model_dump().items()}
-        asyncio.create_task(replicar_admin_a_nube("POST", "/productos", prod_dict))
-    except Exception:
-        pass
     await ws_manager.broadcast({"evento": "catalogo_actualizado", "data": {"tipo": "producto_creado", "id": prod.id}})
     return producto_out(prod, disponible)
 
@@ -293,13 +286,6 @@ async def actualizar_producto(
     safe_commit(db)
     db.refresh(prod)
     disponible, _ = disponibilidad_producto(db, prod)
-    try:
-        import asyncio
-        from app.services.sync_worker import replicar_admin_a_nube
-        cambios_ser = {k: float(v) if isinstance(v, Decimal) else v for k, v in cambios.items()}
-        asyncio.create_task(replicar_admin_a_nube("PUT", f"/productos/{producto_id}", cambios_ser))
-    except Exception:
-        pass
     await ws_manager.broadcast({"evento": "catalogo_actualizado", "data": {"tipo": "producto_actualizado", "id": prod.id}})
     return producto_out(prod, disponible)
 
@@ -323,12 +309,6 @@ async def forzar_disponibilidad(
     safe_commit(db)
     db.refresh(prod)
     disponible, _ = disponibilidad_producto(db, prod)
-    try:
-        import asyncio
-        from app.services.sync_worker import replicar_admin_a_nube
-        asyncio.create_task(replicar_admin_a_nube("PUT", f"/productos/{producto_id}/disponibilidad", {"manual_disponible": data.manual_disponible}))
-    except Exception:
-        pass
     await ws_manager.broadcast({"evento": "catalogo_actualizado", "data": {"tipo": "producto_disponibilidad", "id": prod.id}})
     return producto_out(prod, disponible)
 
@@ -346,10 +326,4 @@ async def desactivar_producto(
     prod.activo = False
     registrar(db, usuario, "DESACTIVAR_PRODUCTO", "producto", prod.id, prod.nombre)
     safe_commit(db)
-    try:
-        import asyncio
-        from app.services.sync_worker import replicar_admin_a_nube
-        asyncio.create_task(replicar_admin_a_nube("DELETE", f"/productos/{producto_id}"))
-    except Exception:
-        pass
     await ws_manager.broadcast({"evento": "catalogo_actualizado", "data": {"tipo": "producto_desactivado", "id": prod.id}})

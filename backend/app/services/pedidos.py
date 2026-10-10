@@ -71,3 +71,28 @@ def calcular_totales(db: Session, detalles: list[DetallePedido]) -> dict[str, De
     subtotal = subtotal.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     iva = (total - subtotal).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     return {"subtotal": subtotal, "iva": iva, "total": total}
+
+
+def recalcular_totales_pedido(
+    db: Session, pedido: Pedido, nuevos: list[DetallePedido] | None = None
+) -> None:
+    """Única fuente del total de un pedido: líneas NO canceladas + recargo de empaque si es LLEVAR.
+
+    `nuevos` son líneas recién creadas que todavía no aparecen en `pedido.detalles`.
+    """
+    nuevos = nuevos or []
+    activos = [d for d in pedido.detalles if d.estado != "CANCELADO" and d not in nuevos] + [
+        d for d in nuevos if d.estado != "CANCELADO"
+    ]
+    totales = calcular_totales(db, activos)
+
+    recargo = Decimal("0")
+    if (getattr(pedido, "tipo_consumo", "LOCAL") or "LOCAL") == "LLEVAR":
+        from app.services.inventario import calcular_recargo_empaque
+
+        recargo, _ = calcular_recargo_empaque(db, activos)
+
+    pedido.recargo_empaque = recargo
+    pedido.subtotal = totales["subtotal"]
+    pedido.iva = totales["iva"]
+    pedido.total = totales["total"] + recargo

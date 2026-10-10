@@ -1,28 +1,30 @@
+"""Worker de sincronización de la caja (modo LOCAL).
+
+Corre dentro del backend y hace dos cosas, en este orden, en cada ciclo:
+  1. BAJAR  los cambios hechos en el panel web y aplicarlos en la base local.
+  2. SUBIR  a la nube todo lo pendiente de la cola local (`registro_sync`), incluido el estado
+            en que quedó cada fila recién bajada, para que ambos lados terminen idénticos.
+
+No espera al temporizador: cada vez que se confirma un cambio en la base de datos el worker
+se despierta al instante, así el dueño ve la venta en la web segundos después de que ocurre.
+Si no hay internet no pasa nada: la cola crece y se entrega al volver la conexión.
+"""
 import asyncio
-from decimal import Decimal
+import json
 import logging
 import time
 from datetime import datetime, timezone
 from typing import Any
 
 import httpx
-from sqlalchemy import func
+from sqlalchemy import text
 
 from app.config import settings
-from app.database import SessionLocal, safe_commit
-from app.models import (
-    CategoriaInsumo,
-    Configuracion,
-    DetalleReceta,
-    Ingrediente,
-    Producto,
-    RegistroSync,
-    Usuario,
-)
+from app.core import replicacion
+from app.database import engine
 
 logger = logging.getLogger("sync_worker")
 
-# Estado reactivo en memoria del worker de sincronización
 _worker_status: dict[str, Any] = {
     "online": True,
     "sincronizando": False,
@@ -33,536 +35,346 @@ _worker_status: dict[str, Any] = {
     "ultimo_chequeo": None,
 }
 
+LOTE = 200
+MAX_LOTES_POR_CICLO = 25
+# Tras N rechazos una operación se aparta (ERROR_SERVIDOR) para no reintentarla sin fin.
+# Con la espera creciente entre intentos, eso equivale a unas 3 horas de insistencia.
+MAX_REINTENTOS_OP = 20
+ESPERA_MAXIMA_S = 600
+
+_despertar: asyncio.Event | None = None
+_loop: asyncio.AbstractEventLoop | None = None
+_proximo_intento: dict[int, float] = {}   # id de operación -> instante en que se puede reintentar
+_fallos_bajada: dict[int, int] = {}       # id de operación de la nube -> intentos fallidos
+
 
 def get_worker_status() -> dict[str, Any]:
-    """Retorna una copia del estado actual del worker de sincronización."""
     return dict(_worker_status)
 
 
-# Tras N rechazos de la nube, una operación se aísla (ERROR_SERVIDOR) para no bloquear a las demás.
-MAX_REINTENTOS_OP = 20
+def despertar_worker() -> None:
+    """Pide un ciclo inmediato. Seguro de llamar desde cualquier hilo."""
+    if _loop is not None and _despertar is not None:
+        try:
+            _loop.call_soon_threadsafe(_despertar.set)
+        except RuntimeError:
+            pass
 
 
-async def _post_push(client: httpx.AsyncClient, cloud_url: str, operaciones: list[dict]) -> httpx.Response:
-    return await client.post(
-        f"{cloud_url}/sync/push",
-        headers={"X-Sync-Token": settings.CLOUD_SYNC_TOKEN, "Content-Type": "application/json"},
-        json={"dispositivo_id": str(settings.SUCURSAL_ID or "SUC-01"), "operaciones": operaciones},
+def _activo() -> bool:
+    return settings.MODO_CEREBRO != "NUBE" and bool(settings.CLOUD_SYNC_ENABLED and settings.CLOUD_SYNC_URL)
+
+
+def _cabeceras() -> dict[str, str]:
+    return {"X-Sync-Token": settings.CLOUD_SYNC_TOKEN, "Content-Type": "application/json"}
+
+
+# ------------------------------------------------------------------ acceso a la base (bloqueante)
+def _config(conn, clave: str) -> str | None:
+    return conn.execute(text("SELECT valor FROM configuracion WHERE clave = :c"), {"c": clave}).scalar()
+
+
+def _guardar_config(conn, clave: str, valor: str, descripcion: str) -> None:
+    conn.execute(
+        text(
+            "INSERT INTO configuracion (clave, valor, descripcion) VALUES (:c, :v, :d) "
+            "ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor"
+        ),
+        {"c": clave, "v": valor, "d": descripcion},
     )
 
 
-def _leer_resultados(resp: httpx.Response, operaciones: list[dict], destino: dict[str, tuple[bool, str | None]]) -> None:
-    """Traduce la respuesta del push a {op_id: (ok, error)}.
+def _contar_pendientes() -> int:
+    with engine.connect() as conn:
+        return int(
+            conn.execute(
+                text("SELECT count(*) FROM registro_sync WHERE estado = 'PENDIENTE' AND origen = 'LOCAL'")
+            ).scalar()
+            or 0
+        )
 
-    La nube nueva responde 200/207 con `resultados` por operación. Una nube antigua responde 200 sin
-    `resultados`: en ese caso 200 significa que todo el lote quedó aplicado.
-    """
+
+def _leer_lote() -> tuple[str, list[dict]]:
+    from app.services.sync import instalacion_id
+
+    ahora = time.time()
+    en_espera = [i for i, t in _proximo_intento.items() if t > ahora]
+    with engine.begin() as conn:
+        inst = instalacion_id(conn)
+        filas = conn.execute(
+            text(
+                "SELECT id, op_id, sucursal_id, tipo, entidad, entidad_id, entidad_uuid, payload "
+                "FROM registro_sync WHERE estado = 'PENDIENTE' AND origen = 'LOCAL' "
+                "AND tipo IN ('FILA', 'BORRAR') AND NOT (id = ANY(CAST(:espera AS integer[]))) ORDER BY id LIMIT :n"
+            ),
+            {"espera": en_espera, "n": LOTE},
+        ).mappings().all()
+    ops = [
+        {
+            "_id": f["id"],
+            "op_id": f["op_id"],
+            "sucursal_id": f["sucursal_id"] or "SUC-01",
+            "dispositivo_id": inst,
+            "tipo": f["tipo"],
+            "entidad": f["entidad"],
+            "entidad_id": f["entidad_id"],
+            "entidad_uuid": f["entidad_uuid"],
+            "payload": {**(f["payload"] or {}), "_seq": f["id"], "_inst": inst},
+            "origen": "LOCAL",
+        }
+        for f in filas
+    ]
+    return inst, ops
+
+
+def _asentar(ops: list[dict], resultados: dict[str, tuple[bool, str | None]]) -> tuple[int, str | None]:
+    """Guarda en la cola local qué pasó con cada operación enviada."""
+    aplicadas = 0
+    primer_error = None
+    ahora = time.time()
+    with engine.begin() as conn:
+        for op in ops:
+            res = resultados.get(op["op_id"])
+            if res is None:
+                continue  # sin respuesta: se reintenta tal cual en el próximo ciclo
+            if res[0]:
+                conn.execute(
+                    text(
+                        "UPDATE registro_sync SET estado = 'APLICADO', sincronizado_en = now(), ultimo_error = NULL, "
+                        "payload = jsonb_build_object('pk', payload->'pk') WHERE id = :i"
+                    ),
+                    {"i": op["_id"]},
+                )
+                _proximo_intento.pop(op["_id"], None)
+                aplicadas += 1
+            else:
+                error = (res[1] or "Error en la nube")[:300]
+                n = conn.execute(
+                    text(
+                        "UPDATE registro_sync SET reintentos = reintentos + 1, ultimo_error = :e, "
+                        "estado = CASE WHEN reintentos + 1 >= :m THEN 'ERROR_SERVIDOR' ELSE estado END "
+                        "WHERE id = :i RETURNING reintentos"
+                    ),
+                    {"e": error, "m": MAX_REINTENTOS_OP, "i": op["_id"]},
+                ).scalar() or 1
+                _proximo_intento[op["_id"]] = ahora + min(ESPERA_MAXIMA_S, 5 * (2 ** min(n, 10)))
+                primer_error = primer_error or f"La nube rechazó {op['entidad']} {op['entidad_uuid']}: {error}"
+                if n >= MAX_REINTENTOS_OP:
+                    logger.error("Operación %s (%s %s) apartada tras %s rechazos", op["_id"], op["entidad"], op["entidad_uuid"], n)
+    return aplicadas, primer_error
+
+
+def _preparar_espejo(espejo_id: str) -> bool:
+    """Si la nube es un espejo nuevo (o recién reiniciado), se le envía la base completa."""
+    with engine.begin() as conn:
+        if _config(conn, "sync_espejo_id") == espejo_id:
+            return False
+        # Lo pendiente de versiones anteriores queda reemplazado por la copia completa
+        conn.execute(
+            text(
+                "UPDATE registro_sync SET estado = 'APLICADO', sincronizado_en = now(), "
+                "resolucion_nota = 'Reemplazada por la copia completa enviada al espejo' "
+                "WHERE origen = 'LOCAL' AND estado <> 'APLICADO'"
+            )
+        )
+        total = replicacion.encolar_snapshot_completo(conn)
+        _guardar_config(conn, "sync_espejo_id", espejo_id, "Espejo en la nube al que está vinculada esta caja")
+        _guardar_config(conn, "sync_cursor_nube", "0", "Última operación de la nube aplicada en esta caja")
+    _proximo_intento.clear()
+    _fallos_bajada.clear()
+    logger.info("Espejo nuevo detectado (%s): %s filas encoladas para copia completa", espejo_id, total)
+    return True
+
+
+def _aplicar_cambio_nube(op: dict) -> str:
+    """Aplica en la base local UNA operación del panel web y avanza el cursor. Devuelve la tabla."""
+    with engine.begin() as conn:
+        devolver = replicacion.aplicar_operacion(
+            conn, op["tipo"], op["entidad"], op["payload"], origen_op="NUBE"
+        )
+        for tabla, pk in devolver:
+            replicacion.encolar_fila(conn, tabla, pk)
+        _guardar_config(conn, "sync_cursor_nube", str(op["id"]), "Última operación de la nube aplicada en esta caja")
+    return op["entidad"]
+
+
+def _saltar_cambio_nube(op: dict, error: str) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO registro_sync (op_id, sucursal_id, dispositivo_id, tipo, entidad, entidad_id, "
+                "entidad_uuid, payload, origen, estado, reintentos, ultimo_error) VALUES (:o, :s, 'NUBE', :t, :e, "
+                ":ei, :eu, CAST(:p AS jsonb), 'NUBE', 'CONFLICTO', :r, :err) ON CONFLICT (op_id) DO NOTHING"
+            ),
+            {
+                "o": op["op_id"], "s": op.get("sucursal_id") or "SUC-01", "t": op["tipo"], "e": op["entidad"],
+                "ei": op.get("entidad_id"), "eu": op.get("entidad_uuid"), "p": json.dumps(op["payload"], default=str),
+                "r": MAX_REINTENTOS_OP, "err": error[:300],
+            },
+        )
+        _guardar_config(conn, "sync_cursor_nube", str(op["id"]), "Última operación de la nube aplicada en esta caja")
+
+
+def _limpiar_cola_antigua() -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text("DELETE FROM registro_sync WHERE estado = 'APLICADO' AND sincronizado_en < now() - interval '15 days'")
+        )
+
+
+# ------------------------------------------------------------------ ciclo
+def _leer_resultados(resp: httpx.Response, ops: list[dict]) -> dict[str, tuple[bool, str | None]]:
+    resultados: dict[str, tuple[bool, str | None]] = {}
     try:
-        cuerpo = resp.json()
+        for r in resp.json().get("resultados") or []:
+            resultados[r["op_id"]] = (r.get("estado") != "ERROR", r.get("error"))
     except Exception:
-        cuerpo = {}
-    por_op = {x.get("op_id"): x for x in (cuerpo.get("resultados") or [])}
-    for op in operaciones:
-        x = por_op.get(op["op_id"])
-        if x is None:
-            ok = resp.status_code == 200
-            destino[op["op_id"]] = (ok, None if ok else "La nube no informó el resultado de la operación")
-        else:
-            ok = x.get("estado") in ("APLICADO", "DUPLICADO", "CONFLICTO")
-            destino[op["op_id"]] = (ok, None if ok else (x.get("error") or "Error desconocido en la nube"))
+        pass
+    return resultados
+
+
+async def _subir(client: httpx.AsyncClient, cloud_url: str) -> None:
+    for _ in range(MAX_LOTES_POR_CICLO):
+        inst, ops = await asyncio.to_thread(_leer_lote)
+        if not ops:
+            return
+        _worker_status["sincronizando"] = True
+        cuerpo = {"dispositivo_id": inst, "operaciones": [{k: v for k, v in o.items() if k != "_id"} for o in ops]}
+        resp = await client.post(f"{cloud_url}/sync/push", headers=_cabeceras(), content=json.dumps(cuerpo, default=str))
+        if resp.status_code not in (200, 207):
+            raise RuntimeError(f"La nube respondió HTTP {resp.status_code} al subir: {resp.text[:200]}")
+        aplicadas, error = await asyncio.to_thread(_asentar, ops, _leer_resultados(resp, ops))
+        if aplicadas:
+            _worker_status["ultima_sincronizacion"] = datetime.now(timezone.utc).isoformat()
+            _worker_status["aplicadas"] = _worker_status.get("aplicadas", 0) + aplicadas
+        if error:
+            _worker_status["ultimo_error"] = error
+        if aplicadas == 0:
+            return  # nada avanzó en este lote: no insistir hasta el próximo ciclo
+
+
+async def _bajar(client: httpx.AsyncClient, cloud_url: str) -> int:
+    """Descarga y aplica los cambios del panel web. Devuelve cuántos aplicó."""
+    from app.services.sync import TABLAS_CATALOGO
+    from app.services.websocket import ws_manager
+
+    def _cursor() -> int:
+        with engine.connect() as conn:
+            return int(_config(conn, "sync_cursor_nube") or 0)
+
+    total = 0
+    tablas: set[str] = set()
+    for _ in range(MAX_LOTES_POR_CICLO):
+        cursor = await asyncio.to_thread(_cursor)
+        resp = await client.get(
+            f"{cloud_url}/sync/cambios", headers=_cabeceras(), params={"despues_de": cursor, "limite": LOTE}
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(f"La nube respondió HTTP {resp.status_code} al bajar cambios: {resp.text[:200]}")
+        datos = resp.json()
+        if await asyncio.to_thread(_preparar_espejo, datos.get("espejo_id") or ""):
+            return total  # espejo nuevo: primero se sube la copia completa
+        ops = datos.get("operaciones") or []
+        if not ops:
+            break
+
+        detenido = False
+        for op in ops:
+            try:
+                tablas.add(await asyncio.to_thread(_aplicar_cambio_nube, op))
+                _fallos_bajada.pop(op["id"], None)
+                total += 1
+            except Exception as e:
+                error = (str(e).splitlines() or [""])[0][:300] or type(e).__name__
+                n = _fallos_bajada.get(op["id"], 0) + 1
+                _fallos_bajada[op["id"]] = n
+                _worker_status["ultimo_error"] = f"No se pudo aplicar un cambio del panel web ({op['entidad']}): {error}"
+                if n >= MAX_REINTENTOS_OP:
+                    logger.error("Cambio de la nube %s (%s) descartado tras %s intentos: %s", op["id"], op["entidad"], n, error)
+                    await asyncio.to_thread(_saltar_cambio_nube, op, error)
+                    continue
+                detenido = True  # se reintenta en el próximo ciclo, respetando el orden
+                break
+        if detenido or len(ops) < LOTE:
+            break
+
+    if total:
+        cursor = await asyncio.to_thread(_cursor)
+        try:
+            await client.post(f"{cloud_url}/sync/confirmar", headers=_cabeceras(), json={"hasta_id": cursor})
+        except Exception:
+            pass
+        await ws_manager.broadcast({"evento": "datos_sincronizados", "data": {"origen": "NUBE", "tablas": sorted(tablas)}})
+        if tablas & TABLAS_CATALOGO:
+            await ws_manager.broadcast({"evento": "catalogo_actualizado", "data": {"tipo": "sincronizacion_nube"}})
+    return total
 
 
 async def ejecutar_ciclo_sync() -> dict[str, Any]:
-    """Ejecuta un ciclo de sondeo y sincronización con el servidor espejo en la nube.
-    
-    Flujo:
-    1. Si estamos en modo NUBE, el servidor es receptor; no envía push hacia afuera.
-    2. Consulta cuántos registros PENDIENTES existen en la BD local.
-    3. Si no hay CLOUD_SYNC_URL configurada, asume funcionamiento local normal.
-    4. Si hay CLOUD_SYNC_URL, hace ping ligero al endpoint /sync/health.
-    5. Si hay internet y registros pendientes, envía lotes de hasta 50 operaciones con UUID idempotente.
-    6. Actualiza atómicamente el estado local a APLICADO y sincronizado_en = now().
-    """
-    # Si estamos en modo NUBE o la sincronización está deshabilitada, el worker no debe hacer nada
-    if settings.MODO_CEREBRO == "NUBE" or not settings.CLOUD_SYNC_ENABLED:
+    """Un ciclo completo: subir, bajar y volver a subir lo que la bajada haya generado."""
+    if not _activo():
         _worker_status["online"] = True
         return dict(_worker_status)
 
     _worker_status["ultimo_chequeo"] = datetime.now(timezone.utc).isoformat()
-
-    # 1. Contar pendientes locales
-    db = SessionLocal()
-    try:
-        p_count = (
-            db.query(func.count(RegistroSync.id))
-            .filter(RegistroSync.estado == "PENDIENTE")
-            .scalar()
-            or 0
-        )
-        _worker_status["pendientes"] = int(p_count)
-    except Exception as e:
-        logger.warning(f"Error al contar registros pendientes: {e}")
-    finally:
-        db.close()
-
-    # Si no hay URL de nube configurada (modo local puro de desarrollo o caja única sin nube)
-    if not settings.CLOUD_SYNC_URL:
-        _worker_status["online"] = True
-        _worker_status["ultimo_error"] = None
-        return dict(_worker_status)
-
-    # 2. Verificar conectividad con la nube
     cloud_url = settings.CLOUD_SYNC_URL.rstrip("/")
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.get(f"{cloud_url}/sync/health")
-            if resp.status_code == 200:
-                _worker_status["online"] = True
-                _worker_status["ultimo_error"] = None
-            else:
-                _worker_status["online"] = False
-                _worker_status["ultimo_error"] = f"Cloud respondió HTTP {resp.status_code}"
-                return dict(_worker_status)
-    except Exception as e:
+        # Tiempos amplios: el plan gratuito de Render tarda en despertar tras estar inactivo
+        async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=30.0)) as client:
+            salud = await client.get(f"{cloud_url}/sync/health")
+            if salud.status_code != 200:
+                raise RuntimeError(f"La nube respondió HTTP {salud.status_code}")
+            _worker_status["online"] = True
+            _worker_status["ultimo_error"] = None
+            # Primero bajar: detecta un espejo nuevo antes de subir nada, y lo que la bajada
+            # deja en la cola (el estado resultante de cada fila) sale en la subida siguiente.
+            await _bajar(client, cloud_url)
+            await _subir(client, cloud_url)
+    except (httpx.HTTPError, OSError):
         _worker_status["online"] = False
-        _worker_status["ultimo_error"] = "Sin conexión a la nube (Operando en Modo Local autónomo)"
-        return dict(_worker_status)
-
-    # 3. Si hay internet y hay pendientes, procesar lote
-    if _worker_status["pendientes"] > 0:
-        db = SessionLocal()
-        pendientes_data = []
-        pendientes_ids = []
+        _worker_status["ultimo_error"] = "Sin conexión a la nube (operando en modo local autónomo)"
+    except Exception as e:
+        _worker_status["ultimo_error"] = (str(e) or type(e).__name__)[:300]
+        logger.warning("Ciclo de sincronización con error: %s", _worker_status["ultimo_error"])
+    finally:
+        _worker_status["sincronizando"] = False
         try:
-            pendientes = (
-                db.query(RegistroSync)
-                .filter(RegistroSync.estado == "PENDIENTE")
-                .order_by(RegistroSync.id.asc())
-                .limit(50)
-                .all()
-            )
-            if pendientes:
-                pendientes_ids = [r.id for r in pendientes]
-                pendientes_data = [
-                    {
-                        "op_id": str(r.op_id),
-                        "sucursal_id": str(r.sucursal_id or "SUC-01"),
-                        "dispositivo_id": str(r.dispositivo_id or "CAJA_1"),
-                        "tipo": str(r.tipo),
-                        "entidad": str(r.entidad),
-                        "entidad_id": r.entidad_id,
-                        "entidad_uuid": str(r.entidad_uuid) if r.entidad_uuid else None,
-                        "payload": r.payload,
-                        "origen": "LOCAL",
-                    }
-                    for r in pendientes
-                ]
-        finally:
-            db.close()
-
-        if pendientes_data:
-            _worker_status["sincronizando"] = True
-            resultados: dict[str, tuple[bool, str | None]] = {}
-            error_red = None
-            try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    push_resp = await _post_push(client, cloud_url, pendientes_data)
-                    if push_resp.status_code in (200, 207):
-                        _leer_resultados(push_resp, pendientes_data, resultados)
-                    else:
-                        # Lote rechazado completo (nube con versión vieja, 422 por una sola operación,
-                        # etc.). Se prueba operación por operación para que UNA mala no bloquee la cola.
-                        logger.warning(
-                            "Lote rechazado (HTTP %s); reintentando operación por operación", push_resp.status_code
-                        )
-                        for op in pendientes_data:
-                            r1 = await _post_push(client, cloud_url, [op])
-                            if r1.status_code in (200, 207):
-                                _leer_resultados(r1, [op], resultados)
-                            else:
-                                resultados[op["op_id"]] = (False, f"HTTP {r1.status_code}: {r1.text[:150]}")
-            except Exception as e:
-                error_red = str(e) or type(e).__name__
-
-            # Abrir nueva sesión para asentar el resultado de cada operación
-            db = SessionLocal()
-            try:
-                records = db.query(RegistroSync).filter(RegistroSync.id.in_(pendientes_ids)).all()
-                now_dt = datetime.now(timezone.utc)
-                aplicadas_ok = 0
-                primer_error = None
-                for r in records:
-                    res = resultados.get(r.op_id)
-                    if res is None:
-                        # sin respuesta de la nube (caída de red): se reintenta en el próximo ciclo
-                        r.reintentos += 1
-                        r.ultimo_error = f"Fallo de red al enviar lote: {error_red}"
-                        primer_error = primer_error or f"Fallo al enviar lote: {error_red}"
-                    elif res[0]:
-                        r.estado = "APLICADO"
-                        r.sincronizado_en = now_dt
-                        r.ultimo_error = None
-                        aplicadas_ok += 1
-                    else:
-                        r.reintentos += 1
-                        r.ultimo_error = (res[1] or "Error en la nube")[:300]
-                        primer_error = primer_error or f"La nube rechazó {r.tipo} #{r.entidad_id}: {r.ultimo_error}"
-                        if r.reintentos >= MAX_REINTENTOS_OP:
-                            r.estado = "ERROR_SERVIDOR"
-                            logger.error(
-                                "Operación sync id=%s (%s) aislada tras %s rechazos de la nube.",
-                                r.id, r.tipo, r.reintentos,
-                            )
-                safe_commit(db)
-                if aplicadas_ok:
-                    _worker_status["ultima_sincronizacion"] = now_dt.isoformat()
-                _worker_status["ultimo_error"] = primer_error
-                p_restantes = (
-                    db.query(func.count(RegistroSync.id))
-                    .filter(RegistroSync.estado == "PENDIENTE")
-                    .scalar()
-                    or 0
-                )
-                _worker_status["pendientes"] = int(p_restantes)
-            except Exception as e:
-                db.rollback()
-                _worker_status["ultimo_error"] = f"Fallo al asentar lote: {str(e)}"
-            finally:
-                _worker_status["sincronizando"] = False
-                db.close()
-
+            _worker_status["pendientes"] = await asyncio.to_thread(_contar_pendientes)
+        except Exception:
+            pass
     return dict(_worker_status)
 
 
-_cached_cloud_token: str | None = None
-_cached_cloud_token_exp: float = 0
-
-
-async def _obtener_token_nube(client: httpx.AsyncClient, cloud_url: str) -> str | None:
-    global _cached_cloud_token, _cached_cloud_token_exp
-    if _cached_cloud_token and time.time() < _cached_cloud_token_exp:
-        return _cached_cloud_token
-
-    credenciales = []
-    if settings.CLOUD_SYNC_USER and settings.CLOUD_SYNC_PASSWORD:
-        credenciales.append((settings.CLOUD_SYNC_USER, settings.CLOUD_SYNC_PASSWORD))
-    credenciales += [
-        ("omarvelandia", "omarvelandia123"),
-        ("admin", "admin123"),
-    ]
-    for usr, pwd in credenciales:
-        try:
-            resp = await client.post(
-                f"{cloud_url}/api/auth/login",
-                data={"username": usr, "password": pwd},
-                timeout=25.0,
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                _cached_cloud_token = data.get("access_token")
-                _cached_cloud_token_exp = time.time() + 18000  # 5 horas
-                return _cached_cloud_token
-        except Exception:
-            continue
-    return None
-
-
-async def replicar_admin_a_nube(metodo: str, endpoint: str, data: dict | list | None = None) -> None:
-    """Si estamos en modo LOCAL con sincronización activa, replica inmediatamente
-    el cambio administrativo (producto, ingrediente, receta, etc.) en Render.
-    """
-    if settings.MODO_CEREBRO == "NUBE" or not settings.CLOUD_SYNC_ENABLED or not settings.CLOUD_SYNC_URL:
+async def sync_background_loop() -> None:
+    """Bucle del worker: un ciclo cada SYNC_INTERVAL_SECONDS o en cuanto haya algo nuevo que subir."""
+    global _despertar, _loop
+    if not _activo():
+        logger.info("Worker de sincronización inactivo (modo NUBE o sin espejo configurado).")
         return
 
-    cloud_url = settings.CLOUD_SYNC_URL.rstrip("/")
-    try:
-        async with httpx.AsyncClient(timeout=25.0) as client:
-            token = await _obtener_token_nube(client, cloud_url)
-            if not token:
-                return
-            headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-            url = f"{cloud_url}/api{endpoint}"
-            m = metodo.upper()
-            if m == "POST":
-                await client.post(url, json=data, headers=headers)
-            elif m == "PUT":
-                await client.put(url, json=data, headers=headers)
-            elif m == "DELETE":
-                await client.delete(url, headers=headers)
-            logger.info(f"Replicación administrativa a la nube exitosa: {m} {endpoint}")
-    except Exception as e:
-        logger.warning(f"Aviso replicando cambio a la nube ({endpoint}): {e}")
-
-
-async def ejecutar_ciclo_pull() -> dict[str, Any]:
-    """Descarga e integra en la BD local cualquier cambio realizado desde la Web/Nube.
-    
-    Regla del Documento Maestro:
-    - Autoridad: Lo que configura el admin en la nube (catálogo, precios, usuarios, configuraciones)
-      baja automáticamente a las terminales locales.
-    """
-    if settings.MODO_CEREBRO == "NUBE" or not settings.CLOUD_SYNC_ENABLED or not settings.CLOUD_SYNC_URL:
-        return {"productos": 0, "usuarios": 0, "configuracion": 0}
-
-    cloud_url = settings.CLOUD_SYNC_URL.rstrip("/")
-    actualizaciones = {"productos": 0, "usuarios": 0, "configuracion": 0}
-
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            token = await _obtener_token_nube(client, cloud_url)
-            if not token:
-                return actualizaciones
-
-            auth_headers = {"Authorization": f"Bearer {token}"}
-
-            # 1. Sincronizar Catálogo de Productos y Precios
-            try:
-                p_resp = await client.get(f"{cloud_url}/api/productos", headers=auth_headers)
-                if p_resp.status_code == 200:
-                    cloud_prods = p_resp.json()
-                    db = SessionLocal()
-                    try:
-                        cambio_catalogo = False
-                        for cp in cloud_prods:
-                            pid = cp.get("id")
-                            lp = db.get(Producto, pid)
-                            cloud_precio = Decimal(str(cp.get("precio", 0)))
-                            if lp:
-                                modificado = False
-                                if abs(lp.precio - cloud_precio) > Decimal("0.01"):
-                                    lp.precio = cloud_precio
-                                    modificado = True
-                                if lp.nombre != cp.get("nombre"):
-                                    lp.nombre = cp.get("nombre")
-                                    modificado = True
-                                if lp.activo != cp.get("activo", True):
-                                    lp.activo = cp.get("activo", True)
-                                    modificado = True
-                                if lp.manual_disponible != cp.get("manual_disponible"):
-                                    lp.manual_disponible = cp.get("manual_disponible")
-                                    modificado = True
-                                if modificado:
-                                    actualizaciones["productos"] += 1
-                                    cambio_catalogo = True
-                            else:
-                                nuevo_p = Producto(
-                                    id=pid,
-                                    categoria_id=cp.get("categoria_id", 1),
-                                    nombre=cp.get("nombre", ""),
-                                    descripcion=cp.get("descripcion", ""),
-                                    precio=cloud_precio,
-                                    iva_incluido=cp.get("iva_incluido", True),
-                                    activo=cp.get("activo", True),
-                                    manual_disponible=cp.get("manual_disponible"),
-                                    permite_adiciones=cp.get("permite_adiciones", True),
-                                )
-                                db.add(nuevo_p)
-                                actualizaciones["productos"] += 1
-                                cambio_catalogo = True
-
-                        if cambio_catalogo:
-                            safe_commit(db)
-                            from app.services.websocket import ws_manager
-                            await ws_manager.broadcast({
-                                "evento": "catalogo_actualizado",
-                                "data": {"tipo": "sincronizacion_nube", "actualizados": actualizaciones["productos"]}
-                            })
-                            logger.info(f"PULL: Catálogo local actualizado con {actualizaciones['productos']} cambio(s) desde la nube.")
-                    finally:
-                        db.close()
-            except Exception as e:
-                logger.warning(f"Aviso al descargar productos de la nube: {e}")
-
-            # 2. Sincronizar Usuarios creados o modificados en la Web
-            try:
-                u_resp = await client.get(f"{cloud_url}/api/admin/usuarios", headers=auth_headers)
-                if u_resp.status_code == 200:
-                    cloud_users = u_resp.json()
-                    db = SessionLocal()
-                    try:
-                        hubo_cambio_u = False
-                        for cu in cloud_users:
-                            uid = cu.get("id")
-                            lu = db.get(Usuario, uid)
-                            if not lu:
-                                nuevo_u = Usuario(
-                                    id=uid,
-                                    nombre=cu.get("nombre", ""),
-                                    usuario=cu.get("usuario", ""),
-                                    rol_id=cu.get("rol_id", 2),
-                                    password_hash=cu.get("password_hash") or "$2b$12$UR9zR9cwj5ffRV9B9oJdteyUkDG5MKTTuANe8aYzqZ1hv0VO70cc.",
-                                    activo=cu.get("activo", True),
-                                    fijado=cu.get("fijado", False),
-                                    es_demo=cu.get("es_demo", False),
-                                )
-                                db.add(nuevo_u)
-                                actualizaciones["usuarios"] += 1
-                                hubo_cambio_u = True
-                            else:
-                                mod_u = False
-                                if lu.activo != cu.get("activo", True):
-                                    lu.activo = cu.get("activo", True)
-                                    mod_u = True
-                                if lu.rol_id != cu.get("rol_id", lu.rol_id):
-                                    lu.rol_id = cu.get("rol_id", lu.rol_id)
-                                    mod_u = True
-                                if lu.fijado != cu.get("fijado", lu.fijado):
-                                    lu.fijado = cu.get("fijado", lu.fijado)
-                                    mod_u = True
-                                if mod_u:
-                                    actualizaciones["usuarios"] += 1
-                                    hubo_cambio_u = True
-                        if hubo_cambio_u:
-                            safe_commit(db)
-                            logger.info(f"PULL: Usuarios locales sincronizados con {actualizaciones['usuarios']} cambio(s) desde la nube.")
-                    finally:
-                        db.close()
-            except Exception as e:
-                logger.warning(f"Aviso al sincronizar usuarios de la nube: {e}")
-
-            # 3. Sincronizar Configuración Global
-            try:
-                c_resp = await client.get(f"{cloud_url}/api/admin/configuracion", headers=auth_headers)
-                if c_resp.status_code == 200:
-                    cloud_configs = c_resp.json()
-                    db = SessionLocal()
-                    try:
-                        hubo_cambio_cfg = False
-                        for cfg in cloud_configs:
-                            k = cfg.get("clave")
-                            v = cfg.get("valor")
-                            if k and v is not None:
-                                local_cfg = db.get(Configuracion, k)
-                                if local_cfg and local_cfg.valor != str(v):
-                                    local_cfg.valor = str(v)
-                                    actualizaciones["configuracion"] += 1
-                                    hubo_cambio_cfg = True
-                                elif not local_cfg:
-                                    nuevo_cfg = Configuracion(clave=k, valor=str(v), descripcion=cfg.get("descripcion"))
-                                    db.add(nuevo_cfg)
-                                    actualizaciones["configuracion"] += 1
-                                    hubo_cambio_cfg = True
-                        if hubo_cambio_cfg:
-                            safe_commit(db)
-                    finally:
-                        db.close()
-            except Exception as e:
-                logger.warning(f"Aviso al sincronizar configuración de la nube: {e}")
-
-            # 4. Sincronizar Insumos / Materias Primas creados o modificados en la Nube
-            try:
-                i_resp = await client.get(f"{cloud_url}/api/ingredientes", headers=auth_headers)
-                if i_resp.status_code == 200:
-                    cloud_ings = i_resp.json()
-                    db = SessionLocal()
-                    try:
-                        hubo_cambio_ing = False
-                        for ci in cloud_ings:
-                            iid = ci.get("id")
-                            ling = db.get(Ingrediente, iid)
-                            costo = Decimal(str(ci.get("costo_unitario") or 0))
-                            p_venta = Decimal(str(ci.get("precio_venta") or 0))
-                            if not ling:
-                                nuevo_ing = Ingrediente(
-                                    id=iid,
-                                    categoria_insumo_id=ci.get("categoria_insumo_id"),
-                                    nombre=ci.get("nombre", ""),
-                                    unidad_base=ci.get("unidad_base", "UNIDAD"),
-                                    costo_unitario=costo,
-                                    tipo_articulo=ci.get("tipo_articulo", "INSUMO_RECETA"),
-                                    precio_venta=p_venta,
-                                    stock_actual=Decimal(str(ci.get("stock_actual") or 0)),
-                                    stock_minimo=Decimal(str(ci.get("stock_minimo") or 0)),
-                                    activo=ci.get("activo", True),
-                                )
-                                db.add(nuevo_ing)
-                                actualizaciones["ingredientes"] = actualizaciones.get("ingredientes", 0) + 1
-                                hubo_cambio_ing = True
-                            else:
-                                mod_ing = False
-                                if ling.nombre != ci.get("nombre"):
-                                    ling.nombre = ci.get("nombre")
-                                    mod_ing = True
-                                if abs(ling.costo_unitario - costo) > Decimal("0.01"):
-                                    ling.costo_unitario = costo
-                                    mod_ing = True
-                                if abs(ling.precio_venta - p_venta) > Decimal("0.01"):
-                                    ling.precio_venta = p_venta
-                                    mod_ing = True
-                                if ling.activo != ci.get("activo", True):
-                                    ling.activo = ci.get("activo", True)
-                                    mod_ing = True
-                                if mod_ing:
-                                    actualizaciones["ingredientes"] = actualizaciones.get("ingredientes", 0) + 1
-                                    hubo_cambio_ing = True
-                        if hubo_cambio_ing:
-                            safe_commit(db)
-                    finally:
-                        db.close()
-            except Exception as e:
-                logger.warning(f"Aviso al sincronizar insumos de la nube: {e}")
-
-            # 5. Sincronizar Recetas de Productos creados o modificados
-            if cambio_catalogo:
-                try:
-                    for cp in cloud_prods:
-                        pid = cp.get("id")
-                        rec_resp = await client.get(f"{cloud_url}/api/ingredientes/productos/{pid}/receta", headers=auth_headers)
-                        if rec_resp.status_code == 200:
-                            lineas_cloud = rec_resp.json()
-                            if lineas_cloud:
-                                db = SessionLocal()
-                                try:
-                                    db.query(DetalleReceta).filter(DetalleReceta.product_id == pid).delete()
-                                    for lc in lineas_cloud:
-                                        db.add(
-                                            DetalleReceta(
-                                                product_id=pid,
-                                                ingrediente_id=lc.get("ingrediente_id"),
-                                                cantidad=Decimal(str(lc.get("cantidad", 1))),
-                                                unidad=lc.get("unidad", "UNIDAD"),
-                                                solo_llevar=lc.get("solo_llevar", False),
-                                            )
-                                        )
-                                    safe_commit(db)
-                                finally:
-                                    db.close()
-                except Exception as e:
-                    logger.warning(f"Aviso al sincronizar recetas de productos: {e}")
-
-    except Exception as e:
-        logger.warning(f"Fallo en ciclo de descarga (pull) desde la nube: {e}")
-
-    return actualizaciones
-
-
-async def sync_background_loop():
-    """Bucle infinito en segundo plano que corre durante el ciclo de vida del servidor."""
-    if settings.MODO_CEREBRO == "NUBE" or not settings.CLOUD_SYNC_ENABLED:
-        logger.info("Modo CEREBRO NUBE: Daemon saliente inactivo (servidor opera como receptor).")
-        return
-
-    # Espera 3 segundos iniciales para permitir que la BD y FastAPI terminen de iniciar
-    await asyncio.sleep(3)
-    ciclo_pull_contador = 0
+    _loop = asyncio.get_running_loop()
+    _despertar = asyncio.Event()
+    await asyncio.sleep(3)  # deja terminar el arranque de la base y de FastAPI
+    ultima_limpieza = 0.0
     while True:
         try:
+            _despertar.clear()
             await ejecutar_ciclo_sync()
+            if time.time() - ultima_limpieza > 3600:
+                ultima_limpieza = time.time()
+                await asyncio.to_thread(_limpiar_cola_antigua)
         except asyncio.CancelledError:
             break
         except Exception as e:
-            logger.error(f"Error inesperado en loop de sincronización (push): {e}", exc_info=True)
+            logger.error("Error inesperado en el worker de sincronización: %s", e, exc_info=True)
 
-        # Cada 2 ciclos (~20 segundos), verificar y descargar cambios hechos en la Web (PULL)
-        ciclo_pull_contador += 1
-        if ciclo_pull_contador >= 2:
-            ciclo_pull_contador = 0
-            try:
-                await ejecutar_ciclo_pull()
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Error inesperado en loop de sincronización (pull): {e}", exc_info=True)
-
-        intervalo = max(3, getattr(settings, "SYNC_INTERVAL_SECONDS", 10))
-        await asyncio.sleep(intervalo)
+        intervalo = max(3, int(getattr(settings, "SYNC_INTERVAL_SECONDS", 5) or 5))
+        if not _worker_status.get("online", True):
+            intervalo = max(intervalo, 15)  # sin internet no vale la pena insistir cada pocos segundos
+        try:
+            await asyncio.wait_for(_despertar.wait(), timeout=intervalo)
+            await asyncio.sleep(0.3)  # agrupa los cambios de una misma acción en un solo envío
+        except asyncio.TimeoutError:
+            pass
+        except asyncio.CancelledError:
+            break

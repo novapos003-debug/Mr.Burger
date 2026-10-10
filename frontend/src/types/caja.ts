@@ -42,7 +42,7 @@ export interface ValeOut {
   cliente_cedula?: string | null
   cliente_telefono?: string | null
   monto: number
-  estado: 'PENDIENTE' | 'COBRADO'
+  estado: 'PENDIENTE' | 'COBRADO' | 'ANULADO'
   cobrado_por?: number | null
   cobrado_en?: string | null
   creado_en: string

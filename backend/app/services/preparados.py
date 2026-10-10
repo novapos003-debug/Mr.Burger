@@ -7,9 +7,9 @@ from sqlalchemy.sql import func
 
 from app.models import DetallePedido, MovimientoCaja, Pago, Pedido, Preparado, Producto, Usuario
 from app.schemas.preparados import PreparadoOut
-from app.services.caja import _monto, turno_abierto
+from app.services.caja import _monto, anular_vales_pendientes, turno_abierto
 from app.services.historial import registrar
-from app.services.pedidos import calcular_totales
+from app.services.pedidos import recalcular_totales_pedido
 
 
 def minutos_espera(creado_en: datetime | None) -> int:
@@ -149,19 +149,25 @@ def cancelar_pedido(
             p.devuelto_por = admin.id
             p.devuelto_en = func.now()
             p.motivo_devolucion = f"Cancelación pedido #{pedido.consecutivo}: {motivo}"
-            db.add(
-                MovimientoCaja(
-                    usuario_id=admin.id,
-                    tipo="SALIDA",
-                    categoria="DEVOLUCION",
-                    concepto=f"Devolución cancelación pedido #{pedido.consecutivo}",
-                    descripcion=f"Devolución por cancelación pedido #{pedido.consecutivo}: {motivo}",
-                    valor=_monto(p.monto),
-                    pedido_id=pedido.id,
-                    cierre_id=abierto.id if abierto else None,
+            # Solo sale plata de la gaveta si el cliente pagó en efectivo. Tarjeta, transferencia,
+            # DiDi tarjeta y vale nunca entraron al cajón: registrarlos como SALIDA descuadra el arqueo.
+            if p.metodo in ("EFECTIVO", "DIDI_EFECTIVO"):
+                db.add(
+                    MovimientoCaja(
+                        usuario_id=admin.id,
+                        tipo="SALIDA",
+                        categoria="DEVOLUCION",
+                        concepto=f"Devolución cancelación pedido #{pedido.consecutivo}",
+                        descripcion=f"Devolución por cancelación pedido #{pedido.consecutivo}: {motivo}",
+                        valor=_monto(p.monto),
+                        pedido_id=pedido.id,
+                        cierre_id=abierto.id if abierto else None,
+                    )
                 )
-            )
             pagos_devueltos += 1
+
+    # Un pedido cancelado no puede dejar un pagaré vivo por cobrar
+    anular_vales_pendientes(db, pedido.id)
 
     if pagos_devueltos > 0:
         pedido.pagado_en = None
@@ -250,8 +256,8 @@ def asignar_preparado(
     else:
         pedido.nota_interna = nota_prep
 
-    totales = calcular_totales(db, pedido.detalles + [detalle])
-    pedido.subtotal, pedido.iva, pedido.total = totales["subtotal"], totales["iva"], totales["total"]
+    # Recalcula con líneas activas + empaque: antes se perdía el recargo de "para llevar"
+    recalcular_totales_pedido(db, pedido, nuevos=[detalle])
 
     if pedido.estado in ("FINALIZADO", "ENTREGADO"):
         pedido.estado = "ENVIADO_A_COCINA"

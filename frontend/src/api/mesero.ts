@@ -64,6 +64,7 @@ export const enviarCocinaApi = async (pedidoId: number): Promise<Pedido> => {
 export interface AgregarRondaPayload {
   ronda: number
   tipo_consumo?: string
+  idempotency_key?: string
   lineas: {
     producto_id: number
     cantidad: number

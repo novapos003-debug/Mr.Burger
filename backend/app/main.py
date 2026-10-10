@@ -40,6 +40,8 @@ async def lifespan(app: FastAPI):
             conn.execute(text("ALTER TABLE producto ADD COLUMN IF NOT EXISTS manual_disponible BOOLEAN;"))
             conn.execute(text("ALTER TABLE pedido ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(100) UNIQUE;"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_pedido_idempotency_key ON pedido(idempotency_key);"))
+            conn.execute(text("ALTER TABLE detalle_pedido ADD COLUMN IF NOT EXISTS clave_idempotencia VARCHAR(100);"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_detalle_pedido_clave_idempotencia ON detalle_pedido(clave_idempotencia);"))
             conn.execute(text("ALTER TABLE producto ADD COLUMN IF NOT EXISTS permite_adiciones BOOLEAN NOT NULL DEFAULT TRUE;"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS idx_movcaja_creado_en ON movimiento_caja (creado_en);"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS idx_movcaja_cierre ON movimiento_caja (cierre_id);"))
@@ -50,21 +52,18 @@ async def lifespan(app: FastAPI):
             conn.execute(text("ALTER TABLE ingrediente ADD COLUMN IF NOT EXISTS precio_venta NUMERIC(12, 2) DEFAULT 0;"))
             conn.execute(text("ALTER TABLE pedido ADD COLUMN IF NOT EXISTS tipo_consumo VARCHAR(15) DEFAULT 'LOCAL';"))
             conn.execute(text("ALTER TABLE pedido ADD COLUMN IF NOT EXISTS recargo_empaque NUMERIC(12, 2) DEFAULT 0;"))
-            try:
-                conn.execute(text("ALTER TABLE movimiento_caja DROP CONSTRAINT IF EXISTS ck_movcaja_categoria;"))
-                conn.execute(text("ALTER TABLE movimiento_caja ADD CONSTRAINT ck_movcaja_categoria CHECK (categoria IN ('PAGO_TURNO','PRESTAMO','ADELANTO','PROVEEDOR','DEVOLUCION','COBRO_VALE','CAMBIO_INICIAL','GASTO_OPERATIVO','OTRO'));"))
-            except Exception:
-                pass
-            # Desactivar productos demo y empaque 999
-            conn.execute(text("UPDATE producto SET activo = FALSE WHERE id IN (1, 2, 3, 4, 5, 6, 999);"))
-            # Desactivar ingredientes iniciales huérfanos
-            conn.execute(text("UPDATE ingrediente SET activo = FALSE WHERE id IN (1, 2, 3, 4, 5, 6, 7, 8, 9);"))
+            # Restricciones CHECK: el esquema original las creó con nombre automático
+            # (<tabla>_<columna>_check) y sin los valores nuevos. Si solo se agrega la nueva, la
+            # vieja sigue rechazando GASTO_OPERATIVO / ANULADO. Se eliminan ambas y se recrea una.
+            conn.execute(text("ALTER TABLE movimiento_caja DROP CONSTRAINT IF EXISTS movimiento_caja_categoria_check;"))
+            conn.execute(text("ALTER TABLE movimiento_caja DROP CONSTRAINT IF EXISTS ck_movcaja_categoria;"))
+            conn.execute(text("ALTER TABLE movimiento_caja ADD CONSTRAINT ck_movcaja_categoria CHECK (categoria IN ('PAGO_TURNO','PRESTAMO','ADELANTO','PROVEEDOR','DEVOLUCION','COBRO_VALE','CAMBIO_INICIAL','GASTO_OPERATIVO','OTRO'));"))
+            conn.execute(text("ALTER TABLE vale DROP CONSTRAINT IF EXISTS vale_estado_check;"))
+            conn.execute(text("ALTER TABLE vale DROP CONSTRAINT IF EXISTS ck_vale_estado;"))
+            conn.execute(text("ALTER TABLE vale ADD CONSTRAINT ck_vale_estado CHECK (estado IN ('PENDIENTE','COBRADO','ANULADO'));"))
             # Asegurar categorías de insumo 8 y 10
-            conn.execute(text("INSERT INTO categoria_insumo (id, nombre, descripcion) VALUES (8, 'DESECHABLES_EMPAQUES', 'Contenedores C1, P1, bolsas T20-T40, vasos y servilletas') ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre;"))
-            conn.execute(text("INSERT INTO categoria_insumo (id, nombre, descripcion) VALUES (10, 'GASTOS_OPERATIVOS', 'Artículos de aseo, papelería y mantenimiento') ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre;"))
-            # Actualizar C1 y P1
-            conn.execute(text("UPDATE ingrediente SET nombre = 'C1 (Empaque Térmico)', tipo_articulo = 'DESECHABLE_SERVICIO', costo_unitario = 500.00, precio_venta = 1500.00, activo = TRUE WHERE nombre ILIKE '%c1%' OR id = 61;"))
-            conn.execute(text("UPDATE ingrediente SET nombre = 'P1 (Porta Perro Caliente)', tipo_articulo = 'DESECHABLE_SERVICIO', costo_unitario = 350.00, precio_venta = 500.00, activo = TRUE WHERE nombre ILIKE '%porta perro%' OR id = 68;"))
+            conn.execute(text("INSERT INTO categoria_insumo (id, nombre, descripcion, activo) VALUES (8, 'DESECHABLES_EMPAQUES', 'Contenedores C1, P1, bolsas T20-T40, vasos y servilletas', TRUE) ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre;"))
+            conn.execute(text("INSERT INTO categoria_insumo (id, nombre, descripcion, activo) VALUES (10, 'GASTOS_OPERATIVOS', 'Artículos de aseo, papelería y mantenimiento', TRUE) ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre;"))
             # Inserción de Bolsas T20 a T40 y Papel de cocina
             conn.execute(text("""
                 INSERT INTO ingrediente (nombre, categoria_insumo_id, tipo_articulo, unidad_base, costo_unitario, precio_venta, activo)
@@ -91,13 +90,11 @@ async def lifespan(app: FastAPI):
                 SELECT 'Papel de cocina', 10, 'GASTO_OPERATIVO', 'UNIDAD', 3500.00, 0.00, TRUE
                 WHERE NOT EXISTS (SELECT 1 FROM ingrediente WHERE nombre ILIKE '%Papel de cocina%');
             """))
-            # Precios de venta por defecto para bolsas al llevar (personalizables por admin)
-            conn.execute(text("UPDATE ingrediente SET precio_venta = 200.00 WHERE nombre ILIKE '%Bolsa T20%' AND (precio_venta IS NULL OR precio_venta = 0);"))
-            conn.execute(text("UPDATE ingrediente SET precio_venta = 300.00 WHERE nombre ILIKE '%Bolsa T25%' AND (precio_venta IS NULL OR precio_venta = 0);"))
-            conn.execute(text("UPDATE ingrediente SET precio_venta = 400.00 WHERE nombre ILIKE '%Bolsa T30%' AND (precio_venta IS NULL OR precio_venta = 0);"))
-            conn.execute(text("UPDATE ingrediente SET precio_venta = 500.00 WHERE nombre ILIKE '%Bolsa T40%' AND (precio_venta IS NULL OR precio_venta = 0);"))
-            # Asegurar política de stock flexible para no bloquear ventas en el restaurante
-            conn.execute(text("INSERT INTO configuracion (clave, valor, descripcion) VALUES ('politica_stock_insuficiente', 'ADVERTIR_Y_PERMITIR', 'Política ante faltante de stock') ON CONFLICT (clave) DO UPDATE SET valor = 'ADVERTIR_Y_PERMITIR';"))
+            # Valores iniciales que el admin puede cambiar después: se aplican UNA sola vez.
+            # Antes corrían en cada arranque y deshacían los ajustes hechos desde el panel.
+            from app.services.migraciones import aplicar_valores_iniciales
+
+            aplicar_valores_iniciales(conn)
 
             # Poblar recetas base oficiales para productos que no tengan receta configurada
             try:
@@ -124,16 +121,28 @@ async def lifespan(app: FastAPI):
         import logging
         logging.error("Error aplicando migraciones demo/empaques: %s", e_mig)
 
-    # Reconciliación automática de usuarios creados localmente sin evento de sincronización
-    if settings.MODO_CEREBRO != "NUBE":
-        try:
-            from app.services.sync import reconciliar_usuarios_locales
+    # Preparación de la sincronización por filas
+    try:
+        from app.core import replicacion
+        from app.services.sync import espejo_id, instalacion_id
 
-            with SessionLocal() as db_sync:
-                reconciliar_usuarios_locales(db_sync)
-        except Exception as e_rec:
-            import logging
-            logging.warning("Aviso en reconciliación automática de usuarios: %s", e_rec)
+        with engine.begin() as conn_sync:
+            conn_sync.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_registro_sync_fila ON registro_sync (entidad, entidad_uuid);"
+            ))
+            conn_sync.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_registro_sync_cola ON registro_sync (origen, estado, id);"
+            ))
+            if settings.MODO_CEREBRO == "NUBE":
+                # Lo creado en el panel web se numera desde 1.000.000: nunca choca con la caja
+                replicacion.reservar_rango_nube(conn_sync)
+                espejo_id(conn_sync)
+            else:
+                replicacion.ajustar_secuencias_locales(conn_sync)
+                instalacion_id(conn_sync)
+    except Exception as e_sync:
+        import logging
+        logging.error("Error preparando la sincronización: %s", e_sync)
 
     worker_task = None
     if settings.MODO_CEREBRO != "NUBE":
@@ -147,11 +156,17 @@ async def lifespan(app: FastAPI):
             pass
 
 
+_EN_NUBE = settings.MODO_CEREBRO == "NUBE"
+
 app = FastAPI(
     title="Restaurante API",
-    version="0.1.0",
+    version="0.2.0",
     description="SIMPLE POR FUERA. INTELIGENTE POR DENTRO.",
     lifespan=lifespan,
+    # En internet no se publica el mapa de la API; en la red local sigue disponible en /docs
+    docs_url=None if _EN_NUBE else "/docs",
+    redoc_url=None if _EN_NUBE else "/redoc",
+    openapi_url=None if _EN_NUBE else "/openapi.json",
 )
 
 app.add_middleware(
@@ -227,7 +242,7 @@ async def websocket_pedidos(websocket: WebSocket, token: str | None = None):
 @app.get("/api/health", tags=["sistema"])
 def health():
     """Healthcheck para Docker y monitoreo de la red local."""
-    return {"status": "ok", "sistema": "restaurante", "version": "0.1.0", "entorno": settings.ENTORNO}
+    return {"status": "ok", "sistema": "restaurante", "version": "0.2.0", "modo": settings.MODO_CEREBRO, "entorno": settings.ENTORNO}
 
 
 @app.get("/", tags=["sistema"])
