@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -64,12 +64,19 @@ def sync_health():
 @router.post("/push", response_model=SyncPushOut)
 async def sincronizar_push(
     data: SyncPushIn,
+    response: Response,
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(sync_or_staff_required),
 ):
     """Recibe un lote de operaciones offline enviadas desde una tablet o el servidor local.
-    Garantiza idempotencia por UUID (evita duplicados si la red falló al responder)."""
+    Garantiza idempotencia por UUID (evita duplicados si la red falló al responder).
+
+    Cada operación se aplica de forma aislada. Si alguna falla, el lote responde HTTP 207 con el
+    detalle por operación en `resultados` (un worker antiguo no lo confundirá con un 200 y no
+    marcará como sincronizado lo que la nube rechazó)."""
     resultado = procesar_push(db, data, usuario)
+    if resultado.errores:
+        response.status_code = 207
     await ws_manager.broadcast(
         {
             "evento": "sync_push_procesado",

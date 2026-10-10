@@ -1,14 +1,18 @@
-from datetime import datetime, timezone
+import logging
+import re
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
+from app.core.tiempo import fecha_local
 from app.database import safe_commit
 from app.models import (
     Cierre,
     DetallePedido,
     Ingrediente,
+    Mesa,
     MovimientoCaja,
     MovimientoInventario,
     Pago,
@@ -21,14 +25,56 @@ from app.schemas.sync import (
     SyncEstadoOut,
     SyncOpIn,
     SyncOpOut,
+    SyncOpResultado,
     SyncPushIn,
     SyncPushOut,
 )
 from app.services.historial import registrar
 
+logger = logging.getLogger("sync")
+
+
+def _resolver_usuario_id(db: Session, op, payload: dict) -> int:
+    """Pedido.usuario_id es obligatorio en la nube.
+
+    Las operaciones encoladas antes de este arreglo no lo traen en el payload, pero sí
+    viajan con dispositivo_id = 'USER_<id>' / 'CAJA_<id>'. Orden de búsqueda:
+    payload -> sufijo numérico del dispositivo -> usuario 'admin' -> primer usuario.
+    """
+    candidatos = [payload.get("usuario_id")]
+    m = re.search(r"(\d+)$", getattr(op, "dispositivo_id", "") or "")
+    if m:
+        candidatos.append(m.group(1))
+    for c in candidatos:
+        try:
+            uid = int(c)
+        except (TypeError, ValueError):
+            continue
+        if db.get(Usuario, uid):
+            return uid
+    fallback = (
+        db.query(Usuario).filter(Usuario.usuario == "admin").first()
+        or db.query(Usuario).order_by(Usuario.id.asc()).first()
+    )
+    if not fallback:
+        raise ValueError("No hay usuarios en la nube a quienes asignar el pedido")
+    return fallback.id
+
+
+def _fecha(valor) -> date:
+    if isinstance(valor, date):
+        return valor
+    if isinstance(valor, str) and valor[:10]:
+        return date.fromisoformat(valor[:10])
+    return fecha_local()
+
 
 def asimilar_operacion(db: Session, op) -> None:
-    """Asimila materialmente una operación en las tablas de negocio de la Nube (Render)."""
+    """Asimila materialmente una operación en las tablas de negocio de la Nube (Render).
+
+    Si la operación no se puede aplicar lanza una excepción: `procesar_push` la ejecuta dentro
+    de un SAVEPOINT, así un fallo solo descarta esa operación y no el lote completo.
+    """
     tipo = op.tipo
     payload = op.payload
     if not payload or not isinstance(payload, dict):
@@ -36,26 +82,36 @@ def asimilar_operacion(db: Session, op) -> None:
 
     try:
         if tipo in ("CREAR_PEDIDO", "AGREGAR_RONDA"):
-            pid = payload.get("id")
+            # AGREGAR_RONDA identifica el pedido con 'pedido_id' (no con 'id')
+            pid = payload.get("id") or payload.get("pedido_id")
             pedido = db.get(Pedido, pid) if pid else None
             if not pedido:
+                if tipo == "AGREGAR_RONDA":
+                    raise ValueError(f"AGREGAR_RONDA: el pedido {pid} todavía no existe en la nube")
+                mesa_id = payload.get("mesa_id")
+                if mesa_id and not db.get(Mesa, mesa_id):
+                    mesa_id = None
                 pedido = Pedido(
                     id=pid,
                     consecutivo=payload.get("consecutivo", 1),
-                    fecha_dia=payload.get("fecha_dia"),
-                    canal=payload.get("canal", "MOSTRADOR"),
-                    mesa_id=payload.get("mesa_id"),
+                    fecha_dia=_fecha(payload.get("fecha_dia")),
+                    canal=payload.get("canal") or "MOSTRADOR",
+                    tipo_consumo=payload.get("tipo_consumo") or "LOCAL",
+                    mesa_id=mesa_id,
+                    usuario_id=_resolver_usuario_id(db, op, payload),
                     cliente=payload.get("cliente"),
-                    subtotal=Decimal(str(payload.get("subtotal", 0))),
-                    iva=Decimal(str(payload.get("iva", 0))),
-                    total=Decimal(str(payload.get("total", 0))),
-                    estado=payload.get("estado", "ENVIADO_A_COCINA"),
+                    subtotal=Decimal(str(payload.get("subtotal") or 0)),
+                    iva=Decimal(str(payload.get("iva") or 0)),
+                    total=Decimal(str(payload.get("total") or 0)),
+                    estado=payload.get("estado") or "ENVIADO_A_COCINA",
                 )
                 db.add(pedido)
                 db.flush()
             else:
-                pedido.estado = payload.get("estado", pedido.estado)
-                pedido.total = Decimal(str(payload.get("total", pedido.total)))
+                pedido.estado = payload.get("estado") or pedido.estado
+                total = payload.get("total", payload.get("nuevo_total"))
+                if total is not None:
+                    pedido.total = Decimal(str(total))
 
             for d in payload.get("detalles", []):
                 prod_id = d.get("producto_id")
@@ -75,7 +131,8 @@ def asimilar_operacion(db: Session, op) -> None:
                         cantidad=Decimal(str(d.get("cantidad", 1))),
                         precio_unitario=Decimal(str(d.get("precio_unitario", 0))),
                         ronda=d.get("ronda", 1),
-                        estado=d.get("estado", "ENVIADO"),
+                        # el payload local manda "estado": null -> columna NOT NULL
+                        estado=d.get("estado") or "ENVIADO",
                     )
                     db.add(nuevo_d)
 
@@ -176,8 +233,9 @@ def asimilar_operacion(db: Session, op) -> None:
             if u and payload.get("nueva_password_hash"):
                 u.password_hash = payload["nueva_password_hash"]
     except Exception as e:
-        import logging
-        logging.warning("Aviso asimilando operacion sync %s: %s", tipo, e)
+        # Antes se tragaba el error y dejaba la sesión inutilizable (-> HTTP 500 para TODO el lote).
+        logger.warning("No se pudo asimilar la operación sync %s: %s", tipo, str(e).splitlines()[0][:300])
+        raise
 
 
 def procesar_push(db: Session, data: SyncPushIn, usuario: Usuario) -> SyncPushOut:
@@ -192,7 +250,9 @@ def procesar_push(db: Session, data: SyncPushIn, usuario: Usuario) -> SyncPushOu
     procesadas = 0
     duplicadas = 0
     conflictos = 0
+    errores = 0
     resultado_ops: list[RegistroSync] = []
+    resultados: list[SyncOpResultado] = []
 
     for op in data.operaciones:
         # Chequeo de idempotencia por UUID
@@ -200,6 +260,7 @@ def procesar_push(db: Session, data: SyncPushIn, usuario: Usuario) -> SyncPushOu
         if existente:
             duplicadas += 1
             resultado_ops.append(existente)
+            resultados.append(SyncOpResultado(op_id=op.op_id, estado="DUPLICADO"))
             continue
 
         estado = "APLICADO"
@@ -210,40 +271,53 @@ def procesar_push(db: Session, data: SyncPushIn, usuario: Usuario) -> SyncPushOu
             # Conflicto: la nube intentó sobreescribir ventas locales
             estado = "CONFLICTO"
             nota_resolucion = "Rechazado: Las transacciones locales de venta tienen autoridad absoluta"
+
+        try:
+            # SAVEPOINT por operación: si una venta falla, solo se descarta ESA operación.
+            # Antes un solo fallo dejaba la sesión inutilizable y tumbaba el lote completo
+            # (HTTP 500/409), con lo cual la cola local quedaba atascada para siempre.
+            with db.begin_nested():
+                registro = RegistroSync(
+                    op_id=op.op_id,
+                    sucursal_id=getattr(op, "sucursal_id", "SUC-01"),
+                    dispositivo_id=op.dispositivo_id,
+                    tipo=op.tipo,
+                    entidad=op.entidad,
+                    entidad_id=op.entidad_id,
+                    entidad_uuid=getattr(op, "entidad_uuid", None),
+                    payload=op.payload,
+                    origen=op.origen,
+                    estado=estado,
+                    resolucion_nota=nota_resolucion,
+                    sincronizado_en=func.now() if estado == "APLICADO" else None,
+                )
+                db.add(registro)
+                db.flush()
+
+                # Asimilar materialmente en tablas de dominio en la nube
+                if estado == "APLICADO":
+                    asimilar_operacion(db, op)
+
+                registrar(
+                    db,
+                    usuario,
+                    "SYNC_PUSH",
+                    "registro_sync",
+                    registro.id,
+                    f"op_id={op.op_id} tipo={op.tipo} estado={estado} disp={op.dispositivo_id}",
+                )
+        except Exception as e:
+            errores += 1
+            detalle = (str(e).splitlines() or [""])[0][:300] or type(e).__name__
+            resultados.append(SyncOpResultado(op_id=op.op_id, estado="ERROR", error=detalle))
+            continue
+
+        if estado == "CONFLICTO":
             conflictos += 1
         else:
             procesadas += 1
-
-        registro = RegistroSync(
-            op_id=op.op_id,
-            sucursal_id=getattr(op, "sucursal_id", "SUC-01"),
-            dispositivo_id=op.dispositivo_id,
-            tipo=op.tipo,
-            entidad=op.entidad,
-            entidad_id=op.entidad_id,
-            entidad_uuid=getattr(op, "entidad_uuid", None),
-            payload=op.payload,
-            origen=op.origen,
-            estado=estado,
-            resolucion_nota=nota_resolucion,
-            sincronizado_en=func.now() if estado == "APLICADO" else None,
-        )
-        db.add(registro)
-        db.flush()
-
-        # Asimilar materialmente en tablas de dominio en la nube
-        asimilar_operacion(db, op)
-
         resultado_ops.append(registro)
-
-        registrar(
-            db,
-            usuario,
-            "SYNC_PUSH",
-            "registro_sync",
-            registro.id,
-            f"op_id={op.op_id} tipo={op.tipo} estado={estado} disp={op.dispositivo_id}",
-        )
+        resultados.append(SyncOpResultado(op_id=op.op_id, estado=estado))
 
     safe_commit(db)
     for r in resultado_ops:
@@ -253,7 +327,9 @@ def procesar_push(db: Session, data: SyncPushIn, usuario: Usuario) -> SyncPushOu
         procesadas=procesadas,
         duplicadas=duplicadas,
         conflictos=conflictos,
+        errores=errores,
         operaciones=[SyncOpOut.model_validate(r) for r in resultado_ops],
+        resultados=resultados,
     )
 
 
@@ -334,7 +410,6 @@ def reconciliar_usuarios_locales(db: Session) -> int:
         logging.info("Reconciliación: %d usuario(s) local(es) encolados para sincronización en la nube", encolados)
 
     return encolados
-
 
 
 def obtener_pull(

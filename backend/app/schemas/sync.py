@@ -40,11 +40,21 @@ class SyncPushIn(BaseModel):
     operaciones: list[SyncOpIn] = Field(min_length=1)
 
 
+class SyncOpResultado(BaseModel):
+    """Resultado individual de cada operación del lote (la nube aísla los fallos por operación)."""
+
+    op_id: str
+    estado: str  # APLICADO | DUPLICADO | CONFLICTO | ERROR
+    error: str | None = None
+
+
 class SyncPushOut(BaseModel):
     procesadas: int
     duplicadas: int
     conflictos: int
+    errores: int = 0
     operaciones: list[SyncOpOut]
+    resultados: list[SyncOpResultado] = []
 
 
 class SyncEstadoOut(BaseModel):

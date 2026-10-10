@@ -3,7 +3,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.deps import admin_required
+from app.core.deps import admin_required, cashier_required
 from app.core.unidades import convertir_unidad
 from app.database import get_db, safe_commit
 from app.models import (

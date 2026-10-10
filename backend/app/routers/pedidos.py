@@ -296,6 +296,7 @@ async def crear_pedido(
             "consecutivo": pedido.consecutivo,
             "fecha_dia": str(pedido.fecha_dia),
             "canal": pedido.canal,
+            "usuario_id": pedido.usuario_id,
             "mesa_id": pedido.mesa_id,
             "cliente": pedido.cliente,
             "subtotal": float(pedido.subtotal),

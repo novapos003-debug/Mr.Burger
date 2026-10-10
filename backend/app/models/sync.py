@@ -34,5 +34,8 @@ class RegistroSync(Base):
 
     __table_args__ = (
         CheckConstraint("origen IN ('LOCAL','NUBE')", name="ck_sync_origen"),
-        CheckConstraint("estado IN ('PENDIENTE','APLICADO','CONFLICTO','ERROR')", name="ck_sync_estado"),
+        CheckConstraint(
+            "estado IN ('PENDIENTE','APLICADO','CONFLICTO','ERROR','ERROR_SERVIDOR')",
+            name="ck_sync_estado",
+        ),
     )

@@ -33,6 +33,39 @@ def get_worker_status() -> dict[str, Any]:
     return dict(_worker_status)
 
 
+# Tras N rechazos de la nube, una operación se aísla (ERROR_SERVIDOR) para no bloquear a las demás.
+MAX_REINTENTOS_OP = 20
+
+
+async def _post_push(client: httpx.AsyncClient, cloud_url: str, operaciones: list[dict]) -> httpx.Response:
+    return await client.post(
+        f"{cloud_url}/sync/push",
+        headers={"X-Sync-Token": settings.CLOUD_SYNC_TOKEN, "Content-Type": "application/json"},
+        json={"dispositivo_id": settings.SUCURSAL_ID, "operaciones": operaciones},
+    )
+
+
+def _leer_resultados(resp: httpx.Response, operaciones: list[dict], destino: dict[str, tuple[bool, str | None]]) -> None:
+    """Traduce la respuesta del push a {op_id: (ok, error)}.
+
+    La nube nueva responde 200/207 con `resultados` por operación. Una nube antigua responde 200 sin
+    `resultados`: en ese caso 200 significa que todo el lote quedó aplicado.
+    """
+    try:
+        cuerpo = resp.json()
+    except Exception:
+        cuerpo = {}
+    por_op = {x.get("op_id"): x for x in (cuerpo.get("resultados") or [])}
+    for op in operaciones:
+        x = por_op.get(op["op_id"])
+        if x is None:
+            ok = resp.status_code == 200
+            destino[op["op_id"]] = (ok, None if ok else "La nube no informó el resultado de la operación")
+        else:
+            ok = x.get("estado") in ("APLICADO", "DUPLICADO", "CONFLICTO")
+            destino[op["op_id"]] = (ok, None if ok else (x.get("error") or "Error desconocido en la nube"))
+
+
 async def ejecutar_ciclo_sync() -> dict[str, Any]:
     """Ejecuta un ciclo de sondeo y sincronización con el servidor espejo en la nube.
     
@@ -123,61 +156,68 @@ async def ejecutar_ciclo_sync() -> dict[str, Any]:
 
         if pendientes_data:
             _worker_status["sincronizando"] = True
-            lote = {
-                "dispositivo_id": settings.SUCURSAL_ID,
-                "operaciones": pendientes_data,
-            }
-
-            push_resp = None
-            error_http = None
+            resultados: dict[str, tuple[bool, str | None]] = {}
+            error_red = None
             try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    push_resp = await client.post(
-                        f"{cloud_url}/sync/push",
-                        headers={
-                            "X-Sync-Token": settings.CLOUD_SYNC_TOKEN,
-                            "Content-Type": "application/json",
-                        },
-                        json=lote,
-                    )
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    push_resp = await _post_push(client, cloud_url, pendientes_data)
+                    if push_resp.status_code in (200, 207):
+                        _leer_resultados(push_resp, pendientes_data, resultados)
+                    else:
+                        # Lote rechazado completo (nube con versión vieja, 422 por una sola operación,
+                        # etc.). Se prueba operación por operación para que UNA mala no bloquee la cola.
+                        logger.warning(
+                            "Lote rechazado (HTTP %s); reintentando operación por operación", push_resp.status_code
+                        )
+                        for op in pendientes_data:
+                            r1 = await _post_push(client, cloud_url, [op])
+                            if r1.status_code in (200, 207):
+                                _leer_resultados(r1, [op], resultados)
+                            else:
+                                resultados[op["op_id"]] = (False, f"HTTP {r1.status_code}: {r1.text[:150]}")
             except Exception as e:
-                error_http = str(e)
+                error_red = str(e) or type(e).__name__
 
-            # Abrir nueva sesión para asentar resultado
+            # Abrir nueva sesión para asentar el resultado de cada operación
             db = SessionLocal()
             try:
                 records = db.query(RegistroSync).filter(RegistroSync.id.in_(pendientes_ids)).all()
-                if push_resp and push_resp.status_code == 200:
-                    now_dt = datetime.now(timezone.utc)
-                    for r in records:
+                now_dt = datetime.now(timezone.utc)
+                aplicadas_ok = 0
+                primer_error = None
+                for r in records:
+                    res = resultados.get(r.op_id)
+                    if res is None:
+                        # sin respuesta de la nube (caída de red): se reintenta en el próximo ciclo
+                        r.reintentos += 1
+                        r.ultimo_error = f"Fallo de red al enviar lote: {error_red}"
+                        primer_error = primer_error or f"Fallo al enviar lote: {error_red}"
+                    elif res[0]:
                         r.estado = "APLICADO"
                         r.sincronizado_en = now_dt
                         r.ultimo_error = None
-                    safe_commit(db)
-                    _worker_status["ultima_sincronizacion"] = now_dt.isoformat()
-                    p_restantes = (
-                        db.query(func.count(RegistroSync.id))
-                        .filter(RegistroSync.estado == "PENDIENTE")
-                        .scalar()
-                        or 0
-                    )
-                    _worker_status["pendientes"] = int(p_restantes)
-                elif push_resp:
-                    for r in records:
+                        aplicadas_ok += 1
+                    else:
                         r.reintentos += 1
-                        r.ultimo_error = f"HTTP {push_resp.status_code}: {push_resp.text[:150]}"
-                        if r.reintentos >= 5 and push_resp.status_code >= 500:
-                            # Aislamiento de mensaje tóxico para no bloquear ventas ni la cola
+                        r.ultimo_error = (res[1] or "Error en la nube")[:300]
+                        primer_error = primer_error or f"La nube rechazó {r.tipo} #{r.entidad_id}: {r.ultimo_error}"
+                        if r.reintentos >= MAX_REINTENTOS_OP:
                             r.estado = "ERROR_SERVIDOR"
-                            logger.error(f"Operación sync id={r.id} ({r.tipo}) aislada tras {r.reintentos} fallos 500.")
-                    safe_commit(db)
-                    _worker_status["ultimo_error"] = f"Error al sincronizar lote: HTTP {push_resp.status_code}"
-                else:
-                    for r in records:
-                        r.reintentos += 1
-                        r.ultimo_error = f"Fallo de red al enviar lote: {error_http}"
-                    safe_commit(db)
-                    _worker_status["ultimo_error"] = f"Fallo al enviar lote: {error_http}"
+                            logger.error(
+                                "Operación sync id=%s (%s) aislada tras %s rechazos de la nube.",
+                                r.id, r.tipo, r.reintentos,
+                            )
+                safe_commit(db)
+                if aplicadas_ok:
+                    _worker_status["ultima_sincronizacion"] = now_dt.isoformat()
+                _worker_status["ultimo_error"] = primer_error
+                p_restantes = (
+                    db.query(func.count(RegistroSync.id))
+                    .filter(RegistroSync.estado == "PENDIENTE")
+                    .scalar()
+                    or 0
+                )
+                _worker_status["pendientes"] = int(p_restantes)
             except Exception as e:
                 db.rollback()
                 _worker_status["ultimo_error"] = f"Fallo al asentar lote: {str(e)}"
@@ -197,7 +237,10 @@ async def _obtener_token_nube(client: httpx.AsyncClient, cloud_url: str) -> str 
     if _cached_cloud_token and time.time() < _cached_cloud_token_exp:
         return _cached_cloud_token
 
-    credenciales = [
+    credenciales = []
+    if settings.CLOUD_SYNC_USER and settings.CLOUD_SYNC_PASSWORD:
+        credenciales.append((settings.CLOUD_SYNC_USER, settings.CLOUD_SYNC_PASSWORD))
+    credenciales += [
         ("omarvelandia", "omarvelandia123"),
         ("admin", "admin123"),
     ]

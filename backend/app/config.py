@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     CLOUD_SYNC_URL: str = "https://mrburger-api.onrender.com"  # URL del servidor en la nube (Render)
     CLOUD_SYNC_TOKEN: str = "mrburger_sync_secret_token_2026"  # Token criptográfico de sincronización
     SYNC_INTERVAL_SECONDS: int = 10  # Intervalo de sondeo/envío en segundos
+    # Credenciales del admin de la nube que usa el worker para PULL/replicación (opcionales).
+    # Si se definen se prueban primero; permiten cambiar las claves por defecto sin romper la sincronización.
+    CLOUD_SYNC_USER: str = ""
+    CLOUD_SYNC_PASSWORD: str = ""
 
     class Config:
         env_file = (str(_ENV_PATH), ".env")
