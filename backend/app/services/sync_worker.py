@@ -36,7 +36,12 @@ _worker_status: dict[str, Any] = {
 }
 
 LOTE = 200
+LOTE_MINIMO = 20
 MAX_LOTES_POR_CICLO = 25
+# La nube gratuita es lenta aplicando lotes grandes: se le da tiempo de sobra para responder y,
+# si aun así no alcanza, el siguiente envío va con la mitad de filas (ver `_subir`).
+ESPERA_SUBIDA_S = 180.0
+_lote_actual = LOTE
 # Tras N rechazos una operación se aparta (ERROR_SERVIDOR) para no reintentarla sin fin.
 # Con la espera creciente entre intentos, eso equivale a unas 3 horas de insistencia.
 MAX_REINTENTOS_OP = 20
@@ -107,7 +112,7 @@ def _leer_lote() -> tuple[str, list[dict]]:
                 "FROM registro_sync WHERE estado = 'PENDIENTE' AND origen = 'LOCAL' "
                 "AND tipo IN ('FILA', 'BORRAR') AND NOT (id = ANY(CAST(:espera AS integer[]))) ORDER BY id LIMIT :n"
             ),
-            {"espera": en_espera, "n": LOTE},
+            {"espera": en_espera, "n": _lote_actual},
         ).mappings().all()
     ops = [
         {
@@ -164,10 +169,16 @@ def _asentar(ops: list[dict], resultados: dict[str, tuple[bool, str | None]]) ->
     return aplicadas, primer_error
 
 
-def _preparar_espejo(espejo_id: str) -> bool:
-    """Si la nube es un espejo nuevo (o recién reiniciado), se le envía la base completa."""
+def _preparar_espejo(espejo_id: str, vinculada: str | None = None) -> bool:
+    """Si la nube es un espejo nuevo (o recién reiniciado), se le envía la base completa.
+
+    También cuando el espejo es el conocido pero aún no tiene caja vinculada (`vinculada == ""`):
+    al recibir el primer envío se vaciará esperando la copia completa de esta caja. Pasa, por
+    ejemplo, si esta base se restauró de un respaldo que ya traía guardado el espejo."""
     with engine.begin() as conn:
-        if _config(conn, "sync_espejo_id") == espejo_id:
+        conocido = _config(conn, "sync_espejo_id") == espejo_id
+        espera_copia = vinculada == "" and _config(conn, "sync_copia_completa_para") != espejo_id
+        if conocido and not espera_copia:
             return False
         # Lo pendiente de versiones anteriores queda reemplazado por la copia completa
         conn.execute(
@@ -179,6 +190,7 @@ def _preparar_espejo(espejo_id: str) -> bool:
         )
         total = replicacion.encolar_snapshot_completo(conn)
         _guardar_config(conn, "sync_espejo_id", espejo_id, "Espejo en la nube al que está vinculada esta caja")
+        _guardar_config(conn, "sync_copia_completa_para", espejo_id, "Espejo al que ya se le encoló la copia completa")
         _guardar_config(conn, "sync_cursor_nube", "0", "Última operación de la nube aplicada en esta caja")
     _proximo_intento.clear()
     _fallos_bajada.clear()
@@ -234,13 +246,22 @@ def _leer_resultados(resp: httpx.Response, ops: list[dict]) -> dict[str, tuple[b
 
 
 async def _subir(client: httpx.AsyncClient, cloud_url: str) -> None:
+    global _lote_actual
     for _ in range(MAX_LOTES_POR_CICLO):
         inst, ops = await asyncio.to_thread(_leer_lote)
         if not ops:
             return
         _worker_status["sincronizando"] = True
         cuerpo = {"dispositivo_id": inst, "operaciones": [{k: v for k, v in o.items() if k != "_id"} for o in ops]}
-        resp = await client.post(f"{cloud_url}/sync/push", headers=_cabeceras(), content=json.dumps(cuerpo, default=str))
+        try:
+            resp = await client.post(
+                f"{cloud_url}/sync/push", headers=_cabeceras(), content=json.dumps(cuerpo, default=str),
+                timeout=httpx.Timeout(ESPERA_SUBIDA_S, connect=30.0),
+            )
+        except httpx.TimeoutException:
+            # Reenviar el mismo lote grande volvería a cortarse: el próximo va más pequeño
+            _lote_actual = max(LOTE_MINIMO, _lote_actual // 2)
+            raise
         if resp.status_code not in (200, 207):
             raise RuntimeError(f"La nube respondió HTTP {resp.status_code} al subir: {resp.text[:200]}")
         aplicadas, error = await asyncio.to_thread(_asentar, ops, _leer_resultados(resp, ops))
@@ -272,7 +293,7 @@ async def _bajar(client: httpx.AsyncClient, cloud_url: str) -> int:
         if resp.status_code != 200:
             raise RuntimeError(f"La nube respondió HTTP {resp.status_code} al bajar cambios: {resp.text[:200]}")
         datos = resp.json()
-        if await asyncio.to_thread(_preparar_espejo, datos.get("espejo_id") or ""):
+        if await asyncio.to_thread(_preparar_espejo, datos.get("espejo_id") or "", datos.get("vinculada")):
             return total  # espejo nuevo: primero se sube la copia completa
         ops = datos.get("operaciones") or []
         if not ops:
@@ -330,6 +351,10 @@ async def ejecutar_ciclo_sync() -> dict[str, Any]:
             # deja en la cola (el estado resultante de cada fila) sale en la subida siguiente.
             await _bajar(client, cloud_url)
             await _subir(client, cloud_url)
+    except (httpx.ReadTimeout, httpx.WriteTimeout):
+        # Hay conexión, pero la nube no alcanzó a responder: no es "sin internet"
+        _worker_status["ultimo_error"] = "La nube tardó demasiado en responder; se reintenta con envíos más pequeños"
+        logger.warning("Ciclo de sincronización con error: %s", _worker_status["ultimo_error"])
     except (httpx.HTTPError, OSError):
         _worker_status["online"] = False
         _worker_status["ultimo_error"] = "Sin conexión a la nube (operando en modo local autónomo)"

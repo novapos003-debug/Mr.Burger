@@ -61,6 +61,9 @@ class SyncCambiosOut(BaseModel):
     """Cambios del panel web pendientes de aplicar en la caja."""
 
     espejo_id: str
+    # Instalación (caja) vinculada a este espejo; "" si todavía ninguna. Con eso la caja sabe
+    # si el espejo espera su copia completa aunque el identificador del espejo no haya cambiado.
+    vinculada: str | None = None
     operaciones: list[SyncOpOut]
 
 

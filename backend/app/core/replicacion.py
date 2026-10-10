@@ -275,7 +275,14 @@ def encolar_snapshot_completo(conn) -> int:
 
 
 # ------------------------------------------------------------------ aplicación
+_cache_columnas: dict[str, list[str]] = {}
+
+
 def _columnas_reales(conn, tabla: str) -> list[str]:
+    """Columnas que la tabla tiene de verdad en esta base. Se consultan una vez por tabla: las
+    columnas solo cambian al arrancar (migraciones), antes de que empiece la sincronización."""
+    if tabla in _cache_columnas:
+        return _cache_columnas[tabla]
     filas = conn.execute(
         text(
             "SELECT column_name FROM information_schema.columns "
@@ -283,7 +290,10 @@ def _columnas_reales(conn, tabla: str) -> list[str]:
         ),
         {"t": tabla},
     ).all()
-    return [f[0] for f in filas]
+    columnas = [f[0] for f in filas]
+    if columnas:
+        _cache_columnas[tabla] = columnas
+    return columnas
 
 
 def _existe(conn, tabla: str, pk: dict) -> bool:

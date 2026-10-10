@@ -71,6 +71,13 @@ def espejo_id(conn) -> str:
     return conn.execute(text("SELECT valor FROM configuracion WHERE clave = 'sync_espejo_id'")).scalar()
 
 
+def instalacion_vinculada(conn) -> str:
+    """Caja vinculada a este espejo, o "" si todavía no se ha vinculado ninguna."""
+    return conn.execute(
+        text("SELECT valor FROM configuracion WHERE clave = 'sync_instalacion_vinculada'")
+    ).scalar() or ""
+
+
 def _archivar_datos_de_negocio(conn) -> str | None:
     """Antes de vaciar el espejo, guarda una copia de todo lo que tenga en el esquema `archivo`.
 
@@ -192,8 +199,15 @@ def procesar_push(db: Session, data: SyncPushIn) -> tuple[SyncPushOut, set[str]]
     # Lo que se aplica aquí viene de la caja: no debe registrarse como cambio propio de la nube.
     db.info["_replicacion_omitir"] = True
     try:
+        # Las ya recibidas se buscan de una vez para todo el lote, no una consulta por operación
+        ya_recibidas = {
+            r[0]
+            for r in db.query(RegistroSync.op_id).filter(
+                RegistroSync.op_id.in_([op.op_id for op in data.operaciones])
+            )
+        }
         for op in data.operaciones:
-            if db.query(RegistroSync.id).filter(RegistroSync.op_id == op.op_id).first():
+            if op.op_id in ya_recibidas:
                 duplicadas += 1
                 resultados.append(SyncOpResultado(op_id=op.op_id, estado="DUPLICADO"))
                 continue
@@ -240,6 +254,7 @@ def procesar_push(db: Session, data: SyncPushIn) -> tuple[SyncPushOut, set[str]]
                 resultados.append(SyncOpResultado(op_id=op.op_id, estado="ERROR", error=detalle))
                 continue
 
+            ya_recibidas.add(op.op_id)
             procesadas += 1
             resultados.append(SyncOpResultado(op_id=op.op_id, estado="APLICADO"))
 

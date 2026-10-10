@@ -2,6 +2,7 @@ import secrets
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -22,6 +23,7 @@ from app.services.sync import (
     TABLAS_CATALOGO,
     confirmar_bajada,
     espejo_id,
+    instalacion_vinculada,
     obtener_cambios_nube,
     obtener_estado_sync,
     obtener_pull,
@@ -91,7 +93,9 @@ async def sincronizar_push(
     if settings.MODO_CEREBRO != "NUBE":
         raise HTTPException(status_code=409, detail="Este servidor no es un espejo: no recibe operaciones")
     try:
-        resultado, tablas = procesar_push(db, data)
+        # En un hilo aparte: un lote grande tarda, y aquí bloquearía a todo el servidor
+        # (el panel web y hasta el chequeo de conexión de la propia caja).
+        resultado, tablas = await run_in_threadpool(procesar_push, db, data)
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     if resultado.errores:
@@ -116,7 +120,11 @@ def cambios_para_la_caja(
     """Cambios hechos en el panel web que la caja aún no ha aplicado, en orden."""
     identificador = espejo_id(db.connection())
     db.commit()
-    return SyncCambiosOut(espejo_id=identificador, operaciones=obtener_cambios_nube(db, despues_de, limite))
+    return SyncCambiosOut(
+        espejo_id=identificador,
+        vinculada=instalacion_vinculada(db.connection()),
+        operaciones=obtener_cambios_nube(db, despues_de, limite),
+    )
 
 
 @router.post("/confirmar")
