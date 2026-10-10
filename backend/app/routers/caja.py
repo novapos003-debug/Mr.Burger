@@ -278,3 +278,56 @@ def obtener_cierre(
     if not cierre:
         raise HTTPException(status_code=404, detail="Cierre no encontrado")
     return _cierre_to_out(db, cierre)
+
+
+@router.post("/abrir-cajon")
+def abrir_cajon_monedero_fisico(
+    _: Usuario = Depends(cashier_required),
+):
+    """Envía el pulso estándar ESC/POS RJ11 (0x1B, 0x70, 0x00, 0x19, 0xFA) a la impresora térmica Windows conectada para patear la gaveta monedero."""
+    import sys
+    if sys.platform != "win32":
+        return {"ok": False, "mensaje": "Comando de puerto directo compatible con servidor Windows"}
+
+    import ctypes
+    from ctypes import wintypes
+
+    class DOC_INFO_1W(ctypes.Structure):
+        _fields_ = [
+            ("pDocName", wintypes.LPCWSTR),
+            ("pOutputFile", wintypes.LPCWSTR),
+            ("pDatatype", wintypes.LPCWSTR),
+        ]
+
+    candidatas = ["STAR-TP80NC-M", "SAT 22TUS (copy 1)", "SAT 22TUS", "CAJAP"]
+    winspool = ctypes.WinDLL("winspool.drv")
+    hPrinter = wintypes.HANDLE()
+    enviado = False
+    impresora_usada = ""
+
+    for nombre_imp in candidatas:
+        if winspool.OpenPrinterW(nombre_imp, ctypes.byref(hPrinter), None):
+            try:
+                doc_info = DOC_INFO_1W("Abrir Cajon", None, "RAW")
+                job_id = winspool.StartDocPrinterW(hPrinter, 1, ctypes.byref(doc_info))
+                if job_id > 0:
+                    winspool.StartPagePrinter(hPrinter)
+                    # Pulso ESC p m t1 t2 (Pin 2, 50ms ON, 500ms OFF)
+                    cmd = bytes([0x1B, 0x70, 0x00, 0x19, 0xFA])
+                    written = wintypes.DWORD()
+                    winspool.WritePrinter(hPrinter, cmd, len(cmd), ctypes.byref(written))
+                    winspool.EndPagePrinter(hPrinter)
+                    winspool.EndDocPrinter(hPrinter)
+                    enviado = True
+                    impresora_usada = nombre_imp
+            except Exception:
+                pass
+            finally:
+                winspool.ClosePrinter(hPrinter)
+            if enviado:
+                break
+
+    if enviado:
+        return {"ok": True, "impresora": impresora_usada, "mensaje": "Pulso enviado exitosamente al cajón"}
+    return {"ok": False, "mensaje": "No se detectó impresora térmica con soporte RJ11"}
+

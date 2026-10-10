@@ -346,6 +346,12 @@ export async function imprimirViaWebUSB(rawBytes: Uint8Array): Promise<{ success
     if (err.name === 'NotFoundError') {
       return { success: false, message: 'No se seleccionó ninguna impresora USB.' }
     }
+    if (err.name === 'SecurityError' || String(err.message).toLowerCase().includes('access denied')) {
+      return {
+        success: false,
+        message: 'Acceso USB bloqueado por Windows: El controlador de Windows (driver) ya tiene el control exclusivo de la impresora. Usa el modo de impresión "NAVEGADOR" o configura la apertura del cajón en las Propiedades de la Impresora de Windows.',
+      }
+    }
     return { success: false, message: `Error WebUSB: ${err.message || 'Error de conexión'}` }
   }
 }
@@ -369,6 +375,18 @@ export function generarBytesEscPos(texto: string): Uint8Array {
 }
 
 export async function abrirCajonMonedero(): Promise<boolean> {
+  // 1. Intentar primero a través de la API local de Windows (winspool directo a la impresora térmica)
+  try {
+    const api = (await import('../api/client')).default
+    const res = await api.post('/caja/abrir-cajon')
+    if (res.data?.ok) {
+      return true
+    }
+  } catch {
+    // Si la API falla (ej. sin red local), continuar silenciosamente al siguiente intento
+  }
+
+  // 2. Intentar WebUSB si está soportado en navegadores compatibles (Android / Linux / Windows con WinUSB)
   if (!('usb' in navigator)) return false
 
   try {
@@ -398,8 +416,9 @@ export async function abrirCajonMonedero(): Promise<boolean> {
     await device.transferOut(endpoint.endpointNumber, cmd)
     await device.close()
     return true
-  } catch (err) {
-    console.error('Error al abrir cajón:', err)
+  } catch (err: any) {
+    // En Windows con driver instalado, WebUSB arroja Access Denied. No alertar error intrusivo
+    console.warn('Aviso al intentar WebUSB para apertura de gaveta:', err?.message || err)
     return false
   }
 }

@@ -115,7 +115,7 @@ export const Admin: React.FC = () => {
   const [compraProveedor, setCompraProveedor] = useState('')
   const [compraDescripcion, setCompraDescripcion] = useState('')
   const [compraAplicaIva, setCompraAplicaIva] = useState(true)
-  const [compraIvaTasa, setCompraIvaTasa] = useState(19)
+  const compraIvaTasa = 19
   const [compraLineas, setCompraLineas] = useState<Array<{ ingrediente_id: number; cantidad: number; costo_unitario: number }>>([
     { ingrediente_id: 1, cantidad: 10, costo_unitario: 2500 },
   ])
@@ -1643,18 +1643,40 @@ export const Admin: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-800">
                   {compras.length > 0 ? (
-                    compras.map((c) => (
-                      <tr key={c.id} className="hover:bg-slate-800/40 transition">
-                        <td className="p-3 font-mono text-slate-400">{new Date(c.creado_en).toLocaleString('es-CO')}</td>
-                        <td className="p-3 font-semibold text-slate-200">{c.descripcion || 'Sin descripción'}</td>
-                        <td className="p-3 text-slate-300">
-                          {c.detalles.map((d) => `${d.cantidad}x ${d.ingrediente_nombre || 'Insumo'}`).join(', ')}
-                        </td>
-                        <td className="p-3 text-right font-mono font-bold text-emerald-400">
-                          ${Number(c.costo_total).toLocaleString('es-CO')}
-                        </td>
-                      </tr>
-                    ))
+                    compras.map((c) => {
+                      const tieneIva = Boolean(c.descripcion?.includes('IVA') || c.descripcion?.includes('Total a Pagar'))
+                      const subtotal = Number(c.costo_total) || 0
+                      const totalConIva = tieneIva ? subtotal * 1.19 : subtotal
+
+                      return (
+                        <tr key={c.id} className="hover:bg-slate-800/40 transition">
+                          <td className="p-3 font-mono text-slate-400">{new Date(c.creado_en).toLocaleString('es-CO')}</td>
+                          <td className="p-3 text-slate-200">
+                            <p className="font-bold text-xs">{c.descripcion?.split('.')[0] || 'Proveedor'}</p>
+                            <p className="text-[11px] text-purple-300 font-mono mt-0.5">{c.descripcion}</p>
+                          </td>
+                          <td className="p-3 text-slate-300">
+                            {c.detalles.map((d) => `${d.cantidad}x ${d.ingrediente_nombre || 'Insumo'}`).join(', ')}
+                          </td>
+                          <td className="p-3 text-right font-mono">
+                            {tieneIva ? (
+                              <div>
+                                <span className="block font-black text-emerald-400 text-sm">
+                                  ${totalConIva.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                                <span className="block text-[10px] text-slate-400">
+                                  Sub: ${subtotal.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (+19% IVA)
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="font-bold text-emerald-400 text-sm">
+                                ${subtotal.toLocaleString('es-CO')}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })
                   ) : (
                     <tr>
                       <td colSpan={4} className="text-center py-6 text-slate-500 text-xs">
