@@ -402,6 +402,10 @@ def reemplazar_receta(
                 estado="PENDIENTE",
             )
             db.add(op_sync)
+
+            import asyncio
+            from app.services.sync_worker import replicar_admin_a_nube
+            asyncio.create_task(replicar_admin_a_nube("PUT", f"/ingredientes/productos/{producto_id}/receta", lineas_payload))
         except Exception:
             pass
     safe_commit(db)

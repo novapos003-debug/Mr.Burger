@@ -11,5 +11,9 @@ git fetch origin main
 git reset --hard origin/main
 
 echo.
+echo Sincronizando recetas locales existentes con la nube...
+python scripts\empujar_recetas_a_nube.py
+
+echo.
 echo Reiniciando servicios con la nueva version...
 call iniciar_windows.bat
