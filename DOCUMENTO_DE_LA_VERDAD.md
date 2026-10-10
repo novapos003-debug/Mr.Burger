@@ -1,6 +1,6 @@
 # Mr. Burger POS — Documento de la Verdad
 
-**Fecha de corte:** 10 de octubre de 2026 · **Base:** commit `eafd8ed` + cambios de la rama `fix/auditoria-fases`
+**Fecha de corte:** 10 de octubre de 2026 (noche) · **Base:** commit `d7a71c4` de `main`
 **Cliente:** Mr. Burger (Cali) · **Objetivo inmediato:** instalación limpia en el PC de caja del restaurante
 
 Este documento describe **lo que el sistema es y hace hoy según el código**, no según lo que se planeó.
@@ -23,15 +23,16 @@ la idea original y la matriz de recetas, pero tiene partes desactualizadas (ver 
 ## 0. Estado al 10 de octubre de 2026
 
 Después de dos auditorías se corrigió el sistema en cinco fases. El código está publicado en
-`main` y desplegado en Render y Firebase. **Falta el último paso, que solo puede hacerse en el
-restaurante:** actualizar el PC de caja y pegarle el token de sincronización.
+`main` y desplegado en Render y Firebase. El PC de caja ya está actualizado, tiene el token de
+sincronización y **quedó vinculado a la nube y sincronizando en ambos sentidos** (ver
+"Cuarta revisión" más abajo).
 
 | Fase | Qué se hizo | Estado |
 |:-:|---|---|
 | 1 | Nueve errores de operación (cobro anticipado, arqueo, vales, totales, cocina, reinicios) | Corregido y probado |
 | 2 | Supabase cerrado: sin permisos públicos y con seguridad por filas en las 25 tablas | **Aplicado en producción** y verificado |
-| 3 | Secretos fuera del código: clave de sesiones propia por instalación, token sin valor por defecto, sin contraseñas en el worker | Token nuevo en Render. La nube rechaza las contraseñas que estuvieron publicadas. **Falta** que el dueño cambie las suyas en la caja |
-| 4 | Sincronización por filas en ambos sentidos y panel de administración en vivo | Corregido y probado |
+| 3 | Secretos fuera del código: clave de sesiones propia por instalación, token sin valor por defecto, sin contraseñas en el worker | Token nuevo en Render y en la caja. La nube rechaza las contraseñas que estuvieron publicadas. El dueño cambió las de `admin` y `omarvelandia`; **faltan** las cuentas demo (`caja`, `mesero`, `cocina`) |
+| 4 | Sincronización por filas en ambos sentidos y panel de administración en vivo | Corregido, probado y **funcionando contra Render y Supabase reales** |
 | 5 | Segunda auditoría: merma de plato, rondas duplicadas por Wi-Fi, comandas offline rechazadas en silencio, kardex de compras, archivo automático de la nube, arranque de un clic e impresión sin diálogo | Corregido y probado |
 
 Qué pasó con cada riesgo de la [sección 14](#14-discrepancias-y-riesgos-detectados):
@@ -55,6 +56,33 @@ Qué pasó con cada riesgo de la [sección 14](#14-discrepancias-y-riesgos-detec
 - Copia de seguridad automática **antes** de arrancar cada versión nueva.
 - `scripts/verificar_token.py`: comprueba el token contra la nube (solo lectura). Si el `.env` del restaurante conserva el token viejo, lo detecta y pide el nuevo.
 - Detección de Python ejecutándolo de verdad: en algunos Windows `python` es un acceso a la Tienda que no funciona.
+
+**Cuarta revisión (10 de octubre, noche), en el PC de caja: "lo que hago no se sincroniza".**
+El dueño cambió contraseñas en la caja y no se veían en la web. Nada subía ni bajaba. Había
+cuatro causas encadenadas; cada una ocultaba a la siguiente:
+
+| # | Causa | Corrección | Commit |
+|:-:|---|---|:-:|
+| 1 | **Token viejo.** El backend arranca dentro de `backend/` y leía `backend/.env` (token antiguo) por encima del `.env` de la raíz, que es el que escribe `configurar_sincronizacion_windows.bat`. La nube respondía 401 a todo. | `config.py`: manda el `.env` de la raíz. `scripts/arrancar_servicios.bat` lee la sincronización de ese archivo y se la entrega al backend como variables explícitas. | `1cde271` |
+| 2 | **Espejo vacío sin copia completa.** La base de la caja ya traía guardado `sync_espejo_id`, así que nunca envió su copia completa. La nube, al vincularse, se vació (archivando lo anterior) y rechazaba todo por datos base faltantes (roles, categorías, productos). | La nube informa en `GET /sync/cambios` qué caja tiene vinculada (`vinculada`). Si no hay ninguna, la caja encola la copia completa aunque el identificador del espejo coincida (bandera `sync_copia_completa_para`). | `3dccd42` |
+| 3 | **Lotes cortados.** La nube gratuita tardaba más de 45 s en aplicar 200 filas; la caja cortaba, lo mostraba como "sin conexión" y reenviaba el mismo lote sin fin. Además el lote bloqueaba todo el servidor de la nube mientras se aplicaba. | Caja: espera hasta 3 minutos por lote y, si no alcanza, baja a la mitad (mínimo 20 filas). Error propio para "nube lenta". Nube: el lote se aplica en un hilo aparte, los duplicados se buscan en una consulta y las columnas de cada tabla se consultan una vez. | `3dccd42` |
+| 4 | **La nube sembraba datos propios.** En cada arranque (y Render gratis se reinicia seguido) sembraba recetas base y bolsas, con identificadores propios, en productos que aún no tenían receta. Chocaban con las recetas reales de la caja ("llave duplicada" producto + insumo). | `main.py`: recetas base, bolsas y papel de cocina se siembran **solo en la caja**. `replicacion.py`: si una fila de la caja choca en el espejo con otra por una restricción de unicidad, se quita la sobrante y gana la de la caja. | `d7a71c4` |
+
+Acciones de una sola vez sobre los datos (no son código): se borró `sync_espejo_id` de la caja para
+forzar la copia completa, y se encoló el borrado en la nube de 167 líneas de receta viejas que ya
+no existían en la caja.
+
+Resultado comprobado esa misma noche:
+
+- Caja → nube: 1.912 operaciones aplicadas, cola en cero, sin errores. Un cambio de receta tardó ~12 s.
+- Nube → caja: un cambio de precio y de receta de *Alitas BBQ (6 piezas)* hecho desde el panel web
+  llegó a la base de la caja en ~5 s, con su registro de auditoría, y la caja devolvió el estado final.
+- El usuario `admin` entró a la web con su contraseña nueva.
+
+**Sin hacer:** las suites de `pruebas/` no se volvieron a ejecutar con estos cambios (necesitan un
+PostgreSQL desechable en el puerto 55432, que el PC de caja no tiene). El arreglo de choques se
+probó a mano dentro de una transacción deshecha. `backend/.env` sigue existiendo con el token
+viejo; ya no se usa, pero conviene borrarlo.
 
 **Conteo físico inicial (`backend/app/services/inventario_inicial.py`):** al arrancar por primera
 vez esta versión, la caja (nunca la nube) deja en $0 el costo de todos los insumos —el dueño los
@@ -537,8 +565,12 @@ sequenceDiagram
 | **Conflictos** | Gana el último cambio que llega. Después de aplicar un cambio de la web, la caja devuelve el estado resultante para que ambos lados queden idénticos. |
 | **Sin duplicados** | Cada operación tiene un `op_id` único; reenviarla no la aplica dos veces. |
 | **Reintentos** | Una fila rechazada se reintenta con espera creciente (hasta ~3 horas, 20 intentos) y luego se aparta como `ERROR_SERVIDOR`. Un reintento tardío nunca pisa un dato más nuevo. |
+| **Tamaño de los envíos** | Hasta 200 filas por lote, con 3 minutos de espera por respuesta. Si la nube no alcanza a responder, el siguiente lote va con la mitad de filas (mínimo 20) hasta el próximo reinicio de la caja. El panel muestra "La nube tardó demasiado en responder", distinto de "Sin conexión". |
 | **Una sola caja por nube** | La primera caja que sube queda vinculada al espejo. Cualquier otra instalación es rechazada (protege de un PC de pruebas apuntando a producción). |
 | **Espejo exacto** | Al vincularse por primera vez, la nube recibe la copia completa de esa caja. Lo que tuviera antes **no se borra**: se guarda en el esquema `archivo` (tablas `<tabla>__<fecha>`). |
+| **Cuándo se envía la copia completa** | Cuando el identificador del espejo cambia (espejo nuevo o reiniciado), o cuando la nube informa que todavía no tiene caja vinculada y esta caja no le ha encolado ya la copia (`sync_copia_completa_para`). Para forzarla a mano: borrar la clave `sync_espejo_id` de `configuracion` en la caja. |
+| **La nube no crea datos por su cuenta** | Recetas base, bolsas y papel de cocina se siembran solo en la caja. En la nube siguen corriendo al arrancar el ajuste del esquema, las categorías de insumo 8 y 10 y `aplicar_valores_iniciales` (❓ este último no se revisó en esta ronda). |
+| **Choques de unicidad** | Si una fila de la caja choca en la nube con otra fila distinta (mismo usuario, mismo producto + insumo en una receta…), la nube quita la sobrante y aplica la de la caja. |
 | **Versiones viejas** | Un envío de una caja con la versión anterior se registra sin aplicar y no vincula nada. |
 
 ### Seguridad del canal
@@ -570,7 +602,16 @@ Dos suites automáticas en `pruebas/`, que levantan una caja y una nube reales c
 | `prueba_sincronizacion.py` | Copia inicial, venta completa, cancelación, corte de internet, cambios desde la web, protecciones, aviso en vivo, reinicio y archivo del espejo | 48 de 48 |
 
 Ambas pasan sobre la copia del respaldo y sobre una base creada con los scripts de instalación.
-**No se ha probado todavía contra Render y Supabase reales**: eso ocurre al desplegar.
+Esos resultados son **anteriores** a los commits `3dccd42` y `d7a71c4`; no se han vuelto a ejecutar.
+
+**Contra Render y Supabase reales** se verificó el 10 de octubre por la noche, desde el PC de caja:
+copia completa de la caja (790 filas de negocio), cola en cero, y un cambio de precio y de receta
+hecho en el panel web que llegó a la caja en ~5 s. Detalle en la [sección 0](#0-estado-al-10-de-octubre-de-2026).
+
+**Cómo diagnosticar si vuelve a fallar:** el final de `backend.log` dice la causa en una línea
+("HTTP 401" = token; "tardó demasiado" = nube lenta; "rechazó \<tabla\>" = dato que la nube no
+acepta). `GET /api/sync/estado` muestra `pendientes` y `ultimo_error`, y la columna `ultimo_error`
+de `registro_sync` guarda el motivo de cada fila rechazada.
 
 ---
 
@@ -589,6 +630,11 @@ Ambas pasan sobre la copia del respaldo y sobre una base creada con los scripts 
 
 `SECRET_KEY` es obligatoria en la nube. En la caja, si no se define, se genera una propia en
 `backend/.secret_key` (archivo que no se sube a GitHub).
+
+**De dónde sale cada valor en la caja ✅:** primero las variables de entorno, luego el `.env` de la
+raíz del proyecto y por último `backend/.env`. El token y la URL de la nube los fija
+`scripts/arrancar_servicios.bat` leyendo el `.env` de la raíz, así que un `backend/.env` viejo ya
+no puede ganarle.
 
 **Caché del frontend ✅** (`firebase.json`): `index.html`, `sw.js` y el manifiesto nunca se cachean; los `.js` y
 `.css` con hash se cachean un año. Así una versión nueva llega sola a los dispositivos.
@@ -823,11 +869,12 @@ La instalación se da por buena cuando **todo** esto se cumple en el PC del rest
 **Nube**
 
 - [ ] La venta de prueba aparece en `https://mrburger-pos-cali.web.app` con el usuario del dueño.
-- [ ] Un usuario creado en el local puede iniciar sesión en la nube.
-- [ ] Un cambio de precio hecho en la nube llega al local en menos de un minuto.
+- [x] Un usuario del local puede iniciar sesión en la nube (`admin`, 10 de octubre).
+- [x] Un cambio de precio hecho en la nube llega al local en menos de un minuto (~5 s, 10 de octubre).
+- [x] La cola de sincronización de la caja está en cero y sin errores (10 de octubre).
 
 **Seguridad y respaldo**
 
 - [ ] Ninguna contraseña de fábrica sigue activa (la nube ya las rechaza, pero en el local siguen sirviendo).
-- [ ] El token de sincronización de Render es nuevo y coincide con el del `.env` de la caja.
+- [x] El token de sincronización de Render es nuevo y coincide con el del `.env` de la caja (10 de octubre).
 - [ ] Existe un respaldo de la base local y se probó restaurarlo.
