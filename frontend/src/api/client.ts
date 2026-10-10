@@ -14,7 +14,18 @@ export const setServerIp = (ip: string): void => {
 }
 
 export const getApiBaseUrl = (): string => {
-  // En la propia máquina servidora (localhost / 127.0.0.1), conectar SIEMPRE de forma directa a localhost:8000 (funciona 100% offline)
+  // 1. Si estamos en la nube (Firebase Hosting / Render / dominio HTTPS público), apuntar SIEMPRE a Render
+  if (
+    typeof window !== 'undefined' &&
+    (window.location.hostname.includes('web.app') ||
+     window.location.hostname.includes('firebaseapp.com') ||
+     window.location.hostname.includes('onrender.com') ||
+     (window.location.protocol === 'https:' && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')))
+  ) {
+    return 'https://mrburger-api.onrender.com/api'
+  }
+
+  // 2. En la propia máquina servidora (localhost / 127.0.0.1), conectar directo al backend local
   if (
     typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -22,6 +33,7 @@ export const getApiBaseUrl = (): string => {
     return 'http://localhost:8000/api'
   }
 
+  // 3. Si hay una IP de servidor configurada en red local (LAN)
   const customIp = getServerIp()
   if (customIp) {
     const clean = customIp.trim().replace(/\/api$/, '').replace(/\/$/, '')
@@ -32,20 +44,12 @@ export const getApiBaseUrl = (): string => {
     return `http://${hostWithPort}/api`
   }
 
-  // Si estamos en la nube (Firebase Hosting), apuntar por defecto a Render
-  if (
-    typeof window !== 'undefined' &&
-    (window.location.hostname.includes('web.app') || window.location.hostname.includes('firebaseapp.com'))
-  ) {
-    return 'https://mrburger-api.onrender.com/api'
-  }
-
-  // En desarrollo con Vite (npm run dev), usar el proxy local de Vite
+  // 4. En desarrollo con Vite (npm run dev), usar el proxy local
   if (import.meta.env.DEV) {
     return '/api'
   }
 
-  // En producción LAN, conectar directamente al puerto 8000 del host
+  // 5. En producción LAN (celulares/tablets conectados por IP del host local)
   if (typeof window !== 'undefined') {
     const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
     const hostname = window.location.hostname || 'localhost'
@@ -56,6 +60,18 @@ export const getApiBaseUrl = (): string => {
 }
 
 export const getWsBaseUrl = (): string => {
+  // 1. Si estamos en la nube (Firebase Hosting / Render), apuntar a WebSocket seguro de Render
+  if (
+    typeof window !== 'undefined' &&
+    (window.location.hostname.includes('web.app') ||
+     window.location.hostname.includes('firebaseapp.com') ||
+     window.location.hostname.includes('onrender.com') ||
+     (window.location.protocol === 'https:' && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')))
+  ) {
+    return 'wss://mrburger-api.onrender.com/ws/pedidos'
+  }
+
+  // 2. En localhost
   if (
     typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -63,6 +79,7 @@ export const getWsBaseUrl = (): string => {
     return 'ws://localhost:8000/ws/pedidos'
   }
 
+  // 3. Con IP local personalizada
   const customIp = getServerIp()
   if (customIp) {
     const clean = customIp.replace(/^https?:\/\//, '').replace(/\/api$/, '').replace(/\/$/, '')
@@ -72,20 +89,13 @@ export const getWsBaseUrl = (): string => {
     return `${protocol}//${hostWithPort}/ws/pedidos`
   }
 
-  if (
-    typeof window !== 'undefined' &&
-    (window.location.hostname.includes('web.app') || window.location.hostname.includes('firebaseapp.com'))
-  ) {
-    return 'wss://mrburger-api.onrender.com/ws/pedidos'
-  }
-
-  // En desarrollo con Vite, el proxy maneja ws://localhost:5173/ws/pedidos
+  // 4. En desarrollo Vite
   if (import.meta.env.DEV && typeof window !== 'undefined') {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     return `${protocol}//${window.location.host}/ws/pedidos`
   }
 
-  // En producción (Termux / LAN), conectar directamente al puerto 8000 del servidor
+  // 5. En LAN
   if (typeof window !== 'undefined') {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const hostname = window.location.hostname || 'localhost'

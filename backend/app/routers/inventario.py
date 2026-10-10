@@ -453,8 +453,163 @@ def configurar_componentes_combo(
     return ver_componentes_combo(producto_id, db=db, _=None)
 
 
+# ============================================================
+# REGISTRO DE BAJAS / MERMAS / DESPERDICIO (Daño de producto/insumo)
+# ============================================================
+
+from pydantic import BaseModel, Field
+
+class MermaIn(BaseModel):
+    ingrediente_id: int | None = None
+    producto_id: int | None = None
+    cantidad: Decimal = Field(gt=0, description="Cantidad que se dañó")
+    motivo: str = Field(min_length=3, max_length=255, description="Motivo del daño o merma")
+
+
+@router.post("/merma", status_code=status.HTTP_201_CREATED)
+async def registrar_merma(
+    data: MermaIn,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(cashier_required),
+):
+    """Registra una baja / merma de inventario por daño, vencimiento o desperdicio."""
+    if not data.ingrediente_id and not data.producto_id:
+        raise HTTPException(status_code=422, detail="Debe indicar un ingrediente_id o un producto_id")
+
+    descontados = []
+    motivo_limpio = data.motivo.strip()
+
+    if data.ingrediente_id:
+        ing = db.get(Ingrediente, data.ingrediente_id)
+        if not ing:
+            raise HTTPException(status_code=404, detail="Ingrediente no encontrado")
+
+        saldo_ant = ing.stock_actual
+        ing.stock_actual -= data.cantidad
+
+        mov = MovimientoInventario(
+            ingrediente_id=ing.id,
+            usuario_id=usuario.id,
+            cantidad=-data.cantidad,
+            unidad=ing.unidad_base,
+            saldo_anterior=saldo_ant,
+            saldo_nuevo=ing.stock_actual,
+            costo_unitario_momento=ing.costo_unitario,
+            tipo="MERMA",
+            referencia=f"Merma: {motivo_limpio}",
+        )
+        db.add(mov)
+        descontados.append({
+            "ingrediente": ing.nombre,
+            "cantidad": float(data.cantidad),
+            "unidad": ing.unidad_base,
+            "stock_restante": float(ing.stock_actual),
+        })
+
+        registrar(
+            db, usuario, "REGISTRAR_MERMA", "ingrediente", ing.id,
+            f"insumo={ing.nombre} cant={data.cantidad} {ing.unidad_base} motivo={motivo_limpio}",
+        )
+
+        from app.services.sync import encolar_sync
+        encolar_sync(
+            db,
+            tipo="DESCUENTO_STOCK",
+            entidad="ingrediente",
+            payload={
+                "ingrediente_id": ing.id,
+                "nombre": ing.nombre,
+                "cantidad_descontada": float(data.cantidad),
+                "stock_actual_checkpoint": float(ing.stock_actual),
+                "tipo_movimiento": "MERMA",
+                "referencia": motivo_limpio,
+            },
+            entidad_id=ing.id,
+            dispositivo_id=f"MERMA_{usuario.id}",
+        )
+
+    elif data.producto_id:
+        prod = (
+            db.query(Producto)
+            .options(joinedload(Producto.recetas).joinedload(DetalleReceta.ingrediente))
+            .filter(Producto.id == data.producto_id)
+            .first()
+        )
+        if not prod:
+            raise HTTPException(status_code=404, detail="Producto no encontrado")
+        if not prod.recetas:
+            raise HTTPException(status_code=422, detail=f"El producto '{prod.nombre}' no tiene receta configurada para descontar")
+
+        for r in prod.recetas:
+            ing = r.ingrediente
+            cant_a_descontar = r.cantidad * data.cantidad
+            saldo_ant = ing.stock_actual
+            ing.stock_actual -= cant_a_descontar
+
+            mov = MovimientoInventario(
+                ingrediente_id=ing.id,
+                usuario_id=usuario.id,
+                cantidad=-cant_a_descontar,
+                unidad=r.unidad or ing.unidad_base,
+                saldo_anterior=saldo_ant,
+                saldo_nuevo=ing.stock_actual,
+                costo_unitario_momento=ing.costo_unitario,
+                tipo="MERMA",
+                referencia=f"Merma plato: {prod.nombre} x{data.cantidad} - {motivo_limpio}",
+            )
+            db.add(mov)
+            descontados.append({
+                "ingrediente": ing.nombre,
+                "cantidad": float(cant_a_descontar),
+                "unidad": r.unidad or ing.unidad_base,
+                "stock_restante": float(ing.stock_actual),
+            })
+
+            from app.services.sync import encolar_sync
+            encolar_sync(
+                db,
+                tipo="DESCUENTO_STOCK",
+                entidad="ingrediente",
+                payload={
+                    "ingrediente_id": ing.id,
+                    "nombre": ing.nombre,
+                    "cantidad_descontada": float(cant_a_descontar),
+                    "stock_actual_checkpoint": float(ing.stock_actual),
+                    "tipo_movimiento": "MERMA",
+                    "referencia": f"{prod.nombre} x{data.cantidad}: {motivo_limpio}",
+                },
+                entidad_id=ing.id,
+                dispositivo_id=f"MERMA_{usuario.id}",
+            )
+
+        registrar(
+            db, usuario, "REGISTRAR_MERMA", "producto", prod.id,
+            f"producto={prod.nombre} cant={data.cantidad} motivo={motivo_limpio}",
+        )
+
+    safe_commit(db)
+    await ws_manager.broadcast({
+        "evento": "inventario_actualizado",
+        "data": {"descontados": descontados, "motivo": motivo_limpio},
+    })
+
+    return {
+        "status": "ok",
+        "mensaje": f"Merma registrada exitosamente por: {motivo_limpio}",
+        "descontados": descontados,
+    }
+
+
 # Alias bajo /inventario para compatibilidad total
 combo_alias_router = APIRouter(prefix="/inventario", tags=["inventario"])
+
+@combo_alias_router.post("/merma", status_code=status.HTTP_201_CREATED)
+async def registrar_merma_alias(
+    data: MermaIn,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(cashier_required),
+):
+    return await registrar_merma(data=data, db=db, usuario=usuario)
 
 @combo_alias_router.get("/combos/{producto_id}/componentes", response_model=list[ComponenteComboOut])
 def ver_componentes_combo_alias(

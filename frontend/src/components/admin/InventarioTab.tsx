@@ -13,6 +13,7 @@ import {
   TrendingDown,
   ShieldAlert,
   Pencil,
+  Trash2,
 } from 'lucide-react'
 import {
   getIngredientesApi,
@@ -29,6 +30,7 @@ import type {
   CategoriaInsumoItem,
   MovimientoInventarioItem,
 } from '../../types/admin'
+import { RegistrarMermaModal } from './RegistrarMermaModal'
 
 export const InventarioTab: React.FC = () => {
   const [ingredientes, setIngredientes] = useState<IngredienteItem[]>([])
@@ -41,6 +43,9 @@ export const InventarioTab: React.FC = () => {
 
   // Feedback
   const [mensajeExito, setMensajeExito] = useState<string | null>(null)
+
+  // Modal Registrar Merma / Bajas
+  const [isMermaOpen, setIsMermaOpen] = useState(false)
 
   // Modal Nuevo Insumo
   const [isNuevoInsumoOpen, setIsNuevoInsumoOpen] = useState(false)
@@ -406,7 +411,16 @@ export const InventarioTab: React.FC = () => {
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setIsMermaOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-rose-950/80 hover:bg-rose-900/90 border border-rose-800 text-rose-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md"
+              title="Dar de baja producto o insumo dañado"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+              <span>📉 Registrar Merma / Daño</span>
+            </button>
+
             <button
               onClick={() => setIsNuevaCatOpen(true)}
               className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
@@ -1204,6 +1218,12 @@ export const InventarioTab: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Modal Registrar Merma / Bajas por Daño */}
+      <RegistrarMermaModal
+        isOpen={isMermaOpen}
+        onClose={() => setIsMermaOpen(false)}
+        onSuccess={cargarDatos}
+      />
     </div>
   )
 }

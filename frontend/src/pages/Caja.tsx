@@ -19,6 +19,7 @@ import { ValesModal } from '../components/caja/ValesModal'
 import { NuevoPedidoModal } from '../components/caja/NuevoPedidoModal'
 import { TirillaModal, type TipoTirilla } from '../components/common/TirillaModal'
 import { ConfiguracionImpresoraModal } from '../components/common/ConfiguracionImpresoraModal'
+import { RegistrarMermaModal } from '../components/admin/RegistrarMermaModal'
 import { FooterCredits } from '../components/common/FooterCredits'
 import type { DatosReciboVenta, DatosReporteZ } from '../utils/printer'
 import {
@@ -34,6 +35,7 @@ import {
   Lock,
   PlusCircle,
   Printer,
+  Trash2,
 } from 'lucide-react'
 
 function extraerVariacionesTexto(variacion?: Record<string, any> | null): string[] {
@@ -118,6 +120,7 @@ export const Caja: React.FC = () => {
   const [isMovimientosOpen, setIsMovimientosOpen] = useState(false)
   const [isValesOpen, setIsValesOpen] = useState(false)
   const [isNuevoPedidoOpen, setIsNuevoPedidoOpen] = useState(false)
+  const [isMermaOpen, setIsMermaOpen] = useState(false)
   const [isConfigImpresoraOpen, setIsConfigImpresoraOpen] = useState(false)
   const [configLocal, setConfigLocal] = useState<Record<string, string>>({})
   const [tirillaConfig, setTirillaConfig] = useState<{
@@ -504,13 +507,24 @@ export const Caja: React.FC = () => {
           </button>
         </div>
 
-        <button
-          onClick={() => requerirTurno(() => setIsNuevoPedidoOpen(true))}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition cursor-pointer shrink-0"
-        >
-          <PlusCircle className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Nueva Orden</span>
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setIsMermaOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-950/80 hover:bg-rose-900 border border-rose-800 text-rose-300 transition cursor-pointer"
+            title="Dar de baja producto o insumo dañado"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+            <span className="hidden sm:inline">📉 Merma</span>
+          </button>
+
+          <button
+            onClick={() => requerirTurno(() => setIsNuevoPedidoOpen(true))}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition cursor-pointer"
+          >
+            <PlusCircle className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Nueva Orden</span>
+          </button>
+        </div>
       </div>
 
       {/* Contenido Principal: Tarjetas de Pedidos en Caja */}
@@ -765,6 +779,12 @@ export const Caja: React.FC = () => {
       <ConfiguracionImpresoraModal
         isOpen={isConfigImpresoraOpen}
         onClose={() => setIsConfigImpresoraOpen(false)}
+      />
+
+      <RegistrarMermaModal
+        isOpen={isMermaOpen}
+        onClose={() => setIsMermaOpen(false)}
+        onSuccess={() => cargarDatos(false)}
       />
     </div>
   )
