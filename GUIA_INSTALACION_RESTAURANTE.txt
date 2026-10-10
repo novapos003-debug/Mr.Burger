@@ -338,6 +338,35 @@ EN CASO DE DUDA con un articulo nuevo, preguntense:
       NO  -> gasto operativo (por unidad de compra).
 
 
+..................................................................
+EL CAJERO YA PUEDE INGRESAR FACTURAS DE PROVEEDOR (orden del dueno)
+..................................................................
+
+Antes solo el admin podia. Ahora cualquier usuario con perfil de
+CAJA (como don Felix) ingresa el pedido que llega:
+
+ 1. En la pantalla de Caja, boton azul  "Ingresar Factura".
+ 2. Escribir el proveedor y, si tiene, el numero de factura.
+ 3. Por cada cosa que llego: elegir el insumo, la CANTIDAD y el
+    COSTO de una unidad.
+       - La cantidad va en la unidad del insumo. Ejemplo: llegaron
+         5 kilos de papa = 5000 (gramos). 2 litros de salsa = 2000.
+       - El costo es el de UNA unidad. Ejemplo: 5 kilos de papa por
+         $30.000 = $6 por gramo. Si no se sabe, dejar 0.
+ 4. "Ingresar factura". Las existencias suben al instante y queda
+    anotado quien la ingreso.
+
+ OJO: ingresar la factura NO saca plata de la caja. Si se pago con
+ efectivo del cajon, registrar tambien la salida en
+ "Gastos / Salidas".
+
+ El cajero NO ve costos, reportes ni usuarios: eso sigue siendo solo
+ del admin. Mesero y cocina no pueden ingresar facturas.
+
+ PRUEBA: entrar con el usuario de don Felix, ingresar una factura de
+ prueba de 1 pan y revisar que el pan subio en 1 en el inventario.
+
+
 ------------------------------------------------------------------
 PASO 9.  REVISAR CON EL DUENO (cuando ya este vendiendo)
 ------------------------------------------------------------------

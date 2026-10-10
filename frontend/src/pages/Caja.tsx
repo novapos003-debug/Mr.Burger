@@ -17,6 +17,7 @@ import { ArqueoCiegoModal } from '../components/caja/ArqueoCiegoModal'
 import { MovimientosModal } from '../components/caja/MovimientosModal'
 import { ValesModal } from '../components/caja/ValesModal'
 import { NuevoPedidoModal } from '../components/caja/NuevoPedidoModal'
+import { RegistrarCompraModal } from '../components/caja/RegistrarCompraModal'
 import { TirillaModal, type TipoTirilla } from '../components/common/TirillaModal'
 import { ConfiguracionImpresoraModal } from '../components/common/ConfiguracionImpresoraModal'
 import { RegistrarMermaModal } from '../components/admin/RegistrarMermaModal'
@@ -121,6 +122,7 @@ export const Caja: React.FC = () => {
   const [isValesOpen, setIsValesOpen] = useState(false)
   const [isNuevoPedidoOpen, setIsNuevoPedidoOpen] = useState(false)
   const [isMermaOpen, setIsMermaOpen] = useState(false)
+  const [isCompraOpen, setIsCompraOpen] = useState(false)
   const [isConfigImpresoraOpen, setIsConfigImpresoraOpen] = useState(false)
   const [configLocal, setConfigLocal] = useState<Record<string, string>>({})
   const [tirillaConfig, setTirillaConfig] = useState<{
@@ -411,6 +413,7 @@ export const Caja: React.FC = () => {
         onMovimientosClick={() => requerirTurno(() => setIsMovimientosOpen(true))}
         onValesClick={() => setIsValesOpen(true)}
         onNuevoPedidoClick={() => requerirTurno(() => setIsNuevoPedidoOpen(true))}
+        onCompraClick={() => setIsCompraOpen(true)}
         onConfigImpresoraClick={() => setIsConfigImpresoraOpen(true)}
         onRefresh={() => cargarDatos(true)}
         isRefreshing={isRefreshing}
@@ -780,6 +783,8 @@ export const Caja: React.FC = () => {
         isOpen={isConfigImpresoraOpen}
         onClose={() => setIsConfigImpresoraOpen(false)}
       />
+
+      <RegistrarCompraModal isOpen={isCompraOpen} onClose={() => setIsCompraOpen(false)} />
 
       <RegistrarMermaModal
         isOpen={isMermaOpen}

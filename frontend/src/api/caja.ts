@@ -9,6 +9,7 @@ import type {
   PagoOut,
 } from '../types/caja'
 import type { Pedido } from '../types/mesero'
+import type { CompraIn, CompraOut } from '../types/admin'
 
 export const cobrarPedido = async (pedidoId: number, data: CobroIn): Promise<CobroOut> => {
   const res = await api.post<CobroOut>(`/caja/pedidos/${pedidoId}/cobrar`, data)
@@ -97,5 +98,29 @@ export const cambiarTipoConsumoApi = async (
   tipoConsumo: 'LOCAL' | 'LLEVAR'
 ): Promise<Pedido> => {
   const res = await api.patch<Pedido>(`/pedidos/${pedidoId}/tipo-consumo`, { tipo_consumo: tipoConsumo })
+  return res.data
+}
+
+// --- Lo que el cajero hace sobre el inventario: ingresar facturas de proveedor y mermas ---
+export interface InsumoCaja {
+  id: number
+  nombre: string
+  unidad_base: string
+  stock_actual: number
+  tipo_articulo: string
+}
+
+export const getInsumosCaja = async (): Promise<InsumoCaja[]> => {
+  const res = await api.get<InsumoCaja[]>('/ingredientes/para-caja')
+  return res.data
+}
+
+export const crearCompraCaja = async (data: CompraIn): Promise<CompraOut> => {
+  const res = await api.post<CompraOut>('/admin/compras', data)
+  return res.data
+}
+
+export const getComprasRecientesCaja = async (): Promise<CompraOut[]> => {
+  const res = await api.get<CompraOut[]>('/admin/compras', { params: { limit: 5 } })
   return res.data
 }

@@ -64,6 +64,13 @@ su movimiento `AJUSTE` en el kardex. Se ejecuta una sola vez (bandera
 otra unidad. Deja el detalle en `inventario_inicial_resultado.txt`. De paso se corrigió que la nube,
 al reiniciarse, le devolvía el costo de fábrica al C1 y al P1 cuando estaban en $0.
 
+**Compras por el cajero (orden del dueño, 10 de octubre):** `POST` y `GET /admin/compras` aceptan
+los roles `admin` y `cajero`. La Caja tiene el botón "Ingresar Factura"
+(`components/caja/RegistrarCompraModal.tsx`). Para elegir insumos el cajero usa
+`GET /ingredientes/para-caja`, una lista corta sin costos ni precios; el inventario completo, los
+reportes y los usuarios siguen siendo solo del admin. Esa misma lista corrige el registro de mermas
+desde la Caja, que para un cajero aparecía sin insumos.
+
 ### Datos que hay que revisar con el dueño
 
 Encontrados al analizar el respaldo; **no se modificaron** porque son decisiones del negocio.

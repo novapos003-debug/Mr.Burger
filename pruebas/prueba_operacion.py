@@ -232,6 +232,28 @@ def main() -> int:
         mov = sql("select unidad, saldo_anterior, saldo_nuevo, costo_unitario_momento from movimiento_inventario where tipo='COMPRA' order by id desc limit 1")
         ok("12b. el kardex guarda unidad, saldos y costo", bool(mov) and mov[0][0] is not None and D(mov[0][1]) == s0 and D(mov[0][2]) == s0 + 50 and D(mov[0][3]) == D(800), str(mov))
 
+        print("\n[13] El cajero ingresa facturas de proveedor (orden del dueño)")
+        s0 = stock(22)
+        r = c.post("/admin/compras", headers=H(CAJA), json={"descripcion": "Proveedor: Panadería. #Factura: 77", "detalles": [{"ingrediente_id": 22, "cantidad": 30, "costo_unitario": 900}]})
+        ok("13a. el cajero registra la compra", r.status_code == 201, f"HTTP {r.status_code} {r.text[:120]}")
+        ok("13b. suben las existencias", stock(22) == s0 + 30, f"{s0} -> {stock(22)}")
+        mov = sql("select usuario_id, tipo, cantidad from movimiento_inventario where ingrediente_id=22 order by id desc limit 1")
+        ok("13c. el kardex dice quién la ingresó", bool(mov) and mov[0][0] == CAJA and mov[0][1] == "COMPRA" and D(mov[0][2]) == 30, str(mov))
+        r = c.get("/admin/compras", headers=H(CAJA))
+        ok("13d. el cajero ve las facturas ingresadas", r.status_code == 200 and len(r.json()) >= 2, f"HTTP {r.status_code}")
+        r = c.get("/ingredientes/para-caja", headers=H(CAJA))
+        lista = r.json() if r.status_code == 200 else []
+        ok("13e. el cajero recibe la lista corta de insumos, sin costos",
+           r.status_code == 200 and len(lista) > 20 and "costo_unitario" not in lista[0] and "precio_venta" not in lista[0], f"HTTP {r.status_code}")
+        ok("13f. el inventario completo sigue siendo solo del admin", c.get("/ingredientes", headers=H(CAJA)).status_code == 403)
+        r_mes = c.post("/admin/compras", headers=H(MESERO), json={"detalles": [{"ingrediente_id": 22, "cantidad": 1, "costo_unitario": 1}]})
+        r_coc = c.post("/admin/compras", headers=H(COCINA), json={"detalles": [{"ingrediente_id": 22, "cantidad": 1, "costo_unitario": 1}]})
+        ok("13g. mesero y cocina no pueden ingresar compras", r_mes.status_code == 403 and r_coc.status_code == 403, f"{r_mes.status_code}/{r_coc.status_code}")
+        ok("13h. el resto de administración sigue cerrado al cajero",
+           all(c.get(u, headers=H(CAJA)).status_code == 403 for u in ("/admin/dashboard", "/admin/usuarios", "/admin/auditoria", "/admin/stock-critico")))
+        r = c.post("/admin/compras", headers=H(CAJA), json={"detalles": [{"ingrediente_id": 22, "cantidad": -5, "costo_unitario": 1}]})
+        ok("13i. una cantidad negativa se rechaza", r.status_code == 422 and stock(22) == s0 + 30, f"HTTP {r.status_code}")
+
         print("\n[9] Reiniciar el backend no revierte ajustes del admin")
         sql("update ingrediente set precio_venta=400, costo_unitario=123 where id=61")
         sql("update configuracion set valor='BLOQUEAR' where clave='politica_stock_insuficiente'")

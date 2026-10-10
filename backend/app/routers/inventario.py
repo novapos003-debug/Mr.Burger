@@ -115,6 +115,26 @@ def listar_ingredientes(
     return [to_ingrediente_out(i) for i in q.order_by(Ingrediente.nombre).all()]
 
 
+@router.get("/para-caja")
+def listar_insumos_para_caja(
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(cashier_required),
+):
+    """Lista corta de insumos para lo que hace el cajero: ingresar facturas de proveedor y
+    registrar mermas. No incluye costos, precios ni proveedor, que siguen siendo solo del admin."""
+    insumos = db.query(Ingrediente).filter(Ingrediente.activo.is_(True)).order_by(Ingrediente.nombre).all()
+    return [
+        {
+            "id": i.id,
+            "nombre": i.nombre,
+            "unidad_base": i.unidad_base,
+            "stock_actual": i.stock_actual,
+            "tipo_articulo": i.tipo_articulo or "INSUMO_RECETA",
+        }
+        for i in insumos
+    ]
+
+
 @router.post("", response_model=IngredienteOut, status_code=status.HTTP_201_CREATED)
 def crear_ingrediente(
     data: IngredienteIn,

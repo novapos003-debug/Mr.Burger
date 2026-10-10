@@ -11,6 +11,7 @@ import {
   RefreshCw,
   LogOut,
   Printer,
+  Truck,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
@@ -21,6 +22,7 @@ interface Props {
   onMovimientosClick: () => void
   onValesClick: () => void
   onNuevoPedidoClick: () => void
+  onCompraClick: () => void
   onConfigImpresoraClick: () => void
   onRefresh: () => void
   isRefreshing: boolean
@@ -34,6 +36,7 @@ export const CajaHeader: React.FC<Props> = ({
   onMovimientosClick,
   onValesClick,
   onNuevoPedidoClick,
+  onCompraClick,
   onConfigImpresoraClick,
   onRefresh,
   isRefreshing,
@@ -113,6 +116,16 @@ export const CajaHeader: React.FC<Props> = ({
           >
             <FileSpreadsheet className="w-4 h-4 text-rose-400" />
             <span>💸 Gastos / Salidas</span>
+          </button>
+
+          {/* Ingresar la factura del pedido que llega del proveedor */}
+          <button
+            onClick={onCompraClick}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs bg-sky-950/80 hover:bg-sky-900 border border-sky-700/80 text-sky-300 shadow-md transition cursor-pointer"
+            title="Ingresar la factura de un pedido de proveedor: sube las existencias de los insumos"
+          >
+            <Truck className="w-4 h-4 text-sky-400" />
+            <span>Ingresar Factura</span>
           </button>
 
           {/* Botón Abrir / Cerrar Turno */}

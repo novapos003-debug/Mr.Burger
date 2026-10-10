@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.deps import admin_required, get_current_user
+from app.core.deps import admin_required, cashier_required, get_current_user
 from app.database import get_db, safe_commit
 from app.models import Usuario
 from app.schemas.admin import (
@@ -79,11 +79,12 @@ def ver_auditoria(
 def crear_compra(
     data: CompraIn,
     db: Session = Depends(get_db),
-    admin: Usuario = Depends(admin_required),
+    usuario: Usuario = Depends(cashier_required),
 ):
-    """Registra una compra de insumos reabasteciendo el inventario."""
+    """Registra una compra de insumos reabasteciendo el inventario.
+    Por orden del dueño también la ingresa el cajero (la factura del pedido que llega)."""
     try:
-        compra = registrar_compra(db, data, admin)
+        compra = registrar_compra(db, data, usuario)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     compras = listar_compras(db, limit=1, offset=0)
@@ -95,7 +96,7 @@ def ver_compras(
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
-    _: Usuario = Depends(admin_required),
+    _: Usuario = Depends(cashier_required),
 ):
     """Lista el historial de compras a proveedores con sus detalles."""
     return listar_compras(db, limit, offset)

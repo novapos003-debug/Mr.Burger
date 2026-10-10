@@ -260,11 +260,6 @@ export const guardarComponentesComboApi = async (
   return res.data
 }
 
-export const limpiarDatosPruebaApi = async (): Promise<{ status: string; mensaje: string }> => {
-  const res = await api.post<{ status: string; mensaje: string }>('/admin/sistema/limpiar-pruebas')
-  return res.data
-}
-
 export const getAdicionesConfigApi = async (): Promise<AdicionExtra[]> => {
   const res = await api.get<AdicionExtra[]>('/productos/adiciones/configuracion')
   return res.data

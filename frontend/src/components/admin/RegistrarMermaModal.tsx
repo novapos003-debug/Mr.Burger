@@ -60,7 +60,8 @@ export const RegistrarMermaModal: React.FC<Props> = ({
       setSelectedProductoId('')
 
       Promise.all([
-        api.get('/ingredientes').then((r) => r.data).catch(() => []),
+        // Lista corta que también puede leer el cajero (la completa es solo del admin)
+        api.get('/ingredientes/para-caja').then((r) => r.data).catch(() => []),
         api.get('/productos').then((r) => r.data).catch(() => []),
       ])
         .then(([ings, prods]) => {
