@@ -1,0 +1,49 @@
+======================================================================
+      MR. BURGER - INSTRUCCIONES PARA CONTINUAR TRABAJANDO EN CASA
+======================================================================
+
+Esta carpeta contiene una COPIA COMPLETA Y EXACTA del sistema Mr. Burger
+generada el 09/10/2026 directamente desde la máquina de la caja.
+
+CONTIENE:
+1. Base de datos completa en: database\backup_restaurante_completo.sql
+   (Incluye todos los ingredientes, compras con IVA 19%, recetas,
+   usuarios, cierres y productos).
+2. Frontend completo (código fuente React/Vite + build de producción en dist/).
+3. Backend completo (FastAPI, modelos, rutas, servicios, migraciones).
+4. Scripts de arranque rápido y utilidades de reparación.
+
+----------------------------------------------------------------------
+PASO 1: COPIAR AL PC DE TU CASA
+----------------------------------------------------------------------
+1. Copia toda esta carpeta "mrburger_copia" a tu disco local C:\ o a tu 
+   escritorio en casa.
+   (Por ejemplo: C:\mrburger)
+
+----------------------------------------------------------------------
+PASO 2: BASE DE DATOS POSTGRESQL EN TU CASA
+----------------------------------------------------------------------
+Opción A - Si ya tienes PostgreSQL instalado en casa:
+1. Si no habías creado la base de datos "restaurante", ejecuta:
+   configurar_bd_windows.bat
+2. Para cargar todos los datos y facturas que se hicieron hoy en caja,
+   simplemente haz doble clic en:
+   restaurar_bd_casa.bat
+   (Este script restaura automáticamente database\backup_restaurante_completo.sql)
+
+Opción B - Si estás usando la base de datos en la Nube (Render):
+1. Ya todo está sincronizado en la nube (https://mrburger-api.onrender.com).
+
+----------------------------------------------------------------------
+PASO 3: INICIAR EL SISTEMA EN TU CASA
+----------------------------------------------------------------------
+Haz doble clic en:
+   iniciar_windows.bat
+(o iniciar_con_consolas.bat)
+
+El sistema abrirá automáticamente:
+- Backend: http://localhost:8000
+- Frontend: http://localhost:5173
+
+¡Listo para seguir desarrollando y testeando!
+======================================================================
