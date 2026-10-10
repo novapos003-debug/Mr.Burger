@@ -10,9 +10,10 @@ set "RAIZ=%CD%"
 :: Asegurar que el servicio de PostgreSQL este iniciado (si ya lo esta, no hace nada)
 for %%S in (postgresql-x64-18 postgresql-x64-17 postgresql-x64-16 postgresql-x64-15 postgresql-18 postgresql-17 postgresql-16 postgresql-15) do net start %%S >nul 2>nul
 
-:: Detectar comando de Python disponible
+:: Detectar comando de Python disponible (se prueba ejecutandolo: en algunos Windows
+:: "python" es solo un acceso a la Tienda que no funciona)
 set PY_CMD=python
-where python >nul 2>nul
+python -c "import sys" >nul 2>nul
 if errorlevel 1 set PY_CMD=py
 
 :: Cerrar procesos previos y liberar estrictamente los puertos 8000 y 5173

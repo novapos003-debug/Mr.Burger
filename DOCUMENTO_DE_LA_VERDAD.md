@@ -47,7 +47,14 @@ Qué pasó con cada riesgo de la [sección 14](#14-discrepancias-y-riesgos-detec
 | 14.7 Turno laboral automático | Sin cambio. Decisión pendiente. |
 | 14.8 Migraciones SQL | El esquema base ya incluye los valores nuevos; el backend corrige las bases existentes al arrancar. |
 | 14.9 Sincronización por id | Resuelto con rangos de numeración separados. |
-| 14.10 Documentación desactualizada | Scripts de Termux y de la sincronización vieja eliminados. El `README.md` sigue sin actualizar. |
+| 14.10 Documentación desactualizada | Eliminado todo lo que no es de la instalación en Windows: Termux, Docker (`docker-compose.yml`, scripts `.ps1`), guías viejas y plan de trabajo. `README.md` reescrito. La guía vigente es `GUIA_INSTALACION_RESTAURANTE.txt`. |
+
+**Tercera revisión (10 de octubre, tarde), sobre el instalador:**
+
+- `scripts/verificar_bd.py`: el instalador solo crea la base si PostgreSQL responde y la base no existe. Si PostgreSQL está apagado o hay cualquier duda, se detiene sin tocar nada. `configurar_bd_windows.bat` se niega a cargar datos sobre una base que ya tiene productos.
+- Copia de seguridad automática **antes** de arrancar cada versión nueva.
+- `scripts/verificar_token.py`: comprueba el token contra la nube (solo lectura). Si el `.env` del restaurante conserva el token viejo, lo detecta y pide el nuevo.
+- Detección de Python ejecutándolo de verdad: en algunos Windows `python` es un acceso a la Tienda que no funciona.
 
 ### Datos que hay que revisar con el dueño
 
@@ -601,6 +608,10 @@ Esta es la instalación de referencia. Lo que se monte mañana debe parecerse a 
 
 ### 13.3 Orden de instalación
 
+> **Hoy la instalación es un doble clic en `actualizar_windows.bat`**, que hace solo los pasos 3,
+> 4 y la sincronización del diagrama. Los pasos para la persona están en
+> `GUIA_INSTALACION_RESTAURANTE.txt`. El diagrama queda como referencia de qué ocurre por dentro.
+
 ```mermaid
 flowchart TD
     A["1. Instalar Git, Python 3.11.9, PostgreSQL y Chrome"] --> B["2. git clone del repositorio"]
@@ -625,11 +636,13 @@ flowchart TD
 
 | Script | Qué hace | Cuándo |
 |---|---|---|
-| `configurar_bd_windows.bat` | Crea usuario y BD `restaurante`; aplica los SQL 01, 02 y 03 | Una vez |
+| `configurar_bd_windows.bat` | Crea usuario y BD `restaurante`; aplica los SQL 01, 02 y 03. No hace nada si la base ya tiene productos | Una vez (lo llama el instalador si hace falta) |
+| `scripts/verificar_bd.py`, `scripts/verificar_token.py` | Comprobaciones de solo lectura de la base local y del token de la nube | Las llama el instalador |
+| `scripts/diagnostico_datos.py` | Informe de solo lectura: duplicados, insumos sospechosos, cola de sincronización | Diagnóstico |
 | `restaurar_bd_casa.bat` | Carga `database/backup_restaurante_completo.sql` | Una vez, opcional |
 | `configurar_firewall_windows.bat` | Abre los puertos 5173 y 8000 | Una vez, como administrador |
 | `optimizar_rendimiento_windows.bat` | Plan de energía alto; quita programas del inicio | Una vez, opcional |
-| `iniciar_windows.bat` | `git pull` y llama a `scriptsrrancar_servicios.bat`: arranca PostgreSQL, backend y frontend, espera a que respondan y abre la caja en Chrome con impresión directa | Cada día |
+| `iniciar_windows.bat` | `git pull` y llama a `scripts\arrancar_servicios.bat`: arranca PostgreSQL, backend y frontend, espera a que respondan y abre la caja en Chrome con impresión directa | Cada día |
 | `iniciar_silencioso.vbs` | Ejecuta `iniciar_windows.bat` sin mostrar ventanas | Acceso directo del cajero |
 | `iniciar_con_consolas.bat` | Arranca con las ventanas visibles para ver errores | Diagnóstico |
 | `actualizar_windows.bat` | Descarga la última versión, llama a `scripts\preparar_sistema.bat` (componentes, base de datos, token, respaldo, firewall, impresora) y arranca | **Instalación y cada actualización** |

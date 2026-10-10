@@ -7,10 +7,11 @@ chcp 65001 >nul
 :: ============================================================
 cd /d "%~dp0.."
 
+:: Se prueba ejecutandolo: en algunos Windows "python" es solo un acceso a la Tienda
 set PY_CMD=python
-where python >nul 2>nul
+python -c "import sys" >nul 2>nul
 if errorlevel 1 set PY_CMD=py
-where %PY_CMD% >nul 2>nul
+%PY_CMD% -c "import sys" >nul 2>nul
 if errorlevel 1 (
     echo [ERROR] No se encontro Python. Instala Python 3.11 y marca "Add Python to PATH".
     pause
@@ -31,30 +32,50 @@ if errorlevel 1 (
 echo.
 echo [B] Verificando la base de datos local...
 for %%S in (postgresql-x64-18 postgresql-x64-17 postgresql-x64-16 postgresql-x64-15 postgresql-18 postgresql-17 postgresql-16 postgresql-15) do net start %%S >nul 2>nul
-%PY_CMD% -c "import psycopg2,sys; c=psycopg2.connect(host='127.0.0.1',port=5432,dbname='restaurante',user='restaurante',password='restaurante_dev',connect_timeout=5); cur=c.cursor(); cur.execute('select count(*) from producto'); print('    [OK] Base de datos lista:', cur.fetchone()[0], 'productos')" 2>nul
-if errorlevel 1 (
-    echo     [FALTA] No hay base de datos "restaurante" o PostgreSQL esta apagado.
-    echo             Si es la primera vez en este computador, se va a crear ahora.
-    echo.
-    call configurar_bd_windows.bat
-)
+%PY_CMD% scripts\verificar_bd.py
+set "ESTADO_BD=%errorlevel%"
+if "%ESTADO_BD%"=="2" goto crear_bd
+if "%ESTADO_BD%"=="0" goto respaldo_previo
+echo.
+echo     No se inicia el sistema para no arriesgar los datos.
+echo     Revisa que PostgreSQL este instalado y encendido, y vuelve a ejecutar este archivo.
+echo.
+pause
+exit /b 1
+
+:crear_bd
+echo             Es la primera vez en este computador: se va a crear ahora.
+echo.
+call "%~dp0..\configurar_bd_windows.bat"
+goto fin_bd
+
+:respaldo_previo
+:: Copia de seguridad ANTES de arrancar la version nueva (queda en la carpeta backups)
+echo     Guardando una copia de seguridad antes de actualizar...
+call "%~dp0..\respaldar_bd_windows.bat" /silencioso
+if errorlevel 1 echo     [AVISO] No se pudo hacer la copia de seguridad. Avisa antes de continuar.
+
+:fin_bd
 
 echo.
 echo [C] Verificando la sincronizacion con la nube...
-set "TIENE_TOKEN="
-if exist ".env" for /f "usebackq tokens=1,* delims==" %%A in (".env") do if /i "%%A"=="CLOUD_SYNC_TOKEN" if not "%%B"=="" set "TIENE_TOKEN=1"
-if defined TIENE_TOKEN (
-    echo     [OK] Token de sincronizacion configurado.
-) else (
-    echo     [FALTA] Este computador aun no tiene el token de la nube.
-    call configurar_sincronizacion_windows.bat
+%PY_CMD% scripts\verificar_token.py
+if not "%errorlevel%"=="2" goto fin_token
+call "%~dp0..\configurar_sincronizacion_windows.bat"
+%PY_CMD% scripts\verificar_token.py
+if "%errorlevel%"=="2" (
+    echo     [AVISO] El token sigue sin ser valido. La caja va a funcionar, pero NO subira
+    echo             datos a la web hasta que ejecutes configurar_sincronizacion_windows.bat
+    echo             con el token correcto.
+    pause
 )
+:fin_token
 
 echo.
 echo [D] Verificando el respaldo diario automatico...
 schtasks /Query /TN "MrBurger - Respaldo diario" >nul 2>nul
 if errorlevel 1 (
-    call programar_respaldo_diario.bat /silencioso
+    call "%~dp0..\programar_respaldo_diario.bat" /silencioso
 ) else (
     echo     [OK] Respaldo diario programado.
 )

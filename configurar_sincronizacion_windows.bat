@@ -36,8 +36,8 @@ move /y ".env.tmp" ".env" >nul
 echo.
 echo ============================================================
 echo   LISTO. La caja quedo configurada para sincronizar.
-echo   Cierra y vuelve a abrir el sistema (iniciar_windows.bat)
-echo   para que tome el cambio.
+echo   Si el sistema ya estaba abierto, cierralo y vuelve a
+echo   abrirlo (iniciar_windows.bat) para que tome el cambio.
 echo ============================================================
 echo.
 pause

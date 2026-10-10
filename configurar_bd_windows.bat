@@ -29,6 +29,11 @@ if %errorlevel% neq 0 (
 
 set PGPASSWORD=restaurante_dev
 
+:: SEGURIDAD: si la base ya tiene productos, no se toca (evita duplicar el catalogo)
+set "YA_TIENE="
+for /f "usebackq delims=" %%N in (`psql -U restaurante -h 127.0.0.1 -d restaurante -tAc "select count(*) from producto" 2^>nul`) do set "YA_TIENE=%%N"
+if defined YA_TIENE if not "%YA_TIENE%"=="0" goto ya_configurada
+
 echo [1/4] Creando usuario 'restaurante' y base de datos 'restaurante'...
 psql -U postgres -c "CREATE USER restaurante WITH PASSWORD 'restaurante_dev' SUPERUSER;"
 psql -U postgres -c "CREATE DATABASE restaurante OWNER restaurante;"
@@ -53,3 +58,11 @@ echo   ¡BASE DE DATOS CONFIGURADA CON ÉXITO EN POSTGRESQL!
 echo ============================================================
 echo.
 pause
+exit /b 0
+
+:ya_configurada
+echo La base de datos "restaurante" ya existe y tiene %YA_TIENE% productos.
+echo No se modifico nada. Para empezar de cero hay que borrarla a mano primero.
+echo.
+pause
+exit /b 0

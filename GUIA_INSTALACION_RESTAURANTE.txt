@@ -1,0 +1,255 @@
+==================================================================
+   MR. BURGER POS  -  QUE HACER AL LLEGAR AL RESTAURANTE
+==================================================================
+
+Sigue los pasos en orden. Tiempo aproximado: 30 a 45 minutos.
+Nada de lo que hay aqui borra ventas, recetas, precios ni insumos.
+
+
+------------------------------------------------------------------
+ANTES DE EMPEZAR  (2 minutos)
+------------------------------------------------------------------
+
+[ ] El computador de la caja esta encendido y con internet.
+[ ] La impresora de tirillas esta encendida, con papel y conectada
+    por USB. El cajon de dinero va conectado a la IMPRESORA (cable
+    tipo telefono), no al computador.
+[ ] Tienes esta memoria USB conectada. Aqui esta el archivo
+    MrBurger_TOKEN_SINCRONIZACION.txt  (lo vas a necesitar una vez).
+
+
+------------------------------------------------------------------
+PASO 1.  INSTALAR  (un doble clic)
+------------------------------------------------------------------
+
+1. Abre la carpeta del sistema Mr.Burger en el computador de la caja
+   (la misma de siempre, donde esta "iniciar_windows.bat").
+
+2. Doble clic en:      actualizar_windows.bat
+
+3. Se abre una ventana negra. Va sola por estos puntos:
+
+     [A] Componentes        -> debe decir [OK]
+     [B] Base de datos      -> debe decir [OK] y cuantos productos hay.
+                               Tambien guarda una copia de seguridad.
+     [C] Sincronizacion     -> AQUI TE PIDE EL TOKEN (ver abajo)
+     [D] Respaldo diario    -> lo programa solo
+     [E] Firewall           -> si dice [FALTA], ver Paso 2
+     [F] Impresora          -> te dice cual es la predeterminada
+
+4. CUANDO PIDA EL TOKEN:
+     - Abre en la USB el archivo MrBurger_TOKEN_SINCRONIZACION.txt
+     - Copia SOLO la ultima linea (la de letras y numeros, sin espacios).
+     - Vuelve a la ventana negra, haz CLIC DERECHO dentro de ella
+       (asi se pega) y presiona Enter.
+     - Debe responder:  [OK] Token de sincronizacion valido.
+   Solo lo pide esta vez. Si no lo pide, es que ya estaba bien.
+
+5. Al final se abre Chrome con la pantalla de la Caja y la ventana
+   negra muestra la direccion para los celulares, algo como:
+
+        http://192.168.1.50:5173
+
+   >>> ANOTA ESE NUMERO.  Es "la IP de la caja".  <<<
+
+SI ALGO SE VE RARO la primera vez (texto extrano o se cierra sola):
+vuelve a dar doble clic en actualizar_windows.bat. La primera vez el
+archivo se actualiza a si mismo; la segunda ya corre la version nueva.
+
+SI DICE "No se inicia el sistema para no arriesgar los datos":
+PostgreSQL esta apagado. Reinicia el computador y repite el paso 1.
+Si sigue igual, abre a Claude (Paso 7) y dile lo que aparece.
+
+
+------------------------------------------------------------------
+PASO 2.  FIREWALL  (solo si el punto [E] dijo FALTA)
+------------------------------------------------------------------
+
+Clic DERECHO sobre   configurar_firewall_windows.bat
+y elige "Ejecutar como administrador". Di que Si.
+
+Sin esto los celulares y la tablet NO logran entrar.
+
+
+------------------------------------------------------------------
+PASO 3.  IMPRESORA Y CAJON
+------------------------------------------------------------------
+
+1. Windows > Configuracion > Bluetooth y dispositivos > Impresoras.
+2. La impresora de tirillas debe aparecer en la lista.
+   - Si NO aparece: hay que instalar su driver (viene en el CD de la
+     impresora o en la pagina del fabricante, segun la marca/modelo).
+     Esto no se puede instalar solo. Si no sabes cual es, dile a
+     Claude la marca y el modelo que trae la etiqueta.
+3. Entra a la impresora y pulsa "Establecer como predeterminada".
+   (Si no deja, apaga la opcion "Permitir que Windows administre mi
+   impresora predeterminada" en esa misma pantalla.)
+4. Prueba: en la Caja cobra un pedido de prueba.
+   - La tirilla debe salir SIN mostrar ninguna ventana de impresion.
+   - El cajon debe abrirse.
+   Importante: esto solo funciona si la Caja se abrio con
+   iniciar_windows.bat o actualizar_windows.bat (no abriendo Chrome
+   a mano).
+
+
+------------------------------------------------------------------
+PASO 4.  DEJAR FIJA LA IP DE LA CAJA
+------------------------------------------------------------------
+
+Si la IP cambia, los celulares dejan de encontrar la caja. Para fijarla:
+
+1. Windows > Configuracion > Red e Internet.
+2. Entra a la conexion que este en uso (Wi-Fi o Ethernet) > Propiedades.
+3. En "Asignacion de IP" pulsa Editar > Manual > activa IPv4.
+4. Escribe los MISMOS datos que tiene ahora. Para verlos, baja en esa
+   misma pantalla hasta "Propiedades":
+       Direccion IP        la que anotaste (ej. 192.168.1.50)
+       Mascara de subred   255.255.255.0
+       Puerta de enlace    la del router (ej. 192.168.1.1)
+       DNS preferido       8.8.8.8
+5. Guardar. Comprueba que sigue habiendo internet.
+
+Si te enredas, sal sin guardar y pidele a Claude que lo haga (Paso 7).
+
+Ademas: que el computador NO se suspenda.
+Configuracion > Sistema > Energia > "Suspender": Nunca.
+Si la caja se duerme, se detiene todo el restaurante.
+
+
+------------------------------------------------------------------
+PASO 5.  CONECTAR CELULARES DE MESEROS Y TABLET DE COCINA
+------------------------------------------------------------------
+
+En CADA celular y en la tablet:
+
+1. Conectalo al MISMO Wi-Fi que el computador de la caja.
+   (No datos moviles. No la red de "invitados" del router.)
+2. Abre Chrome y escribe la direccion completa:
+
+        http://LA-IP-DE-LA-CAJA:5173
+        ejemplo:  http://192.168.1.50:5173
+
+   Ojo: es  http  (sin la s)  y termina en  :5173
+3. Inicia sesion con el usuario de esa persona (mesero, cocina...).
+   Todos tienen que volver a iniciar sesion hoy: es normal.
+4. Menu de Chrome (los tres puntos) > "Agregar a pantalla de inicio"
+   o "Instalar aplicacion". Queda el icono como una app.
+
+Si un celular dice "sin conexion" o se queda cargando:
+   a) Revisa que este en el mismo Wi-Fi.
+   b) Revisa que hiciste el Paso 2 (firewall).
+   c) En la pantalla de inicio de sesion toca el boton
+      "Configurar IP del Servidor" y escribe la IP de la caja.
+   d) Si tenia la app vieja instalada: cierrala del todo y abrela
+      otra vez para que tome la version nueva.
+
+Prueba: toma un pedido desde un celular. Debe aparecer al instante
+en la tablet de cocina y en la caja.
+
+
+------------------------------------------------------------------
+PASO 6.  COMPROBAR QUE SUBE A LA WEB
+------------------------------------------------------------------
+
+1. En la Caja, arriba, esta el indicador de sincronizacion. La primera
+   vez copia TODA la base a la nube: puede tardar 1 a 3 minutos.
+   Cuando termine debe quedar en verde / "sincronizado".
+2. En tu celular (con datos, fuera del Wi-Fi si quieres) abre:
+
+        https://mrburger-pos-cali.web.app
+
+3. Cobra un pedido de prueba en la caja. En unos segundos debe verse
+   en el panel web sin recargar la pagina.
+4. Prueba al reves: cambia un precio en el panel web y mira que
+   llegue a la caja.
+
+IMPORTANTE - CONTRASENAS: el panel web NO deja entrar con las claves
+viejas (admin123 y la que tenia el dueno). Cambialas primero EN LA
+CAJA: entra como admin > Administracion > Usuarios, y ponle clave
+nueva a "admin" y al dueno. En un minuto ya sirven en la web.
+
+
+------------------------------------------------------------------
+PASO 7.  ABRIR A CLAUDE EN ESE COMPUTADOR Y PASARLE LA INFORMACION
+------------------------------------------------------------------
+
+1. Abre la carpeta del sistema Mr.Burger.
+2. Haz clic en la barra de arriba donde sale la ruta de la carpeta,
+   escribe   cmd   y presiona Enter. Se abre una ventana negra.
+3. Escribe   claude   y presiona Enter.
+4. Copia y pega este mensaje tal cual:
+
+   ------------------------------------------------------------
+   Estamos en el PC de caja del restaurante Mr.Burger. Lee
+   DOCUMENTO_DE_LA_VERDAD.md (seccion 0) y
+   GUIA_INSTALACION_RESTAURANTE.txt. Ya ejecute
+   actualizar_windows.bat. Haz esto, solo leyendo, sin borrar ni
+   modificar datos sin preguntarme:
+   1) Ejecuta: python scripts/diagnostico_datos.py  y dime si hay
+      insumos duplicados o con nombre equivocado (ids 86 a 97).
+   2) Revisa backend.log y dime si hay errores.
+   3) Revisa el estado de la sincronizacion con la nube.
+   4) Dime que falta para empezar a vender.
+   ------------------------------------------------------------
+
+Ese Claude no recuerda la conversacion de la casa, pero todo lo que
+necesita esta escrito en DOCUMENTO_DE_LA_VERDAD.md.
+
+Si en ese computador no esta instalado Claude, haz doble clic en
+estado_sistema.bat, tomale foto a la ventana y enviamela.
+
+
+------------------------------------------------------------------
+PASO 8.  REVISAR CON EL DUENO (cuando ya este vendiendo)
+------------------------------------------------------------------
+
+No impiden vender, pero danan los reportes de costos e inventario:
+
+ - "Porcion Ensalda" cuesta $1.000 por gramo (debe ser un error).
+ - 11 bebidas no tienen receta: al venderlas no baja el inventario.
+ - Salsas y alitas con costo $0.
+ - 7 insumos con existencias negativas: hacer un conteo inicial.
+ - "Porta Perro" esta dos veces.
+ - Tomate, Queso Cheddar y empaque C1: revisar costo y precio.
+
+
+==================================================================
+   COMO FUNCIONA  (para entenderlo en 1 minuto)
+==================================================================
+
+EN EL LOCAL (funciona aunque se caiga el internet)
+
+   El computador de la caja es el "cerebro". Ahi viven el programa y
+   la base de datos. Los celulares y la tablet NO tienen nada
+   guardado: solo son pantallas que se conectan por Wi-Fi a la IP de
+   la caja (http://IP:5173). Por eso:
+     - Si se cae el INTERNET: se sigue vendiendo normal.
+     - Si se cae el WI-FI del local: la caja sigue; los celulares no.
+     - Si se APAGA la caja: se detiene todo.
+
+HACIA LA WEB (para el dueno/administrador)
+
+   Cada venta, pedido, compra o cambio que pasa en la caja se copia
+   solo a la nube en pocos segundos. El panel web
+   (https://mrburger-pos-cali.web.app) muestra esa copia en vivo.
+   Si no hay internet, la caja guarda todo en cola y lo sube apenas
+   vuelva; no se pierde nada.
+
+DESDE LA WEB HACIA LA CAJA
+
+   Lo que el admin cambie en el panel web (precios, productos,
+   recetas, usuarios) baja solo a la caja en segundos.
+   Las existencias (stock) las manda siempre la caja.
+
+   La primera vez que la caja se conecta, la nube guarda en un
+   archivo todo lo que tenia y recibe la copia completa de la caja.
+   No se borra nada: queda guardado en la nube.
+
+DIA A DIA
+
+   - Para abrir:  doble clic en iniciar_windows.bat (o el acceso
+     directo). Se actualiza solo si hay version nueva.
+   - Respaldo: se hace solo todos los dias a las 4:00 p.m. en la
+     carpeta "backups". Si hay una USB conectada, deja copia ahi.
+   - Si algo falla:  doble clic en estado_sistema.bat y mira que
+     punto sale en rojo.
