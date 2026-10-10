@@ -21,6 +21,7 @@ import uuid
 from typing import Any
 
 from sqlalchemy import event, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -326,6 +327,61 @@ def _upsert(conn, tabla: str, fila: dict, excluir_en_update: set[str] | None = N
     )
 
 
+_cache_unicos: dict[str, list[list[str]]] = {}
+
+
+def _grupos_unicos(conn, tabla: str) -> list[list[str]]:
+    """Columnas de cada restricción de unicidad de la tabla, sin contar la clave primaria."""
+    if tabla not in _cache_unicos:
+        filas = conn.execute(
+            text(
+                "SELECT array_agg(a.attname::text) FROM pg_index i "
+                "JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey) "
+                "WHERE i.indrelid = CAST(:t AS regclass) AND i.indisunique AND NOT i.indisprimary "
+                "AND i.indpred IS NULL AND i.indexprs IS NULL GROUP BY i.indexrelid"
+            ),
+            {"t": f'"{tabla}"'},
+        ).all()
+        _cache_unicos[tabla] = [list(f[0]) for f in filas]
+    return _cache_unicos[tabla]
+
+
+def _quitar_choques_unicos(conn, tabla: str, fila: dict) -> int:
+    """Borra del espejo las filas que, con OTRA clave primaria, ocupan un valor único de `fila`
+    (p. ej. una línea de receta sobrante para el mismo producto e insumo). El espejo debe quedar
+    igual a la caja: ante un choque gana lo que la caja envía."""
+    distinta = " OR ".join(f'x."{c}" IS DISTINCT FROM n."{c}"' for c in _columnas_pk(tabla))
+    borradas = 0
+    for columnas in _grupos_unicos(conn, tabla):
+        if any(fila.get(c) is None for c in columnas):
+            continue  # un valor nulo no choca con nada
+        iguales = " AND ".join(f'x."{c}" = n."{c}"' for c in columnas)
+        borradas += conn.execute(
+            text(
+                f'DELETE FROM "{tabla}" x USING json_populate_record(NULL::"{tabla}", CAST(:fila AS json)) n '
+                f"WHERE {iguales} AND ({distinta})"
+            ),
+            {"fila": json.dumps(fila, default=str)},
+        ).rowcount or 0
+    if borradas:
+        logger.warning("Espejo: %s fila(s) sobrante(s) de '%s' reemplazada(s) por la de la caja", borradas, tabla)
+    return borradas
+
+
+def _upsert_en_espejo(conn, tabla: str, fila: dict) -> None:
+    """Upsert de una fila de la caja en la nube. Si choca con otra fila por una restricción de
+    unicidad, se quita la sobrante y se reintenta."""
+    try:
+        with conn.begin_nested():
+            _upsert(conn, tabla, fila)
+    except IntegrityError as exc:
+        if getattr(exc.orig, "pgcode", None) != "23505":  # unique_violation
+            raise
+        if not _quitar_choques_unicos(conn, tabla, fila):
+            raise
+        _upsert(conn, tabla, fila)
+
+
 def aplicar_operacion(conn, tipo: str, tabla: str, payload: dict, *, origen_op: str) -> list[tuple[str, dict]]:
     """Aplica una operación de réplica recibida del otro lado.
 
@@ -354,7 +410,10 @@ def aplicar_operacion(conn, tipo: str, tabla: str, payload: dict, *, origen_op: 
         raise ValueError("Operación FILA sin contenido")
 
     if not en_caja_desde_nube:
-        _upsert(conn, tabla, fila)
+        if origen_propio() == "NUBE":
+            _upsert_en_espejo(conn, tabla, fila)
+        else:
+            _upsert(conn, tabla, fila)
         return []
 
     # ---- La caja aplica un cambio hecho en el panel web ----

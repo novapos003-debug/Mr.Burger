@@ -64,45 +64,40 @@ async def lifespan(app: FastAPI):
             # Asegurar categorías de insumo 8 y 10
             conn.execute(text("INSERT INTO categoria_insumo (id, nombre, descripcion, activo) VALUES (8, 'DESECHABLES_EMPAQUES', 'Contenedores C1, P1, bolsas T20-T40, vasos y servilletas', TRUE) ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre;"))
             conn.execute(text("INSERT INTO categoria_insumo (id, nombre, descripcion, activo) VALUES (10, 'GASTOS_OPERATIVOS', 'Artículos de aseo, papelería y mantenimiento', TRUE) ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre;"))
-            # Inserción de Bolsas T20 a T40 y Papel de cocina
-            conn.execute(text("""
-                INSERT INTO ingrediente (nombre, categoria_insumo_id, tipo_articulo, unidad_base, costo_unitario, precio_venta, activo)
-                SELECT 'Bolsa T20 (Para Llevar Pequeña)', 8, 'DESECHABLE_SERVICIO', 'UNIDAD', 100.00, 0.00, TRUE
-                WHERE NOT EXISTS (SELECT 1 FROM ingrediente WHERE nombre ILIKE '%Bolsa T20%');
-            """))
-            conn.execute(text("""
-                INSERT INTO ingrediente (nombre, categoria_insumo_id, tipo_articulo, unidad_base, costo_unitario, precio_venta, activo)
-                SELECT 'Bolsa T25 (Para Llevar Mediana)', 8, 'DESECHABLE_SERVICIO', 'UNIDAD', 150.00, 0.00, TRUE
-                WHERE NOT EXISTS (SELECT 1 FROM ingrediente WHERE nombre ILIKE '%Bolsa T25%');
-            """))
-            conn.execute(text("""
-                INSERT INTO ingrediente (nombre, categoria_insumo_id, tipo_articulo, unidad_base, costo_unitario, precio_venta, activo)
-                SELECT 'Bolsa T30 (Para Llevar Grande)', 8, 'DESECHABLE_SERVICIO', 'UNIDAD', 200.00, 0.00, TRUE
-                WHERE NOT EXISTS (SELECT 1 FROM ingrediente WHERE nombre ILIKE '%Bolsa T30%');
-            """))
-            conn.execute(text("""
-                INSERT INTO ingrediente (nombre, categoria_insumo_id, tipo_articulo, unidad_base, costo_unitario, precio_venta, activo)
-                SELECT 'Bolsa T40 (Para Llevar Extra Grande)', 8, 'DESECHABLE_SERVICIO', 'UNIDAD', 300.00, 0.00, TRUE
-                WHERE NOT EXISTS (SELECT 1 FROM ingrediente WHERE nombre ILIKE '%Bolsa T40%');
-            """))
-            conn.execute(text("""
-                INSERT INTO ingrediente (nombre, categoria_insumo_id, tipo_articulo, unidad_base, costo_unitario, precio_venta, activo)
-                SELECT 'Papel de cocina', 10, 'GASTO_OPERATIVO', 'UNIDAD', 3500.00, 0.00, TRUE
-                WHERE NOT EXISTS (SELECT 1 FROM ingrediente WHERE nombre ILIKE '%Papel de cocina%');
-            """))
+            # Bolsas T20 a T40 y papel de cocina. Solo en la caja: la nube es un espejo y recibe
+            # sus datos de ella; si los creara por su cuenta chocarían con los que la caja envía.
+            if settings.MODO_CEREBRO != "NUBE":
+                for nombre, patron, categoria, tipo, costo in (
+                    ("Bolsa T20 (Para Llevar Pequeña)", "%Bolsa T20%", 8, "DESECHABLE_SERVICIO", 100),
+                    ("Bolsa T25 (Para Llevar Mediana)", "%Bolsa T25%", 8, "DESECHABLE_SERVICIO", 150),
+                    ("Bolsa T30 (Para Llevar Grande)", "%Bolsa T30%", 8, "DESECHABLE_SERVICIO", 200),
+                    ("Bolsa T40 (Para Llevar Extra Grande)", "%Bolsa T40%", 8, "DESECHABLE_SERVICIO", 300),
+                    ("Papel de cocina", "%Papel de cocina%", 10, "GASTO_OPERATIVO", 3500),
+                ):
+                    conn.execute(
+                        text("""
+                            INSERT INTO ingrediente (nombre, categoria_insumo_id, tipo_articulo, unidad_base, costo_unitario, precio_venta, activo)
+                            SELECT :nombre, :categoria, :tipo, 'UNIDAD', :costo, 0.00, TRUE
+                            WHERE NOT EXISTS (SELECT 1 FROM ingrediente WHERE nombre ILIKE :patron);
+                        """),
+                        {"nombre": nombre, "patron": patron, "categoria": categoria, "tipo": tipo, "costo": costo},
+                    )
             # Valores iniciales que el admin puede cambiar después: se aplican UNA sola vez.
             # Antes corrían en cada arranque y deshacían los ajustes hechos desde el panel.
             from app.services.migraciones import aplicar_valores_iniciales
 
             aplicar_valores_iniciales(conn)
 
-            # Poblar recetas base oficiales para productos que no tengan receta configurada
-            try:
-                from app.services.seed_recetas import sembrar_recetas_base
-                sembrar_recetas_base(conn)
-            except Exception as err_recetas:
-                import logging
-                logging.warning("Aviso al sembrar recetas base: %s", err_recetas)
+            # Poblar recetas base oficiales para productos que no tengan receta configurada.
+            # Solo en la caja: en la nube, un producto recién llegado aún no trae su receta y
+            # sembrarle una "base" choca con la receta real que la caja envía enseguida.
+            if settings.MODO_CEREBRO != "NUBE":
+                try:
+                    from app.services.seed_recetas import sembrar_recetas_base
+                    sembrar_recetas_base(conn)
+                except Exception as err_recetas:
+                    import logging
+                    logging.warning("Aviso al sembrar recetas base: %s", err_recetas)
 
             conn.commit()
     except Exception as e:
