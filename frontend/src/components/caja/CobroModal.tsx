@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Loader2,
   ShoppingBag,
+  Printer,
 } from 'lucide-react'
 
 interface Props {
@@ -22,6 +23,7 @@ interface Props {
   onClose: () => void
   onSuccess: (resultado: CobroOut) => void
   onPedidoActualizado?: (pedido: Pedido) => void
+  onImprimirCuenta?: (pedido: Pedido) => void
 }
 
 export const CobroModal: React.FC<Props> = ({
@@ -31,6 +33,7 @@ export const CobroModal: React.FC<Props> = ({
   onClose,
   onSuccess,
   onPedidoActualizado,
+  onImprimirCuenta,
 }) => {
   const [metodo, setMetodo] = useState<MetodoPago | 'MIXTO'>('EFECTIVO')
   const [recibidoEfectivo, setRecibidoEfectivo] = useState<number>(0)
@@ -365,9 +368,21 @@ export const CobroModal: React.FC<Props> = ({
             <>
               {/* Selector de Métodos de Pago */}
               <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wide mb-2">
-                  Método de Pago
-                </label>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wide">
+                    Método de Pago
+                  </label>
+                  {onImprimirCuenta && pedidoActual && (
+                    <button
+                      type="button"
+                      onClick={() => onImprimirCuenta(pedidoActual)}
+                      className="flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-orange-400" />
+                      <span>Imprimir cuenta</span>
+                    </button>
+                  )}
+                </div>
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
               <button
                 type="button"

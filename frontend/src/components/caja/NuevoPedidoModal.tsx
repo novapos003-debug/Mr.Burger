@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import type { CanalVenta, Producto, Categoria, AdicionExtra } from '../../types/mesero'
-import { getProductosApi, getCategoriasApi } from '../../api/mesero'
+import type { CanalVenta, Producto, Categoria, AdicionExtra, Mesa, Pedido } from '../../types/mesero'
+import { getProductosApi, getCategoriasApi, getMesasApi, getPedidosActivosApi, agregarRondaApi } from '../../api/mesero'
 import { crearPedidoCaja, enviarPedidoACocina } from '../../api/caja'
 import { VariacionModal } from '../mesero/VariacionModal'
 import {
@@ -15,6 +15,7 @@ import {
   DollarSign,
   SlidersHorizontal,
   Trash2,
+  Utensils,
 } from 'lucide-react'
 
 interface Props {
@@ -45,6 +46,9 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
   const [direccion, setDireccion] = useState<string>('')
   const [didiOrdenId, setDidiOrdenId] = useState<string>('')
   const [notaInterna, setNotaInterna] = useState<string>('')
+  const [mesas, setMesas] = useState<Mesa[]>([])
+  const [pedidosActivos, setPedidosActivos] = useState<Pedido[]>([])
+  const [mesaId, setMesaId] = useState<number | null>(null)
 
   // Catálogo
   const [productos, setProductos] = useState<Producto[]>([])
@@ -85,7 +89,14 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
         .catch((err) => console.error('Error cargando catálogo:', err))
         .finally(() => setLoading(false))
 
+      // Mesas y sus pedidos abiertos, para que el cajero también pueda atender una mesa
+      Promise.allSettled([getMesasApi(), getPedidosActivosApi()]).then(([mRes, pRes]) => {
+        if (mRes.status === 'fulfilled') setMesas(mRes.value.filter((m) => m.activo))
+        if (pRes.status === 'fulfilled') setPedidosActivos(pRes.value)
+      })
+
       setCanal('MOSTRADOR')
+      setMesaId(null)
       setTipoConsumo('LOCAL')
       setCliente('')
       setTelefono('')
@@ -176,9 +187,21 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
     return matchCat && matchText
   })
 
+  // Pedido abierto de la mesa elegida (si existe): lo nuevo se le suma como otra ronda
+  const pedidoDeMesa = canal === 'MESA' && mesaId !== null
+    ? pedidosActivos.find(
+        (p) => p.mesa_id === mesaId && !['PAGADO', 'CERRADO', 'CANCELADO'].includes(p.estado)
+      ) || null
+    : null
+
   const handleSubmit = async (abrirCobro: boolean) => {
     if (carrito.length === 0) {
       setError('Debes agregar al menos un producto a la orden')
+      return
+    }
+
+    if (canal === 'MESA' && mesaId === null) {
+      setError('Elige la mesa del pedido')
       return
     }
 
@@ -214,6 +237,21 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
         didi_orden_id: canal === 'DIDI' ? didiOrdenId.trim() : null,
       }
 
+      if (pedidoDeMesa) {
+        // La mesa ya tiene cuenta abierta: se agrega como nueva ronda (va directo a cocina)
+        const ronda = Math.max(...pedidoDeMesa.detalles.map((d) => d.ronda), 1) + 1
+        await agregarRondaApi(pedidoDeMesa.id, {
+          ronda,
+          tipo_consumo: tipoConsumo,
+          lineas: lineas.map((l) => ({ ...l, variacion_snapshot: l.variacion_snapshot ?? undefined })),
+        })
+        onPedidoCreado(pedidoDeMesa.id, abrirCobro)
+        onClose()
+        return
+      }
+
+      if (canal === 'MESA') payload.mesa_id = mesaId
+
       const pedido = await crearPedidoCaja(payload)
       // Enviar a cocina automáticamente
       await enviarPedidoACocina(pedido.id)
@@ -242,7 +280,7 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
                 Nueva Orden en Caja
               </h2>
               <p className="text-xs text-slate-400">
-                Atención exclusiva de Mostrador, Domicilio y DiDi Food
+                Mesas, Mostrador, Domicilio y DiDi Food
               </p>
             </div>
           </div>
@@ -256,7 +294,23 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
 
         {/* Canales Selector */}
         <div className="p-4 border-b border-slate-800 bg-slate-950/70 space-y-3">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setCanal('MESA')
+                setTipoConsumo('LOCAL')
+              }}
+              className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl font-bold text-xs border transition cursor-pointer ${
+                canal === 'MESA'
+                  ? 'bg-emerald-600 border-emerald-500 text-white shadow'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+              }`}
+            >
+              <Utensils className="w-4 h-4" />
+              <span>Mesa</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setCanal('MOSTRADOR')}
@@ -302,6 +356,40 @@ export const NuevoPedidoModal: React.FC<Props> = ({ isOpen, onClose, onPedidoCre
               <span>DiDi Food</span>
             </button>
           </div>
+
+          {/* Selector de mesa */}
+          {canal === 'MESA' && (
+            <div className="space-y-1.5">
+              <div className="grid grid-cols-5 sm:grid-cols-9 gap-1.5">
+                {mesas.map((m) => {
+                  const ocupada = m.estado !== 'DISPONIBLE'
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setMesaId(m.id)}
+                      className={`py-2 rounded-xl text-xs font-black border transition cursor-pointer ${
+                        mesaId === m.id
+                          ? 'bg-emerald-600 border-emerald-400 text-white shadow'
+                          : ocupada
+                            ? 'bg-amber-950/40 border-amber-800/70 text-amber-300 hover:bg-amber-950/80'
+                            : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      {m.numero}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="text-[11px] text-slate-400">
+                {mesas.length === 0
+                  ? 'No hay mesas configuradas.'
+                  : pedidoDeMesa
+                    ? `La mesa ya tiene la orden #${pedidoDeMesa.consecutivo} abierta: lo que agregues se suma a esa cuenta.`
+                    : 'Las mesas en ámbar ya tienen una cuenta abierta.'}
+              </p>
+            </div>
+          )}
 
           {/* Selector de Tipo de Consumo para Mostrador */}
           {canal === 'MOSTRADOR' && (

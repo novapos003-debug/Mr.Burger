@@ -305,9 +305,10 @@ export const Caja: React.FC = () => {
     })
   }
 
-  const handleVerRecibo = async (pedido: Pedido) => {
+  // Con esPrecuenta imprime la cuenta de un pedido que todavía no se ha cobrado
+  const handleVerRecibo = async (pedido: Pedido, esPrecuenta = false) => {
     try {
-      const pagos = await getPagosPedido(pedido.id).catch(() => [])
+      const pagos = esPrecuenta ? [] : await getPagosPedido(pedido.id).catch(() => [])
       const ivaCalc = Number(pedido.iva) || 0
       const subtotalCalc = Number(pedido.subtotal) || (Number(pedido.total || 0) - ivaCalc)
       const itemsMap = new Map<string, { cantidad: number; nombre: string; precio_unitario: number; total: number; variaciones?: string[] }>()
@@ -360,7 +361,8 @@ export const Caja: React.FC = () => {
           recargo_empaque: Number(pedido.recargo_empaque || 0),
           tipo_consumo: pedido.tipo_consumo,
           total: Number(pedido.total || 0),
-          pagos: (pagos && pagos.length > 0 ? pagos : [{ id: 0, pedido_id: pedido.id, metodo: 'EFECTIVO' as const, monto: Number(pedido.total || 0), estado: 'VALIDO', pagado_en: '' }]).map((p) => ({
+          esPrecuenta,
+          pagos: esPrecuenta ? [] : (pagos && pagos.length > 0 ? pagos : [{ id: 0, pedido_id: pedido.id, metodo: 'EFECTIVO' as const, monto: Number(pedido.total || 0), estado: 'VALIDO', pagado_en: '' }]).map((p) => ({
             metodo: p.metodo,
             monto: Number(p.monto),
             recibido: p.recibido ? Number(p.recibido) : undefined,
@@ -748,6 +750,7 @@ export const Caja: React.FC = () => {
         ivaPorcentaje={Number(configLocal.iva_porcentaje) || 0}
         onClose={() => setPedidoParaCobro(null)}
         onSuccess={handleCobroExitoso}
+        onImprimirCuenta={(p) => handleVerRecibo(p, true)}
         onPedidoActualizado={(updated) => {
           setPedidoParaCobro(updated)
           setPedidos((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))

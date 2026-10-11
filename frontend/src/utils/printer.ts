@@ -40,6 +40,8 @@ export interface DatosReciboVenta {
     referencia?: string
   }>
   cajero?: string
+  // Cuenta que el cliente pide antes de pagar: sin pagos y marcada como pendiente
+  esPrecuenta?: boolean
 }
 
 export interface DatosValeRetiro {

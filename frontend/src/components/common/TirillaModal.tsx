@@ -89,6 +89,9 @@ export const TirillaModal: React.FC<TirillaModalProps> = ({
       }
       t += `TOTAL A PAGAR:             $${Number(datosRecibo.total).toLocaleString('es-CO')}\n`
       t += '------------------------------------------\n'
+      if (datosRecibo.esPrecuenta) {
+        t += '       CUENTA - PENDIENTE DE PAGO       \n'
+      }
       datosRecibo.pagos.forEach((p) => {
         t += `FORMA PAGO: ${p.metodo.padEnd(16, ' ')} $${Number(p.monto).toLocaleString('es-CO')}\n`
         if (p.recibido) t += `RECIBIDO:                  $${Number(p.recibido).toLocaleString('es-CO')}\n`
@@ -260,6 +263,9 @@ export const TirillaModal: React.FC<TirillaModalProps> = ({
           </div>
 
           <div className="text-[10px] space-y-0.5 pt-1">
+            {datosRecibo.esPrecuenta && (
+              <div className="text-center font-black text-slate-900">CUENTA • PENDIENTE DE PAGO</div>
+            )}
             {datosRecibo.pagos.map((p, idx) => (
               <div key={idx} className="space-y-0.5">
                 <div className="flex justify-between font-bold">
@@ -454,8 +460,8 @@ export const TirillaModal: React.FC<TirillaModalProps> = ({
     setImprimiendoUsb(true)
     setFeedback(null)
     try {
-      // El recibo de venta abre el cajón junto con la impresión
-      const res = await imprimirTirillaTermica(renderPlainText(), tipo === 'RECIBO')
+      // El recibo de venta abre el cajón junto con la impresión; la cuenta sin pagar no
+      const res = await imprimirTirillaTermica(renderPlainText(), tipo === 'RECIBO' && !datosRecibo?.esPrecuenta)
       if (res.success) {
         setFeedback({ tipo: 'ok', msg: res.message })
       } else {
@@ -482,7 +488,7 @@ export const TirillaModal: React.FC<TirillaModalProps> = ({
           <div className="flex items-center gap-2 text-slate-100 font-bold text-sm">
             <Printer className="w-4 h-4 text-orange-400" />
             <span>
-              {tipo === 'RECIBO' && `Tirilla Térmica ${getPrinterConfig().tamanoPapel} • Recibo de Venta`}
+              {tipo === 'RECIBO' && `Tirilla Térmica ${getPrinterConfig().tamanoPapel} • ${datosRecibo?.esPrecuenta ? 'Cuenta por Pagar' : 'Recibo de Venta'}`}
               {tipo === 'VALE' && `Tirilla Térmica ${getPrinterConfig().tamanoPapel} • Vale de Caja Menor`}
               {tipo === 'REPORTE_Z' && `Tirilla Térmica ${getPrinterConfig().tamanoPapel} • Reporte Z Cierre`}
             </span>
