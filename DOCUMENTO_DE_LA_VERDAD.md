@@ -1,6 +1,6 @@
 # Mr. Burger POS — Documento de la Verdad
 
-**Fecha de corte:** 10 de octubre de 2026 (noche) · **Base:** commit `d7a71c4` de `main`
+**Fecha de corte:** 10 de octubre de 2026 (noche) · **Base:** commit `86f59a3` de `main`
 **Cliente:** Mr. Burger (Cali) · **Objetivo inmediato:** instalación limpia en el PC de caja del restaurante
 
 Este documento describe **lo que el sistema es y hace hoy según el código**, no según lo que se planeó.
@@ -83,6 +83,31 @@ Resultado comprobado esa misma noche:
 operación 50 de 50 (desde el respaldo y desde una instalación limpia) y sincronización 48 de 48
 (con la nube vacía y con datos previos). **Sin hacer:** `backend/.env` sigue existiendo en la caja
 con el token viejo; ya no se usa, pero conviene borrarlo.
+
+**Quinta revisión (10 de octubre, noche, con el restaurante operando): impresión y caja.**
+El botón de imprimir respondía "Acceso USB bloqueado por Windows" y el cajón no abría: Chrome no
+puede tomar la impresora por WebUSB cuando Windows ya le instaló su controlador (la
+`STAR-TP80NC-M`, predeterminada, en el puerto `USB010`).
+
+| Qué | Cómo quedó | Commit |
+|---|---|:-:|
+| **Imprimir y abrir el cajón** | `backend/app/services/impresora.py` entrega los bytes ESC/POS a la cola de impresión de Windows en modo RAW (impresora predeterminada primero; ignora las virtuales). Usa la página de códigos 850 para tildes y ñ. `POST /caja/imprimir` imprime la tirilla; `POST /caja/abrir-cajon` usa el mismo servicio. El frontend imprime primero por la caja y solo si allí no hay impresora (web, celular) intenta WebUSB. El botón se llama ahora "Imprimir tirilla". | `1e5e8ec` |
+| **El recibo abre el cajón** | Al pulsar "Imprimir tirilla" en el recibo de venta, la misma orden abre el cajón, con cualquier medio de pago. Vales y Reporte Z imprimen sin abrirlo. En efectivo el cajón ya se abría al confirmar el cobro, así que puede abrirse dos veces. | `dcb2912` |
+| **Cuenta antes de pagar** | En la ventana de cobro, junto a "Método de Pago", el botón "Imprimir cuenta" imprime la tirilla del pedido marcada "CUENTA - PENDIENTE DE PAGO", sin pagos y sin abrir el cajón. No cobra nada. | `86f59a3` |
+| **Pedidos de mesa desde la caja** | "Nueva Orden en Caja" tiene el canal Mesa con las mesas para elegir. Si la mesa ya tiene cuenta abierta (en ámbar), lo nuevo se suma como otra ronda (`POST /pedidos/{id}/rondas`). No hubo cambios en el backend: ya lo permitía. | `86f59a3` |
+
+Comprobado en el restaurante: la tirilla imprime y el cajón abre, desde el sistema y desde el botón
+de la pantalla tras un cobro. **Sin probar en pantalla:** que el recibo abra el cajón con pagos que
+no son efectivo, "Imprimir cuenta" y el canal Mesa de la caja. Ninguna de las suites de pruebas
+cubre la impresión.
+
+Otros hechos de esa noche:
+
+- **Recetas cargadas:** 73 productos con receta (492 líneas), todas en la nube; cola en cero en ambos
+  lados. Único producto activo sin receta: *Agua en Botella* (id 66).
+- **Costos de insumos:** los 98 están en $0. Solo 8 empaques tienen precio de venta (el recargo de
+  "para llevar"); el dueño decidió **dejarlos como están**.
+- El precio de *Alitas BBQ (6 piezas)* quedó en $23.000 por la prueba de sincronización (antes $21.900).
 
 **Conteo físico inicial (`backend/app/services/inventario_inicial.py`):** al arrancar por primera
 vez esta versión, la caja (nunca la nube) deja en $0 el costo de todos los insumos —el dueño los
@@ -175,7 +200,7 @@ flowchart TB
         COCINA -- "http://IP_FIJA:5173" --> WEB
         MESEROS -- "http://IP_FIJA:5173" --> WEB
         CAJA & COCINA & MESEROS -- "API + WS :8000" --> API
-        CAJA -- "WebUSB" --> IMP
+        API -- "cola de impresión de Windows (RAW)" --> IMP
     end
 
     subgraph NUBE["NUBE — espejo para el dueño"]
@@ -376,6 +401,8 @@ sequenceDiagram
 | Flujo | Resumen |
 |---|---|
 | **Mostrador** | La caja crea el pedido, cobra por adelantado, cocina prepara, se entrega con ticket. |
+| **Mesa desde la caja** | El cajero elige el canal Mesa y la mesa; si ya tiene cuenta abierta, agrega una ronda a esa cuenta. |
+| **Cuenta antes de pagar** | En la ventana de cobro, "Imprimir cuenta" saca la tirilla marcada como pendiente de pago; el pedido sigue sin cobrar. |
 | **Domicilio** | Nombre, teléfono y dirección; empaque automático; pago al recibir o ya pagado. |
 | **DiDi** | Llega por la app de DiDi; la caja lo registra con canal `DIDI` y número de orden obligatorio. Cocina lo ve en naranja. |
 | **Cambio de consumo** | `PATCH /pedidos/{id}/tipo-consumo` permite pasar de local a llevar justo antes de cobrar; recalcula el total. |
@@ -489,7 +516,7 @@ Todas las rutas existen **dos veces**: con y sin el prefijo `/api` (ej. `/pedido
 | **Inventario** | `/ingredientes` | `GET`/`POST /` · `PUT`/`DELETE /{id}` · `GET /{id}/movimientos` · `GET`/`POST /categorias` · `GET`/`PUT /productos/{id}/receta` · `GET /productos/{id}/costo-utilidad` · `GET`/`PUT /combos/{id}/componentes` · `POST /merma` |
 | **Pedidos** | `/pedidos` | `GET`/`POST /` · `GET /{id}` · `GET /mesas` · `PUT /mesas/{id}/estado` · `POST /{id}/enviar-a-cocina` · `POST /{id}/rondas` · `PATCH /{id}/tipo-consumo` · `POST /{id}/entregar` · `POST /{id}/cancelar` |
 | **Cocina** | `/cocina` | `GET /cola` · `POST /detalles/{id}/aceptar` · `POST /detalles/{id}/listo` · `POST /detalles/{id}/cancelar` |
-| **Caja** | `/caja` | `POST /pedidos/{id}/cobrar` · `GET /pedidos/{id}/pagos` · `POST /pagos/{id}/devolver` · `GET /vales` · `POST /vales/{id}/cobrar` · `GET`/`POST /movimientos` · `GET /turno` · `POST /turno/abrir` · `POST /turno/cerrar` · `GET /cierres` · `GET /cierres/{id}` · `POST /abrir-cajon` |
+| **Caja** | `/caja` | `POST /pedidos/{id}/cobrar` · `GET /pedidos/{id}/pagos` · `POST /pagos/{id}/devolver` · `GET /vales` · `POST /vales/{id}/cobrar` · `GET`/`POST /movimientos` · `GET /turno` · `POST /turno/abrir` · `POST /turno/cerrar` · `GET /cierres` · `GET /cierres/{id}` · `POST /abrir-cajon` · `POST /imprimir` |
 | **Preparados** | `/preparados` | `GET /` · `GET /sugerir` · `POST /{id}/asignar` · `POST /{id}/descartar` |
 | **Admin** | `/admin` | `GET /dashboard` · `GET /reportes/ventas` · `GET /stock-critico` · `GET /auditoria` · `GET`/`POST /compras` · `GET /configuracion` · `PUT /configuracion/{clave}` · `GET`/`POST /usuarios` · `PUT /usuarios/{id}/password` · `PUT /usuarios/{id}/estado` · `PUT /usuarios/{id}/marcas` · `GET /sistema/reset/resumen` · `POST /sistema/reset` |
 | **Asistencia** | `/asistencia` | `POST /entrada` · `POST /salida` · `GET /mi-turno` · `GET /admin/activos` · `GET /admin/historial` · `POST /admin/{id}/cerrar` · `POST /admin/cerrar-todos` |
@@ -654,7 +681,8 @@ Esta es la instalación de referencia. Lo que se monte mañana debe parecerse a 
 | Git | Para descargar y actualizar el código |
 | Python | **3.11.9**, agregado al PATH |
 | PostgreSQL | Instalado como servicio de Windows (ver [14.3](#143-versión-de-postgresql)) |
-| Navegador | Google Chrome (necesario para WebUSB con la impresora) |
+| Navegador | Google Chrome |
+| Impresora | Térmica instalada en Windows con su controlador y marcada como **predeterminada**; el cajón conectado a su puerto RJ11. La caja imprime por la cola de Windows, no por WebUSB |
 | Red | IP fija en la LAN, misma red Wi-Fi que celulares y tablet |
 | Energía | Suspensión desactivada: si el PC se duerme, todo el restaurante se detiene |
 | **No hace falta** | Node.js, Docker |
@@ -857,7 +885,7 @@ La instalación se da por buena cuando **todo** esto se cumple en el PC del rest
 - [ ] Un mesero, desde su celular, envía un pedido de mesa.
 - [ ] La tablet de cocina suena y muestra el ticket en menos de 2 segundos.
 - [ ] Al aceptar en cocina, baja el stock de los insumos de la receta.
-- [ ] La caja cobra, imprime la tirilla y abre el cajón.
+- [x] La caja cobra, imprime la tirilla y abre el cajón (10 de octubre, por la cola de Windows).
 - [ ] La mesa vuelve a quedar disponible.
 - [ ] Un pedido "para llevar" suma el empaque y lo descuenta del inventario.
 - [ ] El cierre de turno genera el Reporte Z y aparece en Admin.
