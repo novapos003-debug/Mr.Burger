@@ -5,6 +5,7 @@ from app.schemas.caja import (
     CobroOut,
     DevolucionIn,
     MovimientoCajaIn,
+    TirillaIn,
     MovimientoCajaOut,
     PagoIn,
     PagoOut,
@@ -125,6 +126,7 @@ __all__ = [
     "TipoCategoriaOut",
     "TopProductoItem",
     "TurnoAperturaIn",
+    "TirillaIn",
     "ValeCobroIn",
     "ValeOut",
 ]

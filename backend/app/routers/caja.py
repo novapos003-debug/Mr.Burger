@@ -13,6 +13,7 @@ from app.schemas import (
     MovimientoCajaIn,
     MovimientoCajaOut,
     PagoOut,
+    TirillaIn,
     TurnoAperturaIn,
     ValeCobroIn,
     ValeOut,
@@ -27,6 +28,7 @@ from app.services.caja import (
     turno_abierto,
     obtener_turno_actual_con_metricas,
 )
+from app.services.impresora import bytes_de_cajon, bytes_de_tirilla, enviar_a_impresora
 from app.services.websocket import ws_manager
 
 router = APIRouter(prefix="/caja", tags=["caja"])
@@ -285,100 +287,19 @@ def abrir_cajon_monedero_fisico(
     _: Usuario = Depends(cashier_required),
 ):
     """Envía el pulso estándar ESC/POS RJ11 a la impresora térmica Windows conectada para patear la gaveta monedero."""
-    import sys
-    if sys.platform != "win32":
-        return {"ok": False, "mensaje": "Comando de puerto directo compatible con servidor Windows"}
-
-    import ctypes
-    from ctypes import wintypes
-
-    class DOC_INFO_1W(ctypes.Structure):
-        _fields_ = [
-            ("pDocName", wintypes.LPCWSTR),
-            ("pOutputFile", wintypes.LPCWSTR),
-            ("pDatatype", wintypes.LPCWSTR),
-        ]
-
-    class PRINTER_INFO_1W(ctypes.Structure):
-        _fields_ = [
-            ("flags", wintypes.DWORD),
-            ("pDescription", wintypes.LPCWSTR),
-            ("pName", wintypes.LPCWSTR),
-            ("pComment", wintypes.LPCWSTR),
-        ]
-
-    winspool = ctypes.WinDLL("winspool.drv")
-
-    # 1. Obtener lista de impresoras candidatas
-    candidatas: list[str] = []
-
-    # A) Impresora predeterminada
-    buf_def = ctypes.create_unicode_buffer(512)
-    pcb_def = wintypes.DWORD(512)
-    if winspool.GetDefaultPrinterW(buf_def, ctypes.byref(pcb_def)) and buf_def.value:
-        candidatas.append(buf_def.value)
-
-    # B) Enumerar todas las impresoras del sistema
-    try:
-        flags = 2 | 4  # PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS
-        pcb_needed = wintypes.DWORD(0)
-        pc_returned = wintypes.DWORD(0)
-        winspool.EnumPrintersW(flags, None, 1, None, 0, ctypes.byref(pcb_needed), ctypes.byref(pc_returned))
-        if pcb_needed.value > 0:
-            buf_enum = ctypes.create_string_buffer(pcb_needed.value)
-            if winspool.EnumPrintersW(flags, None, 1, buf_enum, pcb_needed.value, ctypes.byref(pcb_needed), ctypes.byref(pc_returned)):
-                printers_arr = ctypes.cast(buf_enum, ctypes.POINTER(PRINTER_INFO_1W))
-                for i in range(pc_returned.value):
-                    pname = printers_arr[i].pName
-                    if pname and pname not in candidatas:
-                        candidatas.append(pname)
-    except Exception:
-        pass
-
-    # C) Fallback de nombres comunes en caso de fallo de enumeración
-    fallbacks = ["STAR-TP80NC-M", "SAT 22TUS (copy 1)", "SAT 22TUS", "POS-80", "POS-58", "XP-80", "XP-58", "CAJAP"]
-    for f in fallbacks:
-        if f not in candidatas:
-            candidatas.append(f)
-
-    # Secuencia combinada universal para abrir gaveta en Pin 2, Pin 5 y DLE DC4
-    PULSO_CAJON_UNIVERSAL = bytes([
-        0x1B, 0x70, 0x00, 0x19, 0xFA,  # ESC p 0 25 250 (Pin 2, estándar Epson/China)
-        0x1B, 0x70, 0x01, 0x19, 0xFA,  # ESC p 1 25 250 (Pin 5, estándar alternativo)
-        0x10, 0x14, 0x01, 0x00, 0x05,  # DLE DC4 n r t (Real-time kick)
-        0x07,                          # BEL (Star Micronics / genéricas)
-    ])
-
-    hPrinter = wintypes.HANDLE()
-    enviado = False
-    impresora_usada = ""
-
-    for nombre_imp in candidatas:
-        # Ignorar impresoras virtuales de PDF/OneNote/Fax para no generar archivos basura
-        nombre_lower = nombre_imp.lower()
-        if any(v in nombre_lower for v in ("pdf", "onenote", "fax", "xps", "document writer")):
-            continue
-
-        if winspool.OpenPrinterW(nombre_imp, ctypes.byref(hPrinter), None):
-            try:
-                doc_info = DOC_INFO_1W("Abrir Cajon POS", None, "RAW")
-                job_id = winspool.StartDocPrinterW(hPrinter, 1, ctypes.byref(doc_info))
-                if job_id > 0:
-                    winspool.StartPagePrinter(hPrinter)
-                    written = wintypes.DWORD()
-                    winspool.WritePrinter(hPrinter, PULSO_CAJON_UNIVERSAL, len(PULSO_CAJON_UNIVERSAL), ctypes.byref(written))
-                    winspool.EndPagePrinter(hPrinter)
-                    winspool.EndDocPrinter(hPrinter)
-                    enviado = True
-                    impresora_usada = nombre_imp
-            except Exception:
-                pass
-            finally:
-                winspool.ClosePrinter(hPrinter)
-            if enviado:
-                break
-
-    if enviado:
-        return {"ok": True, "impresora": impresora_usada, "mensaje": f"Pulso enviado exitosamente a la impresora '{impresora_usada}'"}
+    impresora = enviar_a_impresora(bytes_de_cajon(), "Abrir Cajon POS")
+    if impresora:
+        return {"ok": True, "impresora": impresora, "mensaje": f"Pulso enviado exitosamente a la impresora '{impresora}'"}
     return {"ok": False, "mensaje": "No se detectó ninguna impresora térmica física en Windows"}
 
+
+@router.post("/imprimir")
+def imprimir_tirilla(
+    data: TirillaIn,
+    _: Usuario = Depends(cashier_required),
+):
+    """Imprime una tirilla en la impresora térmica de la caja, por la cola de Windows."""
+    impresora = enviar_a_impresora(bytes_de_tirilla(data.texto, data.abrir_cajon), "Tirilla Mr. Burger")
+    if impresora:
+        return {"ok": True, "impresora": impresora, "mensaje": f"Tirilla enviada a la impresora '{impresora}'"}
+    return {"ok": False, "mensaje": "No se detectó ninguna impresora térmica física en Windows"}

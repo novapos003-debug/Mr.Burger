@@ -130,3 +130,8 @@ class CierreOut(BaseModel):
 
 class CierreCerrarIn(BaseModel):
     notas: str | None = Field(default=None, max_length=1000)
+
+
+class TirillaIn(BaseModel):
+    texto: str = Field(min_length=1, max_length=20000)
+    abrir_cajon: bool = False

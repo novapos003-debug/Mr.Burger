@@ -281,8 +281,7 @@ export async function imprimirTicketPrueba(cfg?: ConfiguracionImpresora): Promis
   ¡IMPRESORA LISTA PARA CAJA!   
 ================================
 `
-    const bytes = generarBytesEscPos(textoEsc)
-    return imprimirViaWebUSB(bytes)
+    return imprimirTirillaTermica(textoEsc)
   }
 
   const html = `
@@ -304,6 +303,25 @@ export async function imprimirTicketPrueba(cfg?: ConfiguracionImpresora): Promis
   `
   imprimirHtmlTirilla(html, papel)
   return { success: true, message: 'Ticket de prueba enviado al diálogo de impresión.' }
+}
+
+// Impresión por la caja: el servidor local entrega la tirilla a la cola de Windows, que sí
+// puede escribir en la impresora aunque su controlador la tenga tomada.
+export async function imprimirEnCaja(texto: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const api = (await import('../api/client')).default
+    const res = await api.post('/caja/imprimir', { texto })
+    return { success: Boolean(res.data?.ok), message: res.data?.mensaje || '' }
+  } catch {
+    return { success: false, message: 'No se pudo contactar la caja para imprimir.' }
+  }
+}
+
+// Impresión térmica directa: primero por la caja y, si no tiene impresora (web o celular), por WebUSB
+export async function imprimirTirillaTermica(texto: string): Promise<{ success: boolean; message: string }> {
+  const porCaja = await imprimirEnCaja(texto)
+  if (porCaja.success) return porCaja
+  return imprimirViaWebUSB(generarBytesEscPos(texto))
 }
 
 // Impresión directa ESC/POS mediante WebUSB (para impresoras térmicas conectadas por USB)

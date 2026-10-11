@@ -9,8 +9,7 @@ import {
 } from 'lucide-react'
 import {
   imprimirHtmlTirilla,
-  imprimirViaWebUSB,
-  generarBytesEscPos,
+  imprimirTirillaTermica,
   numeroALetras,
   getPrinterConfig,
   type DatosReciboVenta,
@@ -455,9 +454,7 @@ export const TirillaModal: React.FC<TirillaModalProps> = ({
     setImprimiendoUsb(true)
     setFeedback(null)
     try {
-      const texto = renderPlainText()
-      const bytes = generarBytesEscPos(texto)
-      const res = await imprimirViaWebUSB(bytes)
+      const res = await imprimirTirillaTermica(renderPlainText())
       if (res.success) {
         setFeedback({ tipo: 'ok', msg: res.message })
       } else {
@@ -546,7 +543,7 @@ export const TirillaModal: React.FC<TirillaModalProps> = ({
             className="w-full sm:flex-1 py-2.5 px-3 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-950/50 transition cursor-pointer disabled:opacity-50"
           >
             <Printer className="w-4 h-4" />
-            <span>Imprimir USB (ESC/POS)</span>
+            <span>Imprimir tirilla</span>
           </button>
 
           <button
