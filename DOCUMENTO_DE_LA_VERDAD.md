@@ -79,10 +79,10 @@ Resultado comprobado esa misma noche:
   llegó a la base de la caja en ~5 s, con su registro de auditoría, y la caja devolvió el estado final.
 - El usuario `admin` entró a la web con su contraseña nueva.
 
-**Sin hacer:** las suites de `pruebas/` no se volvieron a ejecutar con estos cambios (necesitan un
-PostgreSQL desechable en el puerto 55432, que el PC de caja no tiene). El arreglo de choques se
-probó a mano dentro de una transacción deshecha. `backend/.env` sigue existiendo con el token
-viejo; ya no se usa, pero conviene borrarlo.
+**Pruebas con estos cambios:** ejecutadas después en el PC de desarrollo sobre el commit `6127a4a`:
+operación 50 de 50 (desde el respaldo y desde una instalación limpia) y sincronización 48 de 48
+(con la nube vacía y con datos previos). **Sin hacer:** `backend/.env` sigue existiendo en la caja
+con el token viejo; ya no se usa, pero conviene borrarlo.
 
 **Conteo físico inicial (`backend/app/services/inventario_inicial.py`):** al arrancar por primera
 vez esta versión, la caja (nunca la nube) deja en $0 el costo de todos los insumos —el dueño los
@@ -602,7 +602,8 @@ Dos suites automáticas en `pruebas/`, que levantan una caja y una nube reales c
 | `prueba_sincronizacion.py` | Copia inicial, venta completa, cancelación, corte de internet, cambios desde la web, protecciones, aviso en vivo, reinicio y archivo del espejo | 48 de 48 |
 
 Ambas pasan sobre la copia del respaldo y sobre una base creada con los scripts de instalación.
-Esos resultados son **anteriores** a los commits `3dccd42` y `d7a71c4`; no se han vuelto a ejecutar.
+Con los commits `3dccd42` y `d7a71c4` se volvieron a ejecutar el 10 de octubre por la noche: 50 de 50
+y 48 de 48, en los cuatro escenarios.
 
 **Contra Render y Supabase reales** se verificó el 10 de octubre por la noche, desde el PC de caja:
 copia completa de la caja (790 filas de negocio), cola en cero, y un cambio de precio y de receta
