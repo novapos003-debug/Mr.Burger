@@ -454,7 +454,8 @@ export const TirillaModal: React.FC<TirillaModalProps> = ({
     setImprimiendoUsb(true)
     setFeedback(null)
     try {
-      const res = await imprimirTirillaTermica(renderPlainText())
+      // El recibo de venta abre el cajón junto con la impresión
+      const res = await imprimirTirillaTermica(renderPlainText(), tipo === 'RECIBO')
       if (res.success) {
         setFeedback({ tipo: 'ok', msg: res.message })
       } else {

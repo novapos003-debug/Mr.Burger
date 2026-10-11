@@ -307,10 +307,10 @@ export async function imprimirTicketPrueba(cfg?: ConfiguracionImpresora): Promis
 
 // Impresión por la caja: el servidor local entrega la tirilla a la cola de Windows, que sí
 // puede escribir en la impresora aunque su controlador la tenga tomada.
-export async function imprimirEnCaja(texto: string): Promise<{ success: boolean; message: string }> {
+export async function imprimirEnCaja(texto: string, abrirCajon = false): Promise<{ success: boolean; message: string }> {
   try {
     const api = (await import('../api/client')).default
-    const res = await api.post('/caja/imprimir', { texto })
+    const res = await api.post('/caja/imprimir', { texto, abrir_cajon: abrirCajon })
     return { success: Boolean(res.data?.ok), message: res.data?.mensaje || '' }
   } catch {
     return { success: false, message: 'No se pudo contactar la caja para imprimir.' }
@@ -318,10 +318,18 @@ export async function imprimirEnCaja(texto: string): Promise<{ success: boolean;
 }
 
 // Impresión térmica directa: primero por la caja y, si no tiene impresora (web o celular), por WebUSB
-export async function imprimirTirillaTermica(texto: string): Promise<{ success: boolean; message: string }> {
-  const porCaja = await imprimirEnCaja(texto)
+// Con abrirCajon, la misma orden de impresión abre también el cajón monedero.
+export async function imprimirTirillaTermica(texto: string, abrirCajon = false): Promise<{ success: boolean; message: string }> {
+  const porCaja = await imprimirEnCaja(texto, abrirCajon)
   if (porCaja.success) return porCaja
-  return imprimirViaWebUSB(generarBytesEscPos(texto))
+  const bytes = generarBytesEscPos(texto)
+  if (!abrirCajon) return imprimirViaWebUSB(bytes)
+  // ESC p 0 25 250 (abrir cajón vía RJ11) antes de la tirilla
+  const pulso = new Uint8Array([0x1B, 0x70, 0x00, 0x19, 0xFA])
+  const conCajon = new Uint8Array(pulso.length + bytes.length)
+  conCajon.set(pulso, 0)
+  conCajon.set(bytes, pulso.length)
+  return imprimirViaWebUSB(conCajon)
 }
 
 // Impresión directa ESC/POS mediante WebUSB (para impresoras térmicas conectadas por USB)
